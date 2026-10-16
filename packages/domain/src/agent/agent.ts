@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
+import { readSelectedImageGenerationChild } from '../assets/presentation-asset';
 import { lockLiveResearchObject, lockTrashReferences, rememberDiscardedTaskResult } from '../trash/trash';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
@@ -513,7 +514,7 @@ export async function listAgentTasks(
     take: 20,
   });
   return Promise.all(rows.map(async (task) => ({
-    ...taskToView(task, await canRetryAgentTask(deps, task, input.userId)),
+    ...await selectedImageChildTaskView(deps, task, input.userId, await canRetryAgentTask(deps, task, input.userId)),
     researchObjectId: task.session.researchObjectId,
   })));
 }
@@ -1090,8 +1091,30 @@ export async function getAgentTask(
   if (!task || task.deletedAt || (task.session.deletedAt && !preservedProduct) || task.session.researchObject?.deletedAt || task.session.userId !== input.userId) {
     throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', '任务不存在');
   }
-  return { ...taskToView(task, await canRetryAgentTask(deps, task, input.userId)),
+  return { ...await selectedImageChildTaskView(deps, task, input.userId, await canRetryAgentTask(deps, task, input.userId)),
     researchObjectId: task.session.researchObjectId };
+}
+
+/** Projection I/O stays in authenticated services, outside the pure taskToView. */
+async function selectedImageChildTaskView(deps: AgentDeps, task: Parameters<typeof taskToView>[0], userId: string, canRetry: boolean) {
+  const view = taskToView(task, canRetry);
+  if (task.kind !== 'workspace.guide' || !isJsonRecord(task.result) || !isJsonRecord(task.result.selectedImageDraft)
+    || !isJsonRecord(view.result?.selectedImageDraft)) return view;
+  const zh = isJsonRecord(task.payload) && task.payload.locale === 'zh';
+  try {
+    const child = await deps.prisma.$transaction(tx => readSelectedImageGenerationChild(tx, { userId, guideTaskId: task.id }), { isolationLevel: 'Serializable' });
+    if (!child) return view;
+    const summary = ['failed', 'cancelled'].includes(child.status)
+      ? zh ? '配图任务尚未完成；已保留原任务、原图和修改提案。' : 'The image task did not finish. Its original task, image and proposal are retained.'
+      : child.status === 'succeeded' ? zh ? '配图任务已完成；原图和修改提案保留，请查看实际结果。' : 'The image task completed. View its actual result; the original image and proposal are retained.'
+        : zh ? '已保存修改提案，正在制作配图；原图保留。' : 'The revision proposal is saved and its image task is in progress. The original is retained.';
+    return { ...view, result: { ...view.result, summary, nextSteps: [{ intent: 'open-task', targetId: child.id,
+      label: zh ? '查看配图任务' : 'View image task' }] } };
+  } catch {
+    return { ...view, result: { ...view.result, nextSteps: [], summary: zh
+      ? '暂时无法确认配图任务的来源或权限；原图和修改提案保留，未重新提交。'
+      : 'The image task cannot be confirmed with its current source or permissions. The original image and proposal are retained; nothing was resubmitted.' } };
+  }
 }
 
 /** Model tasks retain one retry; deterministic source indexes allow two explicit recoveries. */

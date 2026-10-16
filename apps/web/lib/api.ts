@@ -1473,6 +1473,8 @@ export interface AgentTaskView {
 /** Display snapshot only; server asset/source authority is independently resolved. */
 export interface HermesImageReady {
   actorId: string; researchObjectId: string; versionId: string; guideTaskId: string; assetId: string; label: string;
+  /** Existing selected-guide source, for preserving a later manual selection. Client callback only. */
+  sourceAssetId?: string;
 }
 export interface HermesImageContext {
   actorId: string; researchObjectId: string; versionId: string; selectedImageAssetId: string | null;

@@ -2,6 +2,27 @@ import type { SourceLocator } from '../research-intelligence/types';
 import type { StoryboardDocument } from '../assets/storyboard';
 import type { SelectedImageBinding } from '../assets/scene-image';
 
+/** A selected context alone never authorizes producing another paid image. */
+export function selectedImageProductionIntent(goal: string): boolean {
+  // Inspect authority wording only; labels and the full original goal are not rewritten.
+  const text = goal.replace(/"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|「[^」\n]*」|《[^》\n]*》/gu, ' ').trim().replace(/\s+/gu, ' ');
+  if (!text || /(?:如果|假如)|\b(?:if|unless|whether)\b/iu.test(text)
+    || /(?:不要|别(?:再)?|无需|不用|不需要|请勿|暂不|先不)\s*(?:再|重新)?\s*(?:生成|生图|重画|重绘|出图|制作|提交)/u.test(text)
+    || /\b(?:do not|don't|never|no need to|not going to)\s+(?:generate|regenerate|redraw|render|produce|submit)\b/iu.test(text)) return false;
+  const command = text.replace(/^(?:(?:please|can you|could you|would you|help me|i want you to|i need you to)\s+)+/iu, '')
+    .replace(/^(?:请(?:你|帮我)?|帮我|麻烦(?:你)?|劳驾|我想(?:请你|让你)?|我需要你?|我希望你?)\s*/u, '');
+  // Only this explicit trailing coordination is ancillary; ambiguous attachment stays unsupported.
+  const primary = command.replace(/(?:并解释原因|\s+and explain why)[。.!！]?$/iu, '').trim();
+  if (/(?:解释|说明|讲解|讨论|建议|介绍|分析|为什么|为何|如何|怎么|是否|方案|计划)/u.test(primary)
+    || /\b(?:explain|explanation|advice|advise|suggest|suggestion|discuss|discussion|how|plan|proposal|outline)\b/iu.test(primary)) return false;
+  if (/^(?:不要|别|无需|不用|不需要|先不|暂不|仅讨论|只讨论|只解释|只需解释|只要方案|是否|为什么|为何|如何|怎么|解释|讨论|告诉我)/u.test(primary)
+    || /^(?:do not|don't|no need|not yet|only explain|plan only|explain|describe|discuss|suggest|advise|tell me|plan|should|why|how|what)\b/iu.test(primary)
+    || /^(?:generate|prepare|make|write)\s+(?:(?:a|the)\s+)?(?:plan|proposal|outline)\b/iu.test(primary)) return false;
+  return /^(?:modify|edit|change|redraw|regenerate|generate|draw|improve|clarify|remove|add|move|replace|make)\b/iu.test(primary)
+    || /^(?:把|将|给|在|为|对|左|右|上|下|中|这|第|当前|所选|修改|调整|优化|重画|重绘|重新生成|生成|画|绘制|去掉|删除|添加|移动|换)/u.test(primary)
+      && /(?:修改|改成|改为|改一下|改细|改粗|调整|优化|重画|重绘|重新生成|生成|画一|画细|画粗|绘制|去掉|删除|添加|移动|移到|换成)/u.test(primary);
+}
+
 export interface WorkspaceSelectedImageDraft {
   status: 'private-proposal';
   source: Pick<SelectedImageBinding, 'researchObjectId' | 'versionId' | 'assetId' | 'contentHash' | 'storyboardAssetId' | 'parentContentHash' | 'sceneIndex'> & { sourceClaimIds: string[] };

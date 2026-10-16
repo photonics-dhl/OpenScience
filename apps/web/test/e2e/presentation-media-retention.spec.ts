@@ -30,20 +30,25 @@ test.beforeAll(async () => {
 test.afterAll(() => { harness?.kill(); if (log !== undefined) closeSync(log); });
 
 const guideImage = (letter: string) => `${letter}1000000-0000-4000-8000-000000000001`;
-async function selectedGuideFixture(page: Page) {
+async function selectedGuideFixture(page: Page, withChild = false) {
   const state = { posts: [] as Array<{ key: string; body: { sessionId: string; payload: { goal: string; context: { presentation: { selectedImageAssetId: string } } } } }>,
     loseResponse: false, release: null as (() => void) | null, runActor: 'fixture-viewer', runRo: 'ro', runVersion: 'working-version',
-    runReads: 0, writes: [] as string[], errors: [] as string[] };
+    runReads: 0, writes: [] as string[], errors: [] as string[], childReads: 0,
+    childStatus: 'pending' as 'pending' | 'running' | 'succeeded' | 'failed', childListed: false, disconnectChild: false };
   page.on('pageerror', error => state.errors.push(error.message));
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), pathname = url.pathname;
     if (pathname === '/api/csrf-token') return route.fulfill({ json: { csrfToken: 'guide-fixture-token' } });
     if (pathname === '/api/auth/me') return route.fulfill({ json: { userId: 'fixture-viewer', role: 'researcher', platformRole: 'user', creditBalance: 10 } });
     if (request.method() === 'POST' && pathname === '/api/agent/sessions') return route.fulfill({ status: 201, json: { session: { id: 'guide-session' } } });
-    const task = () => ({ id: 'selected-task', researchObjectId: 'ro', sessionId: 'guide-session', kind: 'workspace.guide', status: 'pending',
+    const reference = () => ({ researchObjectId: 'ro', versionId: 'working-version', assetId: state.posts.at(-1)?.body.payload.context.presentation.selectedImageAssetId,
+      contentHash: 'a'.repeat(64), storyboardAssetId: guideImage('d'), parentContentHash: 'b'.repeat(64), sceneIndex: 0, sourceClaimIds: ['claim'] });
+    const task = () => ({ id: 'selected-task', researchObjectId: 'ro', sessionId: 'guide-session', kind: 'workspace.guide', status: withChild ? 'succeeded' : 'pending',
       progress: 0, retryCount: 0, canRetry: false, error: null, createdAt: '2026-10-16T00:00:00Z', updatedAt: '2026-10-16T00:00:00Z',
-      result: { selectedImageReference: { researchObjectId: 'ro', versionId: 'working-version', assetId: state.posts.at(-1)?.body.payload.context.presentation.selectedImageAssetId,
-        contentHash: 'a'.repeat(64), storyboardAssetId: guideImage('d'), parentContentHash: 'b'.repeat(64), sceneIndex: 0, sourceClaimIds: ['claim'] } } });
+      result: { selectedImageReference: reference(), ...(withChild ? { summary: 'The image task is in progress.', needsMoreInformation: false,
+        nextSteps: [{ intent: 'open-task', targetId: guideImage('f'), label: 'View image task' }],
+        selectedImageDraft: { status: 'private-proposal', source: reference(), document: { schemaVersion: 1, title: 'Arrow correction',
+          scenes: [{ title: 'Arrow', sourceClaimIds: ['claim'], illustration: { schemaVersion: 2, message: 'Correct relation', composition: 'A thin left arrow.', treatment: 'Ink.' } }] } } } : {}) } });
     if (request.method() === 'POST' && pathname === '/api/agent/tasks') {
       state.posts.push({ key: request.headers()['idempotency-key']!, body: request.postDataJSON() });
       if (state.loseResponse) {
@@ -54,8 +59,14 @@ async function selectedGuideFixture(page: Page) {
       return route.fulfill({ status: 201, json: { task: task() } });
     }
     if (request.method() !== 'GET') { state.writes.push(`${request.method()} ${pathname}`); return route.fulfill({ status: 400, json: { error: { message: 'Unexpected fixture write' } } }); }
-    if (pathname === '/api/agent/tasks') return route.fulfill({ json: { tasks: [] } });
+    if (pathname === '/api/agent/tasks') return route.fulfill({ json: { tasks: withChild && state.posts.length ? [task()] : [] } });
     if (pathname === '/api/agent/tasks/selected-task') return route.fulfill({ json: { task: task() } });
+    if (withChild && pathname.endsWith(`/presentation-tasks/${guideImage('f')}`)) {
+      state.childReads += 1;
+      if (state.disconnectChild) { state.disconnectChild = false; return route.abort('connectionreset'); }
+      return route.fulfill({ json: { task: { id: guideImage('f'), kind: 'presentation.generate', researchObjectId: 'ro', status: state.childStatus,
+        result: state.childStatus === 'succeeded' ? { assetId: guideImage('f'), contentHash: 'e'.repeat(64) } : null } } });
+    }
     if (pathname.endsWith('/versions')) return route.fulfill({ json: { versions: [{ versionId: 'working-version', status: 'draft' }] } });
     if (pathname.endsWith('/hermes-runs')) {
       await route.fulfill({ json: { run: { id: 'completed-run-f', actorId: state.runActor,
@@ -63,7 +74,8 @@ async function selectedGuideFixture(page: Page) {
         { stage: 'scene_image', ordinal: 0, status: 'succeeded', presentationAssetId: guideImage('f'), agentTaskId: guideImage('f') } ] } } });
       state.runReads += 1; return;
     }
-    if (pathname.endsWith('/presentation-assets')) return route.fulfill({ json: { assets: [{ id: guideImage('f'), researchObjectId: 'ro', versionId: 'working-version', kind: 'image', status: 'draft', label: 'Image F' }] } });
+    if (pathname.endsWith('/presentation-assets')) return route.fulfill({ json: { assets: withChild && !state.childListed ? [] : [{ id: guideImage('f'), researchObjectId: 'ro', versionId: 'working-version', kind: 'image', status: 'draft', label: 'Image F',
+      ...(withChild ? { contentHash: 'e'.repeat(64), sceneImage: { storyboardAssetId: 'selected-task', sceneIndex: 0 } } : {}) }] } });
     if (pathname.endsWith('/content')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"/>' });
     return route.fulfill({ status: 404, json: { error: { message: `Unimplemented fixture GET ${pathname}` } } });
   });
@@ -71,6 +83,51 @@ async function selectedGuideFixture(page: Page) {
   await expect(page.getByLabel(english.hermesConversation.inputLabel, { exact: true })).toBeVisible();
   return state;
 }
+
+test('selected guide observes its real child after a disconnect and waits for the PNG list before selecting F', async ({ page }) => {
+  const state = await selectedGuideFixture(page, true);
+  await page.getByLabel(english.hermesConversation.inputLabel, { exact: true }).fill('Make the left arrow thinner');
+  state.disconnectChild = true;
+  await page.locator('.hermes-conversation-composer button[type="submit"]').click();
+  await expect.poll(() => state.posts.length).toBe(1);
+  await expect.poll(() => state.childReads, { timeout: 12_000 }).toBeGreaterThan(1);
+  const result = page.locator(`[data-hermes-generated-image-task="${guideImage('f')}"]`);
+  await expect(result).toContainText(english.hermesConversation.firstImage.rendering);
+  await expect(result.locator('img')).toHaveCount(0);
+  state.childStatus = 'succeeded';
+  const reads = state.childReads;
+  await expect.poll(() => state.childReads).toBeGreaterThan(reads);
+  await expect(result.locator('img')).toHaveCount(0);
+  state.childListed = true;
+  await expect(result.locator('img')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Load completed image in gallery', exact: true }).click();
+  await expect(page.locator('[data-research-media-kind="image"] img')).toHaveAttribute('alt', 'Image F');
+  expect(state.posts).toHaveLength(1); expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
+});
+
+test('selected failed child and page reload keep the same task without submitting or showing the original as a new image', async ({ page }) => {
+  const state = await selectedGuideFixture(page, true);
+  state.childStatus = 'failed';
+  await page.getByLabel(english.hermesConversation.inputLabel, { exact: true }).fill('Make the left arrow thinner');
+  await page.locator('.hermes-conversation-composer button[type="submit"]').click();
+  const result = page.locator(`[data-hermes-generated-image-task="${guideImage('f')}"]`);
+  await expect(result).toContainText(english.hermesConversation.firstImage.stopped);
+  await expect(result.locator('img')).toHaveCount(0);
+  const original = structuredClone(state.posts[0]);
+  await page.reload();
+  await expect(result).toContainText(english.hermesConversation.firstImage.stopped);
+  const reads = state.childReads;
+  await result.getByRole('button', { name: english.hermesConversation.firstImage.refresh, exact: true }).click();
+  await expect.poll(() => state.childReads).toBeGreaterThan(reads);
+  await page.getByRole('button', { name: 'Next image', exact: true }).click();
+  await page.getByRole('button', { name: 'Next image', exact: true }).click();
+  await expect(page.locator('[data-research-media-kind="image"] img')).toHaveAttribute('alt', 'Image C');
+  state.childStatus = 'succeeded'; state.childListed = true;
+  await result.getByRole('button', { name: english.hermesConversation.firstImage.refresh, exact: true }).click();
+  await expect(result.locator('img')).toHaveCount(1);
+  await expect(page.locator('[data-research-media-kind="image"] img')).toHaveAttribute('alt', 'Image C');
+  expect(state.posts).toEqual([original]); expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
+});
 
 test('actual selected guide preserves a lost B request while a completed F arrives, and resumes only the same body and key after reload', async ({ page }) => {
   const state = await selectedGuideFixture(page);

@@ -6,6 +6,7 @@ import { getBlobStorageKey } from '@openscience/storage';
 import {
   buildInterestContext,
   createHermesFirstImageContinuation,
+  adoptSelectedImageGuide,
   readWorkspaceGuidePayloadWithSelectedImage,
   requireNativeAgentExecutionAuthority, readNativeAgentExecution,
   projectIllustrationEvidence, readWorkspaceSelectedImageDraft, workspaceSelectedImageDraftSource,
@@ -20,6 +21,7 @@ import {
   type WorkspaceSelectedImageDraft,
 } from '@openscience/domain';
 import type { createPresentationGenerationHandler } from './presentation/handler';
+import { renderStoryboard } from './presentation/storyboard';
 import { canonicalPresentationClaims, type PresentationClaim } from './presentation/chart-generator';
 import { readPresentationInput, generatedImageReviewAttachment } from './presentation/generated-image-review';
 import { ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES } from '@openscience/ai-gateway';
@@ -32,6 +34,11 @@ import { RESEARCH_NOTE_FORMATTING_SKILL } from './skills/research-note-formattin
 import { SCIENTIFIC_WRITING_SKILL } from './skills/scientific-writing';
 
 type WorkspaceGuideIntent = 'open-task' | 'open-ro' | 'start-import' | 'prepare-publication' | 'review-media';
+
+/** Dormant reader-stage continuation; the normal guide handler does not call it in R2. */
+export function prepareSelectedImageGeneration(deps: AgentDeps & { storage: StorageAdapter }, input: { userId: string; guideTaskId: string; executionAttempt?: number }) {
+  return adoptSelectedImageGuide({ ...deps, renderStoryboard }, input);
+}
 
 export interface WorkspaceGuideResult extends Record<string, unknown> {
   selectedImageReference?: WorkspaceSelectedImageDraft['source'];

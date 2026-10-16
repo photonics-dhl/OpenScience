@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage } from '../src/agent/workspace-guide-contract';
+import { parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage, selectedImageProductionIntent } from '../src/agent/workspace-guide-contract';
+
+describe('selected-image production intent', () => {
+  it.each(['Make the left arrow thinner', 'Please redraw the selected image', 'Could you change its style to watercolor?',
+    'Clarify the left connecting line', '把左边箭头改细一点', '请把第二张图换成水彩风格', '修改这张图的右上角',
+    '把左边箭头画细一点', '把左边箭头画细一点，不要修改其他内容',
+    'Please redraw the left arrow; do not change the other regions', 'Change the label “为什么” to Why',
+    '请把文字“不要”移到右下角', 'Change the left arrow, but do not publish anything',
+    '请给我把左边箭头改细一点', '为我们重画第二张图的右上角',
+    '给这张图修改左边箭头', '给这张图修改左边箭头并解释原因',
+    'Change the left arrow and explain why'])('accepts an explicit current imperative: %s', goal => {
+    expect(selectedImageProductionIntent(goal)).toBe(true);
+  });
+  it.each(['Can you explain how to modify the arrow?', 'Tell me how to redraw this', 'Suggest a plan to improve the image',
+    'Generate a plan for a new image', 'The paper says to redraw the arrow', 'The phrase "generate an image" is in the title',
+    'Should we change this figure?', 'If needed, redraw it', 'Do not regenerate this image', 'Why change the arrow?',
+    '论文说“生成图片”这几个字是什么意思', '先不生成，只讨论修改方案', '请解释如何修改箭头',
+    'Change the arrow only if the author supports it', '把箭头改细，但不要生成新图', '请不要把箭头改细',
+    '请给我解释如何修改图中的箭头', '给我解释如何修改图中的箭头', '请给大家解释如何修改图中的箭头',
+    '请为我们解释如何修改图中的箭头', '给我一份修改这张图的方案',
+    '请给我说明怎么生成这张图片', '为读者解释修改箭头的方案',
+    '给大家一份修改这张图的方案', '给这张图的修改方案提些建议',
+    '给这张图的说明标签改细一点', '给大家解释如何修改箭头并解释原因'])('does not turn discussion into production: %s', goal => {
+    expect(selectedImageProductionIntent(goal)).toBe(false);
+  });
+});
 
 const payload = {
   goal: 'Help me shape the problem statement',

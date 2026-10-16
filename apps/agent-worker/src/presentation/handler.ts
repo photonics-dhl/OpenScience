@@ -30,6 +30,7 @@ import { SynclipVideoTimingError } from './synclip-video-spool';
 import { Prisma } from '@prisma/client';
 import { loadInstalledMediaSkills, mergeDesignSkillUsage, type DesignSkillUsage } from '../skills/installed-media-skills';
 import { requireStyleReferenceImage } from '@openscience/domain';
+import { requireSelectedImageGuideParent } from '@openscience/domain';
 import { readStoredIllustrationIssues, reviewIllustrationStoryboard } from './illustration-review';
 import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardScienceRejectionReceipt, type StoryboardScienceRejectedCandidate, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
 import { hasSingleReviewedVisualSource, readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
@@ -723,6 +724,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       ? await resolveVisualNarrativeSource({ prisma: deps.prisma, storage: deps.storage }, narrativeScope, sourceEvidence, firstImageSource) : undefined;
     if (narrativeSource && narrativeSource.identity !== sourceMetadata?.identity)
       throw new Error('[blocked] Reviewed paper source changed during illustration planning');
+    let requireSelectedGuideParentUnchanged: ((tx: Prisma.TransactionClient) => Promise<void>) | undefined;
     const requireUnchangedEvidence = async (prisma: Parameters<typeof readVisualNarrativeSource>[0]
       & Pick<Prisma.TransactionClient, 'evidenceRecord' | 'presentationAsset'>) => {
       if (scientificMedia && presentationEvidenceIdentity(await readReviewedPresentationEvidence(prisma, payload, lineageByClaim)) !== sourceEvidenceIdentity) {
@@ -731,6 +733,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       if (narrativeSource && (await readVisualNarrativeSource(prisma, narrativeScope, firstImageSource)).identity !== narrativeSource.identity)
         throw new Error('[blocked] Reviewed paper source changed during illustration planning');
       if (storyboardDocument) await requireNarrativeOriginals(prisma, payload, storyboardDocument);
+      if (requireSelectedGuideParentUnchanged) await requireSelectedGuideParentUnchanged(prisma as Prisma.TransactionClient);
     };
     const planningContext = await readStoryboardPlanningContext(deps.prisma, payload, scope.userId);
     const pixelAuthority = payload.hermesRunAuthority?.stage === 'storyboard'
@@ -800,6 +803,36 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
     } : options.gateway;
     const base = planningContext.base;
     const sceneParent = await requireSceneImageParent(deps.prisma, payload);
+    if (sceneParent && payload.sceneImage) {
+      const parentTask = await deps.prisma.agentTask.findUnique({ where: { id: payload.sceneImage.storyboardAssetId } });
+      const parentRow = await deps.prisma.presentationAsset.findUnique({ where: { id: payload.sceneImage.storyboardAssetId } });
+      const selectedProof = parentRow?.provenance && typeof parentRow.provenance === 'object' && !Array.isArray(parentRow.provenance)
+        && Object.hasOwn(parentRow.provenance, 'nativeIllustration');
+      if (parentTask?.kind === 'workspace.guide' || selectedProof) {
+        if (parentTask?.kind !== 'workspace.guide') throw new Error('[blocked] Selected-image parent has no original guide owner');
+        const selected = await requireSelectedImageGuideParent(deps.prisma, { userId: scope.userId, guideTaskId: parentTask.id, executionAttempt: parentTask.executionAttempt });
+        const selectedResult = structuredClone(selected.task.result) as Record<string, unknown>;
+        const selectedPayload = structuredClone(selected.task.payload), selectedBinding = structuredClone(selected.source.binding);
+        const verify = (proof: typeof selected) => {
+          const hash = createHash('sha256').update(renderStoryboard(proof.document, proof.settings)).digest('hex');
+          if (proof.asset.status !== 'approved' || proof.asset.contentHash !== hash
+            || proof.asset.objectKey !== `presentation/${payload.researchObjectId}/${payload.versionId}/${hash}.html`
+            || payload.sceneImage!.sceneIndex !== 0 || !isDeepStrictEqual(payload.sourceClaimIds, proof.source.binding.sourceClaimIds)
+            || !isDeepStrictEqual(sceneParent.view.document, proof.document) || sceneParent.contentHash !== hash)
+            throw new Error('[blocked] Selected-image parent bytes or source changed');
+        };
+        verify(selected);
+        requireSelectedGuideParentUnchanged = async tx => {
+          const current = await requireSelectedImageGuideParent(tx, { userId: scope.userId, guideTaskId: parentTask.id, executionAttempt: parentTask.executionAttempt });
+          verify(current);
+          const keys = ['nativeAgentExecution', 'selectedImageContext', 'selectedImageReply', 'selectedImageDraft', 'sourceMapRef', 'storyboardReview', 'nativeIllustration'];
+          const currentResult = current.task.result as Record<string, unknown>;
+          if (keys.some(key => !isDeepStrictEqual(currentResult[key], selectedResult[key]))
+            || !isDeepStrictEqual(current.task.payload, selectedPayload) || !isDeepStrictEqual(current.source.binding, selectedBinding))
+            throw new Error('[blocked] Selected-image paid source changed');
+        };
+      }
+    }
     const sceneRevision = await requireSceneImageRevision(deps.prisma, payload);
     const requireUnchangedSceneRevision = async (prisma: Pick<Prisma.TransactionClient, 'presentationAsset' | 'agentTask'>) => {
       if (!isDeepStrictEqual(await requireSceneImageRevision(prisma, payload), sceneRevision)) {
@@ -1199,7 +1232,11 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       let nativePrompt: { prompt: string; designSkills?: DesignSkillUsage[] } | undefined;
       const parentTask = await deps.prisma.agentTask.findUnique({ where: { id: payload.sceneImage.storyboardAssetId } });
       const parentNative = readNativeAgentExecution(parentTask?.result);
-      if (parentNative?.profile === 'paper-illustration') {
+      if (parentTask?.kind === 'workspace.guide') {
+        if (!requireSelectedGuideParentUnchanged || sceneRevision || styleReference)
+          throw new Error('[blocked] Selected-image rendering requires its accepted exact guide parent');
+        await requireSelectedGuideParentUnchanged(deps.prisma);
+      } else if (parentNative?.profile === 'paper-illustration') {
         if (!parentTask || parentTask.status !== 'succeeded' || parentTask.deletedAt || parentTask.kind !== 'presentation.generate'
           || sceneRevision || styleReference) throw new Error('[blocked] Native rendering requires its completed plan; revise the plan before changing the rendering instructions');
         const parentPayload = parsePresentationGenerationPayload(parentTask.payload);
@@ -1255,6 +1292,7 @@ export function createPresentationGenerationHandler(options: { gateway?: Pick<Ai
       await requireUnchangedSceneRevision(deps.prisma);
       await requireHermesAuthority(deps.prisma);
       if (technicalRecovery) await deps.prisma.$transaction(requireTechnicalRecovery, { isolationLevel: 'Serializable' });
+      if (requireSelectedGuideParentUnchanged) await requireSelectedGuideParentUnchanged(deps.prisma);
       const result = completedProviderRecovery
         ? await options.gateway.resumeImageFromCompletedResult!(task.id)
         : await options.gateway.generateImage({ prompt: prompt!, requestId: task.id, ...(referenceImage ? { referenceImage } : {}) },

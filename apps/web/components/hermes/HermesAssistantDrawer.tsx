@@ -33,7 +33,7 @@ import { createLiteratureIntentFingerprint } from '@/lib/literature-acquisition-
 import type { HermesPresentationIntent } from '@/lib/hermes/presentation-intent';
 import { useSearchParams } from 'next/navigation';
 import { HermesPresentationReview } from './HermesPresentationReview';
-import { HermesFirstImageResult } from './HermesFirstImageResult';
+import { HermesFirstImageResult, selectedImageSourceIdentity } from './HermesFirstImageResult';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal,
   currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission, type HermesDraftScope } from '@/lib/hermes/draft-state';
@@ -137,8 +137,10 @@ export function applyFirstImageReady(previous: HermesImageContext | undefined, r
   if (ready.actorId !== scope.actorId || ready.researchObjectId !== scope.researchObjectId || ready.versionId !== scope.versionId) return previous;
   const current = previous?.actorId === scope.actorId && previous.researchObjectId === scope.researchObjectId && previous.versionId === scope.versionId ? previous : undefined;
   if (current?.readyImage?.guideTaskId === ready.guideTaskId) return current;
-  return { ...scope, images: current?.images ?? [], selectedImageAssetId: ready.assetId,
-    pendingImageAssetId: current?.images.some(image => image.assetId === ready.assetId) ? undefined : ready.assetId,
+  const preserveSelection = ready.sourceAssetId && current?.selectedImageAssetId
+    && current.selectedImageAssetId !== ready.sourceAssetId && current.selectedImageAssetId !== ready.assetId;
+  return { ...scope, images: current?.images ?? [], selectedImageAssetId: preserveSelection ? current!.selectedImageAssetId : ready.assetId,
+    pendingImageAssetId: preserveSelection || current?.images.some(image => image.assetId === ready.assetId) ? undefined : ready.assetId,
     readyImage: { guideTaskId: ready.guideTaskId, assetId: ready.assetId, label: ready.label } };
 }
 function legacyGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {
@@ -210,10 +212,13 @@ export function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null
     try {
       const selectedImageReference = readWorkspaceSelectedImageReference(value.selectedImageReference);
       const selectedImageDraft = value.selectedImageDraft === undefined ? undefined : readWorkspaceSelectedImageDraft(value.selectedImageDraft);
-      if (nextSteps.length || value.firstImageRun || value.presentationDraft || value.researchRunDraft || value.draftEdit || value.writingDraft
-        || selectedImageDraft && (value.needsMoreInformation || JSON.stringify(selectedImageDraft.source) !== JSON.stringify(selectedImageReference))
+      if ((nextSteps.length && (!selectedImageDraft || value.needsMoreInformation || nextSteps[0]?.intent !== 'open-task'
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(nextSteps[0]?.targetId ?? '')
+        || nextSteps[0]?.targetId === task.id || nextSteps[0]?.targetId === selectedImageReference.assetId))
+        || value.firstImageRun || value.presentationDraft || value.researchRunDraft || value.draftEdit || value.writingDraft
+        || selectedImageDraft && (value.needsMoreInformation || selectedImageSourceIdentity(selectedImageDraft.source) !== selectedImageSourceIdentity(selectedImageReference))
         || task.researchObjectId && task.researchObjectId !== selectedImageReference.researchObjectId) return null;
-      return { summary: value.summary, nextSteps: [], needsMoreInformation: value.needsMoreInformation,
+      return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation,
         selectedImageReference, ...(selectedImageDraft ? { selectedImageDraft } : {}) };
     } catch { return null; }
   }
@@ -1233,6 +1238,17 @@ function HermesAssistantDrawerContent({
               <ScientificText as="p" hideSourceMarkers>{selectedResult.selectedImageDraft.document.scenes[0]!.illustration!.composition}</ScientificText>
               <ScientificText as="p" hideSourceMarkers>{selectedResult.selectedImageDraft.document.scenes[0]!.illustration!.treatment}</ScientificText>
             </details>}
+            {task && viewerId && selectedResult.selectedImageDraft && selectedResult.nextSteps[0]?.targetId
+              && selectedResult.selectedImageReference.researchObjectId === routeResearchObjectId
+              && selectedResult.selectedImageReference.versionId === currentImageVersion.current && <HermesFirstImageResult
+                actorId={viewerId} researchObjectId={selectedResult.selectedImageReference.researchObjectId}
+                versionId={selectedResult.selectedImageReference.versionId} guideTaskId={task.id}
+                selectedChild={{ taskId: selectedResult.nextSteps[0].targetId, source: selectedResult.selectedImageReference }}
+                onImageReady={ready => {
+                  if (ownerRef.current !== currentOwner || currentTaskId.current !== ready.guideTaskId || ready.actorId !== viewerId
+                    || ready.researchObjectId !== routeResearchObjectId || ready.versionId !== currentImageVersion.current) return;
+                  onImageReady?.(ready);
+                }} />}
           </div>}
           {localMessage && <p className="hermes-message hermes-message-assistant" role="status">{localMessage}</p>}
           {publicUrl && <Link className="hermes-conversation-link" href={publicUrl}>{tw('openPublic')} →</Link>}

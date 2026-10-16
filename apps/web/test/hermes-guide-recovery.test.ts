@@ -1,8 +1,53 @@
 import { describe, expect, it } from 'vitest';
 import { resultFromTask, selectRestorableGuide, buildGuidePresentationContext, selectedGuidePresentationContext, applyFirstImageReady } from '../components/hermes/HermesAssistantDrawer';
 import type { AgentTaskView } from '../lib/api';
+import * as imageObserver from '../components/hermes/HermesFirstImageResult';
 import { currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission, loadPendingSelectedImageSubmission, savePendingSelectedImageSubmission } from '../lib/hermes/draft-state';
 import { parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
+
+it('reads only a server-bound normal child alongside the unchanged selected proposal', () => {
+  const guide = '10000000-0000-4000-8000-000000000011', child = '10000000-0000-4000-8000-000000000012';
+  const source = { researchObjectId: 'ro', versionId: 'v', assetId: '10000000-0000-4000-8000-000000000013', contentHash: 'a'.repeat(64),
+    storyboardAssetId: '10000000-0000-4000-8000-000000000014', parentContentHash: 'b'.repeat(64), sceneIndex: 0, sourceClaimIds: ['claim'] };
+  const result = { summary: 'Image queued', needsMoreInformation: false, nextSteps: [{ intent: 'open-task', targetId: child, label: 'Image' }],
+    selectedImageReference: source, selectedImageDraft: { status: 'private-proposal', source, document: { schemaVersion: 1, title: 'Plan',
+      scenes: [{ title: 'Scene', sourceClaimIds: ['claim'], illustration: { schemaVersion: 2, message: 'A relation' } }] } } };
+  const task = { id: guide, kind: 'workspace.guide', researchObjectId: 'ro', result } as unknown as AgentTaskView;
+  expect(resultFromTask(task)?.nextSteps).toEqual(result.nextSteps);
+  const reordered = Object.fromEntries(Object.entries(source).reverse());
+  expect(resultFromTask({ ...task, result: { ...result, selectedImageDraft: { ...result.selectedImageDraft, source: reordered } } })?.nextSteps)
+    .toEqual(result.nextSteps);
+  for (const step of [{ ...result.nextSteps[0], targetId: guide }, { ...result.nextSteps[0], targetId: source.assetId },
+    { ...result.nextSteps[0], targetId: 'not-a-task-id' }, { ...result.nextSteps[0], intent: 'open-ro' }])
+    expect(resultFromTask({ ...task, result: { ...result, nextSteps: [step] } })).toBeNull();
+  expect(resultFromTask({ ...task, result: { ...result, selectedImageDraft: undefined } })).toBeNull();
+});
+
+it('announces only the exact child PNG already present in the refreshed real asset list', () => {
+  const child = '10000000-0000-4000-8000-000000000012', guide = '10000000-0000-4000-8000-000000000011';
+  const scope = { researchObjectId: 'ro', versionId: 'v', guideTaskId: guide };
+  const task = { id: child, kind: 'presentation.generate', status: 'succeeded', researchObjectId: 'ro',
+    result: { assetId: child, contentHash: 'e'.repeat(64) } } as unknown as AgentTaskView;
+  const asset = { id: child, kind: 'image', status: 'draft', researchObjectId: 'ro', versionId: 'v', contentHash: 'e'.repeat(64),
+    sceneImage: { storyboardAssetId: guide, sceneIndex: 0 } };
+  const select = (imageObserver as unknown as { selectedChildImageAsset: (task: AgentTaskView, assets: unknown[], inputScope: typeof scope) => unknown }).selectedChildImageAsset;
+  expect(select(task, [], scope)).toBeUndefined();
+  expect(select(task, [asset], scope)).toEqual(asset);
+  for (const wrong of [{ ...asset, versionId: 'old' }, { ...asset, contentHash: 'd'.repeat(64) },
+    { ...asset, sceneImage: { storyboardAssetId: 'other', sceneIndex: 0 } }, { ...asset, id: 'original' }])
+    expect(select(task, [wrong], scope)).toBeUndefined();
+  expect(select({ ...task, status: 'failed' }, [asset], scope)).toBeUndefined();
+  expect(select({ ...task, kind: 'workspace.guide' }, [asset], scope)).toBeUndefined();
+});
+
+it('keeps a later C selection when the selected B child first completes', () => {
+  const scope = { actorId: 'u', researchObjectId: 'ro', versionId: 'v' };
+  const previous = { ...scope, images: [{ assetId: 'b', label: 'B' }, { assetId: 'c', label: 'C' }], selectedImageAssetId: 'c' };
+  const ready = { ...scope, guideTaskId: 'guide-b', assetId: 'f', label: 'F', sourceAssetId: 'b' };
+  const next = applyFirstImageReady(previous, ready, scope)!;
+  expect(next.selectedImageAssetId).toBe('c'); expect(next.pendingImageAssetId).toBeUndefined();
+  expect(next.readyImage?.assetId).toBe('f');
+});
 
 describe('exact image reference in the actual guide writer', () => {
   const a = 'a1000000-0000-4000-8000-000000000001', b = 'b1000000-0000-4000-8000-000000000001';

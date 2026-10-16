@@ -6,6 +6,7 @@ import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, 
 import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration, recoverCompletedHermesSceneImageResults } from '../../../../packages/domain/src/agent/research-run';
 import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint, requireSceneImageParent } from '@openscience/domain';
 import { workspaceGuideHandler } from '../../src/workspace-guide';
+import * as selectedGuideProduction from '../../src/workspace-guide';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
 import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
 import { createHandlers, createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../../src/index';
@@ -59,7 +60,7 @@ const responses = [
   ['review', 'paper_illustration_review', { planToolCallId: 'art', decision: 'accepted', summary: 'Source, scientific relationship and layout agree.', corrections: [], issues: [] }],
 ] as const;
 
-async function fixture(automaticRun = false, nativeVideo = false) {
+async function fixture(automaticRun = false, nativeVideo = false, additionalClaim = false) {
   let transactionError: unknown;
   const { prisma, db } = createFakePrisma(); seedUser(db, { id: id(1), platformRole: 'user' });
   db.workspaces.push({ id: id(2), status: 'active' }); db.memberships.push({ userId: id(1), workspaceId: id(2), role: 'author' });
@@ -86,6 +87,10 @@ async function fixture(automaticRun = false, nativeVideo = false) {
     exactQuote: quote, relation: 'supports', locator: createBlockSourceLocator(JSON.parse(bytes.toString('utf8')), 'block', { charRange: { start: 0, end: quote.length } }), extractionStatus: 'succeeded',
     updatedAt: new Date(), provenance: { source: 'reviewed_ingestion', sourceTaskId: id(17), sourceMapRef: ref } });
   const objects = new Map([[ref.objectKey, bytes]]);
+  if (additionalClaim) {
+    db.claimNodes.push({ ...structuredClone(db.claimNodes[0]), id: id(55) });
+    db.evidenceRecords.push({ ...structuredClone(db.evidenceRecords[0]), id: id(56), claimId: id(55) });
+  }
   const putObject = vi.fn(async (key: string, body: Uint8Array) => { const data = Buffer.from(body); objects.set(key, data); return { key, size: data.length }; });
   const deps = { prisma, redis: { lpush: vi.fn(async () => 1) }, mailer: {} as never,
     audit: { record: async (event: Record<string, unknown>) => void await prisma.auditLog.create({ data: event }) },
@@ -93,7 +98,7 @@ async function fixture(automaticRun = false, nativeVideo = false) {
     storage: { putObject, headObject: async (key: string) => objects.has(key) ? { key, size: objects.get(key)!.length } : null,
       getObject: async (key: string) => { const data = objects.get(key); if (!data) throw new Error('Missing fixture object'); return { body: Readable.from([data]), size: data.length }; } } };
   const session = await createAgentSession(deps as never, { userId: id(1), researchObjectId: id(3), kind: 'visualization' });
-  let payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'interactive_html', sourceClaimIds: [id(5)],
+  let payload = { schemaVersion: 1, researchObjectId: id(3), versionId: id(4), kind: 'interactive_html', sourceClaimIds: additionalClaim ? [id(5), id(55)] : [id(5)],
     storyboard: { locale: 'en', style: 'aged-academia', instruction: 'Explain the relation.', output: nativeVideo ? 'video' : 'image', narrative: true, narrativeSceneLimit: nativeVideo ? 3 : 1 } };
   const submit = () => submitAgentTask(deps as never, { userId: id(1), sessionId: session.id, kind: 'presentation.generate', payload, idempotencyKey: 'native-plan', dispatch: false });
   if (automaticRun) {
@@ -162,20 +167,21 @@ async function fixture(automaticRun = false, nativeVideo = false) {
     useLocalVideoScene: (index: number) => { localVideoScene = index; }, transactionError: () => transactionError };
 }
 
-async function selectedGuideFixture() {
-  const f = await fixture();
+async function selectedGuideFixture(goal = 'Clarify the left connecting line', additionalClaim = false) {
+  const f = await fixture(false, false, additionalClaim);
   const plan = await f.handler(f.deps as never, f.task() as never);
   await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result: plan });
   f.db.presentationAssets[0].status = 'approved';
   const sceneImage = { storyboardAssetId: f.owner.id, sceneIndex: 0 };
-  const parent = await requireSceneImageParent(f.deps.prisma, { researchObjectId: id(3), versionId: id(4), sourceClaimIds: [id(5)], sceneImage });
+  const parent = await requireSceneImageParent(f.deps.prisma, { researchObjectId: id(3), versionId: id(4), sourceClaimIds: f.owner.payload.sourceClaimIds, sceneImage });
   const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
   const image = { id: id(50), researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', deletedAt: null,
     contentHash: sha(bytes), objectKey: 'private/selected.png', provenance: { subtype: 'storyboard_scene_image', contentType: 'image/png', sceneImage, parentIdentity: parent!.identity } };
   await f.putObject(image.objectKey, bytes); f.db.presentationAssets.push(image);
   f.db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: id(5) });
+  if (additionalClaim) f.db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: id(55) });
   const session = await createAgentSession(f.deps as never, { userId: id(1), researchObjectId: id(3), kind: 'workspace.guide' });
-  const payload = { goal: 'Clarify the left connecting line', locale: 'en', route: 'research-object-edit', target: null,
+  const payload = { goal, locale: 'en', route: 'research-object-edit', target: null,
     context: { tasks: [], researchObjects: [], presentation: { researchObjectId: id(3), versionId: id(4), selectedImageAssetId: image.id } } };
   const task = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: session.id, kind: 'workspace.guide', payload, idempotencyKey: 'selected-guide', dispatch: false });
   const claimed = await claimAgentTask(f.deps as never, task.id);
@@ -194,7 +200,247 @@ async function selectedGuideFixture() {
   return { ...f, image, bytes, guide: task, run, runThroughFactory };
 }
 
+async function completedSelectedEditFixture(goal?: string, additionalClaim = false) {
+  const f = await selectedGuideFixture(goal, additionalClaim), result = await f.run();
+  await markTaskProgress(f.deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+  const deps = { ...f.deps, sceneImageEnabled: true, nativeSceneImageEnabled: true };
+  deps.prisma.hermesResearchRun.findFirst = (async args => (await deps.prisma.hermesResearchRun.findMany(args))[0] ?? null) as typeof deps.prisma.hermesResearchRun.findFirst;
+  return { ...f, result, deps, prepare: () => selectedGuideProduction.prepareSelectedImageGeneration(deps as never, { userId: id(1), guideTaskId: f.guide.id }) };
+}
+
 describe('selected-image Native guide', () => {
+  it('keeps the full selected request when it exceeds the old presentation instruction limit', async () => {
+    const goal = 'Make the left arrow thinner. ' + 'Retain the original scientific relation. '.repeat(30);
+    expect(goal.length).toBeGreaterThan(1000);
+    const f = await completedSelectedEditFixture(goal), child = await f.prepare();
+    expect(child?.id).toBeTruthy();
+    expect(f.db.agentTasks.find(row => row.id === f.guide.id)!.payload.goal).toBe(goal);
+    expect(JSON.stringify(f.fetcher.mock.calls).includes(goal.trim())).toBe(true);
+  });
+  it('uses the original active guide lease for adoption and retains the paid result when the guide completes', async () => {
+    const f = await selectedGuideFixture(), result = await f.run();
+    const deps = { ...f.deps, sceneImageEnabled: true, nativeSceneImageEnabled: true };
+    deps.prisma.hermesResearchRun.findFirst = (async args => (await deps.prisma.hermesResearchRun.findMany(args))[0] ?? null) as typeof deps.prisma.hermesResearchRun.findFirst;
+    const prepare = (executionAttempt: number) => selectedGuideProduction.prepareSelectedImageGeneration(deps as never,
+      { userId: id(1), guideTaskId: f.guide.id, executionAttempt });
+    await expect(prepare(0)).rejects.toThrow();
+    expect(f.db.presentationAssets).toHaveLength(2);
+    const child = await prepare(1);
+    expect(child?.id).toBeTruthy();
+    expect((await getAgentTask(deps as never, { userId: id(1), taskId: f.guide.id })).result?.nextSteps)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ intent: 'open-task', targetId: child!.id })]));
+    const parent = f.db.presentationAssets.find(row => row.id === f.guide.id)!;
+    expect(parent.status).toBe('approved');
+    expect(f.db.auditLogs).toEqual(expect.arrayContaining([expect.objectContaining({ actorId: null,
+      action: 'presentation_asset.system_approved', metadata: expect.objectContaining({ guideTaskId: f.guide.id, userAccepted: false }) })]));
+    await markTaskProgress(deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    expect((await prepare(1))?.id).toBe(child?.id);
+    expect(f.fetcher).toHaveBeenCalledTimes(6);
+  });
+  it.each(['source-image', 'goal', 'claim'])('refuses a changed %s after the paid image reply and before writing its pixels', async change => {
+    const f = await completedSelectedEditFixture(), child = await f.prepare();
+    if (!child) throw new Error('Expected selected image child');
+    const row = f.db.agentTasks.find(item => item.id === child.id)!;
+    const claimed = await claimAgentTask(f.deps as never, child.id);
+    f.generate.mockImplementationOnce(async () => {
+      if (change === 'source-image') f.image.contentHash = 'f'.repeat(64);
+      if (change === 'goal') f.db.agentTasks.find(item => item.id === f.guide.id)!.payload.goal = 'Change a different object';
+      if (change === 'claim') f.db.claimNodes[0].statement = 'Another relation';
+      return { bytes: f.bytes, contentType: 'image/png', provider: 'synclip', model: 'gpt-image-2.5', promptHash: 'c'.repeat(64) };
+    });
+    await expect(f.handler(f.deps as never, { id: child.id, payload: row.payload,
+      executionAttempt: claimed!.executionAttempt, retryCount: 0 } as never)).rejects.toThrow();
+    expect(f.generate).toHaveBeenCalledOnce();
+    expect(f.db.presentationAssets.some(asset => asset.id === child.id)).toBe(false);
+    expect(f.db.agentTasks.filter(item => item.payload?.sceneImage?.storyboardAssetId === f.guide.id)).toHaveLength(1);
+  });
+  it.each(['kind', 'body', 'actor'])('does not project a forged %s child into the original guide', async change => {
+    const f = await completedSelectedEditFixture(), child = await f.prepare();
+    const row = f.db.agentTasks.find(item => item.id === child!.id)!;
+    if (change === 'kind') row.kind = 'workspace.guide';
+    if (change === 'body') row.payload.sceneImage.storyboardAssetId = f.owner.id;
+    if (change === 'actor') f.db.agentSessions.find(session => session.id === row.sessionId)!.userId = id(99);
+    const view = await getAgentTask(f.deps as never, { userId: id(1), taskId: f.guide.id });
+    expect(view.result?.nextSteps ?? []).toEqual([]);
+    expect(view.result?.summary).toContain('cannot be confirmed');
+  });
+  it('does not send a guide-owned parent through the generic renderer when its real owner is missing', async () => {
+    const f = await completedSelectedEditFixture(), child = await f.prepare();
+    const row = f.db.agentTasks.find(item => item.id === child!.id)!, claimed = await claimAgentTask(f.deps as never, child!.id);
+    f.db.agentTasks.splice(f.db.agentTasks.findIndex(item => item.id === f.guide.id), 1);
+    await expect(f.handler(f.deps as never, { id: row.id, payload: row.payload, executionAttempt: claimed!.executionAttempt, retryCount: 0 } as never))
+      .rejects.toThrow('Selected-image parent has no original guide owner');
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it('retains the complete original PNG evidence scope when the edited scene cites only one Claim', async () => {
+    const f = await completedSelectedEditFixture(undefined, true), child = await f.prepare();
+    expect(f.result.selectedImageDraft!.source.sourceClaimIds).toEqual([id(5)]);
+    const row = f.db.agentTasks.find(item => item.id === child!.id)!;
+    expect(row.payload.sourceClaimIds).toEqual([id(5), id(55)]);
+    const claimed = await claimAgentTask(f.deps as never, row.id);
+    f.generate.mockRejectedValue(new Error('R2_MULTICLAIM_IMAGE_CAPTURED'));
+    await expect(f.handler(f.deps as never, { id: row.id, payload: row.payload,
+      executionAttempt: claimed!.executionAttempt, retryCount: 0 } as never)).rejects.toThrow('R2_MULTICLAIM_IMAGE_CAPTURED');
+  });
+  it('renders the real selected-guide child and reviews its saved pixels through the existing Native image path', async () => {
+    const f = await completedSelectedEditFixture(), child = await f.prepare();
+    if (!child) throw new Error('Expected the normal selected-image child');
+    f.deps.prisma.presentationAsset.findUniqueOrThrow = (async args => {
+      const row = await f.deps.prisma.presentationAsset.findUnique(args);
+      if (!row) throw new Error('Missing selected-image parent in fixture');
+      return row;
+    }) as typeof f.deps.prisma.presentationAsset.findUniqueOrThrow;
+    f.deps.prisma.presentationAsset.update = (async args => {
+      const changed = await f.deps.prisma.presentationAsset.updateMany({ where: args.where, data: args.data });
+      if (changed.count !== 1) throw new Error('Selected-image fixture asset changed');
+      return f.deps.prisma.presentationAsset.findUniqueOrThrow({ where: args.where });
+    }) as typeof f.deps.prisma.presentationAsset.update;
+    // Honor the real reservation query; the shared fake otherwise returns an older task's debit.
+    f.deps.prisma.usageLedger.findFirst = (async args => {
+      const where = (args?.where ?? {}) as Record<string, unknown>;
+      return f.db.usageLedger.find(row => ['idempotencyKey', 'userId', 'resource', 'kind', 'period']
+        .every(key => where[key] === undefined || row[key] === where[key])) ?? null;
+    }) as typeof f.deps.prisma.usageLedger.findFirst;
+    const claimed = await claimAgentTask(f.deps as never, child.id), row = f.db.agentTasks.find(item => item.id === child.id)!;
+    let turns = 0;
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ model: 'MiniMax-M3',
+      content: ++turns === 1 ? [{ type: 'tool_use', id: 'r2-skill', name: 'skill_view', input: { name: 'openscience-source-review' } },
+        { type: 'tool_use', id: 'r2-image', name: 'paper_image_view', input: {} }]
+        : [{ type: 'text', text: JSON.stringify({ decision: 'accepted', summary: 'The approved relation is visible.', repairInstruction: null }) }],
+      stop_reason: turns === 1 ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } })));
+    const gateway = new AiGateway({ providers: [new AnthropicCompatProvider('minimax-key-1-model-1',
+      { baseUrl: 'https://offline.invalid', apiKey: 'fixture', model: 'MiniMax-M3' }, fetcher)],
+      illustrationReviewPolicy: async () => true, authorizeIllustrationReview: input => requireIllustrationReviewSubmission(f.deps.prisma, input) });
+    const generate = vi.spyOn(gateway, 'generateImage').mockResolvedValue({ bytes: f.bytes, contentType: 'image/png', provider: 'synclip',
+      model: 'gpt-image-2.5', promptHash: 'c'.repeat(64) });
+    const noReplan = vi.spyOn(gateway, 'completeStructured');
+    const host = vi.spyOn(nativeHost, 'runHostedNativeTask').mockImplementation(async input => {
+      const messages: Array<Record<string, unknown>> = [{ role: 'system', content: input.config.instructions }, { role: 'user', content: input.config.goal }];
+      const tools = [...['skills_list', 'skill_view'].map(name => ({ name, description: name, parameters: { type: 'object', properties: {} } })),
+        ...input.config.sourceTools].map(tool => ({ type: 'function', function: tool }));
+      const first = await input.session.complete({ model: input.config.model, max_tokens: 1000, messages, tools });
+      messages.push(first.choices[0]!.message as unknown as Record<string, unknown>);
+      for (const tool of first.choices[0]!.message.tool_calls ?? []) {
+        await input.authorize(); const args = JSON.parse(tool.function.arguments);
+        const response = tool.function.name === 'skill_view' ? { success: true, content: 'Check the actual image against its approved scientific relation.' }
+          : await input.paper.call(tool.function.name, args, 0, tool.id);
+        messages.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(response) });
+        if (tool.function.name === 'paper_image_view') messages.push({ role: 'user', content: (await input.paper.images!(args, response)).content });
+      }
+      const last = await input.session.complete({ model: input.config.model, max_tokens: 1000, messages, tools });
+      return { finalResponse: last.choices[0]!.message.content!, observedPassageIds: [] };
+    });
+    try {
+      const handler = createPresentationGenerationHandler({ gateway, nativeAgent: { gateway, inboxRoot: '/unused-test-socket',
+        runtime: f.deps.nativeAgentRuntime, renderPages: async () => [] } });
+      const result = await handler(f.deps as never, { id: child.id, payload: row.payload, executionAttempt: claimed!.executionAttempt, retryCount: 0 } as never);
+      await markTaskProgress(f.deps as never, { taskId: child.id, expectedExecutionAttempt: claimed!.executionAttempt, status: 'succeeded', result });
+      expect(result).toMatchObject({ assetId: child.id, contentHash: sha(f.bytes), imageReview: { decision: 'accepted', requestId: child.id } });
+      expect(f.db.presentationAssets.find(asset => asset.id === child.id)).toMatchObject({ kind: 'image', status: 'draft',
+        contentHash: sha(f.bytes), provenance: { sceneImage: { storyboardAssetId: f.guide.id, sceneIndex: 0 } } });
+      expect(generate).toHaveBeenCalledOnce(); expect(noReplan).not.toHaveBeenCalled();
+      expect(JSON.stringify(fetcher.mock.calls)).toContain(f.bytes.toString('base64'));
+    } finally { host.mockRestore(); }
+  });
+  it.each(['Why is the left arrow reversed?', 'How should I change this?', 'Do not change the arrow', 'If needed, redraw the arrow',
+    '不要修改这张图', '如果需要再生成', '先不生成，只讨论修改方案',
+    '请给我解释如何修改图中的箭头', '给我解释如何修改图中的箭头', '请给大家解释如何修改图中的箭头',
+    '请为我们解释如何修改图中的箭头', '给我一份修改这张图的方案',
+    '请给我说明怎么生成这张图片', '为读者解释修改箭头的方案',
+    '给大家一份修改这张图的方案', '给这张图的修改方案提些建议',
+    '给这张图的说明标签改细一点', '给大家解释如何修改箭头并解释原因'])('does not produce from an accepted proposal without imperative authority: %s', async goal => {
+    const f = await completedSelectedEditFixture(goal);
+    const before = { tasks: f.db.agentTasks.length, assets: f.db.presentationAssets.length, ledger: structuredClone(f.db.usageLedger), nativeCalls: f.fetcher.mock.calls.length };
+    expect(await f.prepare()).toBeUndefined();
+    expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.presentationAssets).toHaveLength(before.assets);
+    expect(f.db.usageLedger).toEqual(before.ledger); expect(f.generate).not.toHaveBeenCalled();
+    expect(f.fetcher).toHaveBeenCalledTimes(before.nativeCalls);
+    expect(f.db.agentTasks.find(row => row.id === f.guide.id)!.payload.goal).toBe(goal);
+    expect(f.result.selectedImageDraft).toMatchObject({ status: 'private-proposal' });
+  });
+  it.each(['cp', 'future-attempt', 'request', 'hash', 'tools', 'review-tool', 'missing-review-tool', 'runtime', 'source-image', 'evidence', 'scope', 'actor', 'permission'])(
+    'rejects a changed selected source before adoption or charge: %s', async change => {
+      const f = await completedSelectedEditFixture(), owner = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+      const before = { tasks: f.db.agentTasks.length, assets: f.db.presentationAssets.length, ledger: structuredClone(f.db.usageLedger) };
+      if (change === 'cp') delete owner.result.nativeAgentExecution.checkpoint;
+      if (change === 'future-attempt') owner.result.nativeAgentExecution.checkpoint.executionAttempt = 99;
+      if (change === 'request') owner.result.storyboardReview.requestId = id(99);
+      if (change === 'hash') owner.result.storyboardReview.candidateHash = '0'.repeat(64);
+      if (change === 'tools') owner.result.nativeAgentExecution.checkpoint.hasToolCalls = true;
+      if (change === 'review-tool') owner.result.nativeIllustration.reviewToolCallId = 'not-the-paid-tool';
+      if (change === 'missing-review-tool') { delete owner.result.nativeIllustration.reviewToolCallId; delete owner.result.selectedImageReply.reviewToolCallId; }
+      if (change === 'runtime') owner.result.nativeIllustration.runtimeId = 'another-runtime';
+      if (change === 'source-image') f.image.contentHash = 'f'.repeat(64);
+      if (change === 'evidence') f.db.evidenceRecords[0].exactQuote = 'Another scientific claim';
+      if (change === 'scope') owner.payload.context.presentation.versionId = id(99);
+      if (change === 'actor') f.db.agentSessions.find(row => row.id === owner.sessionId)!.userId = id(99);
+      if (change === 'permission') f.db.memberships[0].role = 'viewer';
+      await expect(f.prepare()).rejects.toThrow();
+      expect(f.db.agentTasks).toHaveLength(before.tasks); expect(f.db.presentationAssets).toHaveLength(before.assets);
+      expect(f.db.usageLedger).toEqual(before.ledger); expect(f.generate).not.toHaveBeenCalled();
+    });
+  it.each(['parent-saved', 'child-dispatch', 'response-lost'])('resumes the same selected operation after %s without another Native charge', async stage => {
+    const f = await completedSelectedEditFixture(), calls = f.fetcher.mock.calls.length;
+    const before = f.db.usageLedger.filter(row => row.kind === 'consume').length;
+    if (stage === 'parent-saved') {
+      const update = f.deps.prisma.presentationAsset.updateMany.bind(f.deps.prisma.presentationAsset);
+      const spy = vi.spyOn(f.deps.prisma.presentationAsset, 'updateMany').mockImplementationOnce((async args => {
+        if (args?.data?.status === 'approved') throw new Error('R2_CRASH_AFTER_PARENT');
+        return update(args);
+      }) as typeof update);
+      try { await expect(f.prepare()).rejects.toThrow('R2_CRASH_AFTER_PARENT'); } finally { spy.mockRestore(); }
+      expect(f.db.presentationAssets.find(row => row.id === f.guide.id)?.status).toBe('draft');
+    }
+    if (stage === 'child-dispatch') {
+      f.deps.redis.lpush.mockRejectedValueOnce(new Error('R2_DISPATCH_REPLY_LOST'));
+      await f.prepare().catch(() => undefined);
+    }
+    if (stage === 'response-lost') await f.prepare(); // The first tab never receives this completed response.
+    const first = await f.prepare(), second = await f.prepare();
+    expect(first?.id).toBe(second?.id); expect(first?.id).toBeTruthy();
+    expect(f.db.presentationAssets.filter(row => row.id === f.guide.id)).toHaveLength(1);
+    expect(f.db.agentTasks.filter(row => row.payload?.sceneImage?.storyboardAssetId === f.guide.id)).toHaveLength(1);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(before + 1);
+    expect(f.fetcher).toHaveBeenCalledTimes(calls);
+  });
+  it.each([undefined, '请把左边箭头改细一点', '请给我把左边箭头改细一点',
+    '给这张图修改左边箭头', '给这张图修改左边箭头并解释原因'])(
+    'adopts an accepted selected-image edit into one truthful parent and paid child without changing the guide receipt: %s', async goal => {
+    const f = await selectedGuideFixture(goal);
+    const result = await f.run();
+    await markTaskProgress(f.deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    const stored = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+    const receipt = structuredClone(stored.result), original = structuredClone(f.image);
+    const calls = f.fetcher.mock.calls.length, debits = f.db.usageLedger.filter(row => row.kind === 'consume').length;
+    const deps = { ...f.deps, sceneImageEnabled: true, nativeSceneImageEnabled: true };
+    // This existing in-memory adapter lacks findFirst; execute the real common transition query.
+    deps.prisma.hermesResearchRun.findFirst = (async args => (await deps.prisma.hermesResearchRun.findMany(args))[0] ?? null) as typeof deps.prisma.hermesResearchRun.findFirst;
+    const prepare = (selectedGuideProduction as unknown as { prepareSelectedImageGeneration: (
+      deps: unknown, input: { userId: string; guideTaskId: string }) => Promise<{ id: string }> }).prepareSelectedImageGeneration;
+    const child = await prepare(deps, { userId: id(1), guideTaskId: f.guide.id });
+    expect(child.id).not.toBe(f.guide.id);
+    expect(f.db.presentationAssets.find(row => row.id === f.guide.id)).toMatchObject({ status: 'approved', kind: 'interactive_html',
+      provenance: { taskId: f.guide.id, subtype: 'sourced_storyboard', storyboardDocument: result.selectedImageDraft!.document } });
+    expect(f.db.agentTasks.find(row => row.id === child.id)).toMatchObject({ kind: 'presentation.generate',
+      payload: { kind: 'image', sceneImage: { storyboardAssetId: f.guide.id, sceneIndex: 0 } } });
+    expect((await prepare(deps, { userId: id(1), guideTaskId: f.guide.id })).id).toBe(child.id);
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(debits + 1);
+    expect(f.fetcher).toHaveBeenCalledTimes(calls);
+    expect(stored.result).toEqual(receipt);
+    expect(stored.result.nextSteps).toEqual([]);
+    expect(f.image).toEqual(original);
+    expect((await getAgentTask(deps as never, { userId: id(1), taskId: f.guide.id })).result?.nextSteps)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ intent: 'open-task', targetId: child.id })]));
+    const claimed = await claimAgentTask(deps as never, child.id);
+    const imageTask = f.db.agentTasks.find(row => row.id === child.id)!;
+    f.generate.mockRejectedValue(new Error('R2_REAL_IMAGE_BOUNDARY_CAPTURED'));
+    await expect(f.handler(deps as never, { id: child.id, payload: imageTask.payload,
+      executionAttempt: claimed!.executionAttempt, retryCount: 0 } as never)).rejects.toThrow('R2_REAL_IMAGE_BOUNDARY_CAPTURED');
+    expect(f.generate).toHaveBeenCalledOnce();
+    expect(f.generate.mock.calls[0][0]).toMatchObject({ requestId: child.id,
+      prompt: expect.stringContaining(result.selectedImageDraft!.document.scenes[0]!.illustration!.message) });
+    expect(f.oldPlan).not.toHaveBeenCalled();
+  });
   it('uses the actual existing Worker factory Native configuration', async () => {
     const f = await selectedGuideFixture();
     expect(await f.runThroughFactory()).toMatchObject({ selectedImageDraft: { source: { assetId: f.image.id } } });

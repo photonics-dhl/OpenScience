@@ -1,4 +1,10 @@
 import { requireStyleReferenceImage } from './scene-image';
+import { requireSelectedImageSource } from './scene-image';
+import { readWorkspaceGuidePayloadWithSelectedImage, readWorkspaceSelectedImageDraft, selectedImageProductionIntent, workspaceSelectedImageDraftSource } from '../agent/workspace-guide-contract';
+import type { SelectedImageBinding } from './scene-image';
+import { nativeAgentTerminalResult, requireNativeIllustrationTerminalSource, requireNativeAgentExecutionAuthority } from '../agent/native-agent-execution';
+import { requireIllustrationSourceSupport } from './illustration-brief';
+import type { StorageAdapter } from '@openscience/storage';
 import { imageReviewHasNoSubmission } from './native-image-review';
 import { requireArtStyleContinuationTaskAuthority } from '../agent/art-style-continuation';
 import { requireFirstImageContinuationTaskAuthority } from '../agent/first-image-continuation';
@@ -26,6 +32,130 @@ import { parseDocumentSourceMapReference } from '../research-intelligence/source
 import { validateSourceLocator } from '../research-intelligence/validation';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const selectedImageChildKey = (guideId: string) => `selected-image:${guideId}:scene:0`;
+
+/** Server-only retained source reader. No raw proposal or caller approval is accepted. */
+export async function requireSelectedImageGuideProduction(tx: Prisma.TransactionClient, input: { userId: string; guideTaskId: string; executionAttempt?: number }) {
+  function fail(): never { throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production source changed'); }
+  const task = await tx.agentTask.findUnique({ where: { id: input.guideTaskId } });
+  if (!task || task.deletedAt || task.kind !== 'workspace.guide' || !['succeeded', 'failed', 'running'].includes(task.status)) fail();
+  if (task.status === 'running') {
+    if (input.executionAttempt === undefined) fail();
+    await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: input.executionAttempt });
+  }
+  const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
+  const payload = readWorkspaceGuidePayloadWithSelectedImage(task.payload), scope = payload.context.presentation;
+  if (!session || session.deletedAt || session.status !== 'active' || session.kind !== 'workspace.guide' || session.userId !== input.userId
+    || !scope?.versionId || !scope.selectedImageAssetId || session.researchObjectId !== scope.researchObjectId) fail();
+  await requirePresentationWriteScope(tx, { userId: input.userId, researchObjectId: scope.researchObjectId, versionId: scope.versionId });
+  const saved = recordValue(task.result), marker = readNativeAgentExecution(saved), cp = marker?.checkpoint;
+  if (marker?.profile !== 'paper-illustration' || !cp || cp.taskId !== task.id || cp.executionAttempt > task.executionAttempt
+    || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls) fail();
+  await requireNativeIllustrationTerminalSource(tx, task);
+  const reply = recordValue(saved.selectedImageReply);
+  const incoming = Object.fromEntries(['summary', 'nextSteps', 'needsMoreInformation', 'selectedImageReference', 'selectedImageDraft', 'sourceMapRef', 'selectedImageReply', 'storyboardReview']
+    .filter(key => Object.hasOwn(saved, key)).map(key => [key, saved[key]]));
+  // A completed paid source may be retained after a failed final task CAS.
+  incoming.summary = reply.summary; incoming.nextSteps = []; incoming.needsMoreInformation = reply.kind !== 'proposal' && reply.kind !== 'explanation';
+  incoming.selectedImageReference ??= workspaceSelectedImageDraftSource(saved.selectedImageContext as unknown as SelectedImageBinding);
+  nativeAgentTerminalResult(task, 'succeeded', incoming);
+  if (reply.kind !== 'proposal' || !selectedImageProductionIntent(payload.goal)) return undefined;
+  const draft = readWorkspaceSelectedImageDraft(saved.selectedImageDraft);
+  const document = parseStoryboardDocument(draft.document, draft.source.sourceClaimIds, 'image');
+  const source = await requireSelectedImageSource(tx, { userId: input.userId, researchObjectId: scope.researchObjectId,
+    versionId: scope.versionId, assetId: scope.selectedImageAssetId });
+  const review = recordValue(saved.storyboardReview), native = recordValue(saved.nativeIllustration);
+  if (document.scenes.length !== 1 || review.sourceEvidenceIdentity !== source.binding.sourceEvidenceIdentity
+    || native.runtimeId !== marker.runtimeId || native.skillCatalogueId !== marker.skillCatalogueId
+    || typeof native.planToolCallId !== 'string' || !native.planToolCallId || typeof native.reviewToolCallId !== 'string'
+    || !native.reviewToolCallId || native.reviewToolCallId === native.planToolCallId || native.reviewToolCallId !== reply.reviewToolCallId) fail();
+  const supported = source.claims.map(claim => ({ id: claim.id, sourcePassages: source.evidence.filter(row => row.claimId === claim.id)
+    .map(row => ({ evidenceId: row.id, text: row.exactQuote ?? '', relation: row.relation })) }));
+  for (const scene of document.scenes) {
+    if (!scene.illustration || scene.paperOriginal) fail();
+    requireIllustrationSourceSupport(scene.illustration, supported);
+  }
+  // Mirror the actual Native planning settings. The complete user goal remains
+  // on this immutable guide, including requests longer than the old 1000-char plan field.
+  const settings = parseStoryboardRequest({ locale: payload.locale, style: source.settings.style,
+    instruction: 'Revise only the selected image. Read the complete userRequest and original scientific brief in context.selectedImage.',
+    output: 'image', narrative: true, narrativeSceneLimit: 1 });
+  return { task, session, payload, scope: { researchObjectId: scope.researchObjectId, versionId: scope.versionId }, source, document, settings, review, native };
+}
+
+export async function requireSelectedImageGuideParent(tx: Prisma.TransactionClient,
+  input: { userId: string; guideTaskId: string; executionAttempt?: number }, expected?: { contentHash: string; objectKey: string }) {
+  const authority = await requireSelectedImageGuideProduction(tx, input);
+  if (!authority) throw new PresentationAssetError('VALIDATION_ERROR', 'Selected guide does not authorize image production');
+  const asset = await tx.presentationAsset.findUnique({ where: { id: input.guideTaskId } });
+  const p = recordValue(asset?.provenance);
+  const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: input.guideTaskId } });
+  if (!asset || asset.deletedAt || asset.kind !== 'interactive_html' || !['draft', 'approved'].includes(asset.status)
+    || asset.label !== PRESENTATION_ASSET_LABEL || asset.generator !== 'OpenScience Hermes storyboard planner' || asset.generatorVersion !== '1'
+    || asset.researchObjectId !== authority.scope.researchObjectId || asset.versionId !== authority.scope.versionId
+    || p.taskId !== authority.task.id || p.subtype !== 'sourced_storyboard' || p.source !== 'verified_claims'
+    || !isDeepStrictEqual(p.storyboardDocument, authority.document) || !isDeepStrictEqual(p.storyboardSettings, authority.settings)
+    || !isDeepStrictEqual(p.illustrationReview, authority.review) || !isDeepStrictEqual(p.nativeIllustration, authority.native)
+    || p.sourceEvidenceIdentity !== authority.source.binding.sourceEvidenceIdentity
+    || !isDeepStrictEqual(p.sourceEvidenceIds, authority.source.evidence.map(row => row.id))
+    || !isDeepStrictEqual(p.sourceClaimIds, authority.source.binding.sourceClaimIds) || p.contentType !== 'text/html; charset=utf-8'
+    || !isDeepStrictEqual(links.map(link => link.claimId).sort(), authority.source.binding.sourceClaimIds)
+    || (expected && (asset.contentHash !== expected.contentHash || asset.objectKey !== expected.objectKey)))
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image parent no longer matches its original guide');
+  return { ...authority, asset };
+}
+
+/** Dormant R2 producer; only the later authenticated selected-guide consumer connects it. */
+export async function adoptSelectedImageGuide(deps: AgentDeps & { storage: Pick<StorageAdapter, 'putObject'>;
+  renderStoryboard: (document: ReturnType<typeof parseStoryboardDocument>, settings: StoryboardRequest) => Buffer },
+input: { userId: string; guideTaskId: string; executionAttempt?: number }): Promise<AgentTaskView | undefined> {
+  const initial = await deps.prisma.$transaction(tx => requireSelectedImageGuideProduction(tx, input), { isolationLevel: 'Serializable' });
+  if (!initial) return undefined;
+  const scope = { ...initial.scope, userId: input.userId };
+  await withPresentationAssetWrite(deps.prisma, scope, async (tx, version) => {
+    const current = await requireSelectedImageGuideProduction(tx, input);
+    if (!current) throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production intent changed');
+    const bytes = deps.renderStoryboard(current.document, current.settings);
+    const contentHash = createHash('sha256').update(bytes).digest('hex');
+    const objectKey = `presentation/${scope.researchObjectId}/${scope.versionId}/${contentHash}.html`;
+    const existing = await tx.presentationAsset.findUnique({ where: { id: current.task.id } });
+    if (existing) { await requireSelectedImageGuideParent(tx, input, { contentHash, objectKey }); return; }
+    await tx.trashObjectCleanup.updateMany({ where: { objectKey }, data: { state: 'retained', lastError: null } });
+    await deps.storage.putObject(objectKey, bytes, { contentType: 'text/html; charset=utf-8', sha256: contentHash });
+    await tx.presentationAsset.create({ data: { id: current.task.id, ...current.scope, kind: 'interactive_html', status: 'draft',
+      contentHash, objectKey, generator: 'OpenScience Hermes storyboard planner', generatorVersion: '1', promptHash: String(current.review.promptHash), label: PRESENTATION_ASSET_LABEL,
+      provenance: { source: 'verified_claims', subtype: 'sourced_storyboard', taskId: current.task.id, sourceEvidenceIdentity: current.source.binding.sourceEvidenceIdentity,
+        sourceEvidenceIds: current.source.evidence.map(row => row.id), sourceClaimIds: current.source.binding.sourceClaimIds,
+        storyboardDocument: current.document, storyboardSettings: current.settings, illustrationReview: current.review,
+        nativeIllustration: current.native, contentType: 'text/html; charset=utf-8' } as unknown as Prisma.InputJsonObject } });
+    await tx.presentationAssetClaim.createMany({ data: current.source.binding.sourceClaimIds.map(claimId => ({ presentationAssetId: current.task.id, claimId, ...current.scope })) });
+    await recordAudit(deps, tx, { actorId: input.userId, workspaceId: version.researchObject.workspaceId,
+      action: 'presentation_asset.generated', targetType: 'presentation_asset', targetId: current.task.id,
+      metadata: { taskId: current.task.id, ...current.scope, subtype: 'sourced_storyboard' } }, {});
+  });
+  const parent = await requireSelectedImageGuideParent(deps.prisma, input);
+  if (parent.asset.status === 'draft') await transitionPresentationAssetUnderReview(deps, { ...scope, assetId: parent.asset.id,
+    status: 'approved', expectedUpdatedAt: parent.asset.updatedAt }, {}, undefined, input.guideTaskId, input.executionAttempt);
+  await requireSelectedImageGuideParent(deps.prisma, input);
+  return submitPresentationGeneration(deps, { ...scope, kind: 'image', sourceClaimIds: [...parent.source.binding.sourceClaimIds],
+    sceneImage: { storyboardAssetId: parent.asset.id, sceneIndex: 0 }, idempotencyKey: selectedImageChildKey(input.guideTaskId) });
+}
+
+/** Authenticated read projection, never a model-provided child id. */
+export async function readSelectedImageGenerationChild(tx: Prisma.TransactionClient, input: { userId: string; guideTaskId: string }) {
+  const child = await tx.agentTask.findUnique({ where: { idempotencyKey: selectedImageChildKey(input.guideTaskId) } });
+  if (!child || child.deletedAt) return undefined;
+  const owner = await tx.agentTask.findUnique({ where: { id: input.guideTaskId } });
+  const parent = await requireSelectedImageGuideParent(tx, { ...input, executionAttempt: owner?.executionAttempt });
+  if (parent.asset.status !== 'approved') throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image child parent is no longer approved');
+  const session = await tx.agentSession.findUnique({ where: { id: child.sessionId } });
+  const expected = { schemaVersion: 1, ...parent.scope, kind: 'image', sourceClaimIds: [...parent.source.binding.sourceClaimIds], sceneImage: { storyboardAssetId: input.guideTaskId, sceneIndex: 0 } };
+  if (child.kind !== 'presentation.generate' || !session || session.deletedAt || session.userId !== input.userId || session.researchObjectId !== parent.scope.researchObjectId
+    || session.kind !== 'visualization' || !isDeepStrictEqual(child.payload, expected))
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image child changed');
+  return child;
+}
 const KINDS = ['chart', 'interactive_html', 'image', 'video'] as const;
 const SERIALIZABLE_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000, 2000, 4000, 8000] as const;
 export const HERMES_IMAGE_RENDER_RECOVERY_ACTION = 'hermes.research_run.image_render_recovery';
@@ -510,7 +640,7 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
           } catch { return false; }
         })) throw new PresentationAssetError('VALIDATION_ERROR', 'A scene image task is already in progress');
       };
-      const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true } });
+      const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true, provenance: true } });
       if (!lockedParent) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
       const lockTimestamp = new Date();
       const locked = await tx.presentationAsset.updateMany({ where: { id: lockedParent.id, updatedAt: lockedParent.updatedAt }, data: { updatedAt: lockTimestamp } });
@@ -521,6 +651,16 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       if (lockedExistingTask && !lockedExistingTask.deletedAt) return;
       const currentParent = await requireSceneImageParent(tx, payload);
       if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');
+      const parentOwner = await tx.agentTask.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId } });
+      if (parentOwner?.kind === 'workspace.guide' || recordValue(lockedParent.provenance).nativeIllustration !== undefined) {
+        if (parentOwner?.kind !== 'workspace.guide') throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image parent has no original guide owner');
+        const selected = await requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: parentOwner.id, executionAttempt: parentOwner.executionAttempt });
+        if (selected.asset.status !== 'approved' || payload.sceneImage!.sceneIndex !== 0
+          || input.idempotencyKey !== selectedImageChildKey(parentOwner.id)
+          || !isDeepStrictEqual(payload.sourceClaimIds, selected.source.binding.sourceClaimIds)
+          || payload.sceneImage!.styleReferenceAssetId || payload.sceneImage!.revisionAssetId)
+          throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image submission no longer matches its guide');
+      }
       if (videoIntent) {
         await requireSceneImageSpendIsNew(tx, currentParent, payload);
         await rejectPending();
@@ -720,11 +860,17 @@ export async function transitionHermesPresentationAsset(deps: AgentDeps, input: 
 
 async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
   userId: string; researchObjectId: string; versionId: string; assetId: string; status: Extract<PresentationAssetStatus, 'approved' | 'rejected'>; expectedUpdatedAt: Date;
-}, ctx: AuditContext, internalRunId?: string): Promise<PresentationAsset> {
+}, ctx: AuditContext, internalRunId?: string, selectedGuideTaskId?: string, selectedGuideExecutionAttempt?: number): Promise<PresentationAsset> {
   return withPresentationAssetWrite(deps.prisma, input, async (tx, version) => {
     const transaction = { ...deps, prisma: tx as AgentDeps['prisma'] };
     const asset = await tx.presentationAsset.findUnique({ where: { id: input.assetId } });
     if (!asset || asset.deletedAt || asset.researchObjectId !== input.researchObjectId || asset.versionId !== input.versionId) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
+    if (selectedGuideTaskId) {
+      const selected = await requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: selectedGuideTaskId, executionAttempt: selectedGuideExecutionAttempt });
+      if (internalRunId || selected.asset.id !== asset.id || input.status !== 'approved' || selected.review.decision !== 'accepted')
+        throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image scientific transition does not match its guide');
+      if (asset.status === 'approved') return asset; // A qualified concurrent approval already committed; do not approve or audit twice.
+    }
     const pixel = internalRunId ? await readNarrativePixelReplanAuthority(tx, { runId: internalRunId, actorId: input.userId }) : null;
     if (pixel && !deps.audit?.record) throw new PresentationAssetError('VALIDATION_ERROR', 'Narrative replacement audit is unavailable');
     if (internalRunId) {
@@ -870,7 +1016,7 @@ async function transitionPresentationAssetUnderReview(deps: AgentDeps, input: {
     }
     const current = await tx.presentationAsset.findUnique({ where: { id: asset.id } });
     if (!current) throw new PresentationAssetError('NOT_FOUND', 'Presentation asset not found');
-    await recordAudit(transaction, tx, { actorId: internalRunId ? null : input.userId, action: `presentation_asset.${internalRunId ? 'system_' : ''}${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind, ...(input.status === 'rejected' ? { invalidatedSceneImageCount } : {}), ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, userAccepted: false } : {}) } }, ctx);
+    await recordAudit(transaction, tx, { actorId: internalRunId || selectedGuideTaskId ? null : input.userId, action: `presentation_asset.${internalRunId || selectedGuideTaskId ? 'system_' : ''}${input.status}`, workspaceId: version.researchObject.workspaceId, targetType: 'presentation_asset', targetId: asset.id, metadata: { researchObjectId: input.researchObjectId, versionId: input.versionId, kind: asset.kind, ...(input.status === 'rejected' ? { invalidatedSceneImageCount } : {}), ...(internalRunId ? { executor: 'hermes', authorizedByUserId: input.userId, runId: internalRunId, userAccepted: false } : {}), ...(selectedGuideTaskId ? { executor: 'hermes', authorizedByUserId: input.userId, guideTaskId: selectedGuideTaskId, userAccepted: false } : {}) } }, ctx);
     return current;
   });
 }
