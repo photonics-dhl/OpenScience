@@ -61,6 +61,81 @@ test('private rollback rejection diagnostics preserve refusal and opt in only fo
   }
 });
 
+test('private video ingress diagnostics identify the original side and first failed obligation without exposing returned data', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const video = deployLockSource.match(/function finiteVideoPairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const directory = await mkdtemp(join(fileURLToPath(new URL('../../tmp/', import.meta.url)), 'video-ingress-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous'), roots = [['apps/reader.ts']];
+  for (const root of [candidate, previous]) {
+    await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+    await writeFile(join(root, 'apps/reader.ts'), 'export function read() { return 1; }');
+  }
+  let sinkFailure = false, proofs, calls;
+  const environment = { resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [],
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
+    console: { error(value) { if (sinkFailure) throw Error('SECRET-sink'); events.push(value); } },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+    proveNativeVideoReceiptIngress(_ts, program, root) {
+      const index = root === candidate ? 0 : 1; calls.push(index);
+      assert.equal(program, contexts.get(index === 0 ? current : old).program);
+      if (proofs[index] instanceof Error) throw proofs[index];
+      return proofs[index];
+    } };
+  const collect = runInNewContext(`${collector}; rollbackReaderClosure`, environment);
+  const current = collect(ts, candidate, roots), old = collect(ts, previous, roots);
+  // Real original collector contexts, but only the actual ingress wrapper is
+  // exercised here: this is no DEFAULT or finite source-model acceptance proof.
+  const head = video.slice(0, video.indexOf('  try {'));
+  const body = video.slice(video.indexOf("    site = 'ingress'"), video.indexOf("    site = 'family'"));
+  const invoke = runInNewContext(`${helper}; ${head} try {
+    const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
+    ${body} return true;
+  } catch (error) { return reject(error); } }; finiteVideoPairCompatibility`, environment);
+  const edges = ['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix',
+    'session-checkpoint-prefix', 'verified-base', 'store-capability-use', 'generic-private-store-chain'];
+  const healthy = () => ({ reason: 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', storeGraph: { status: 'conditional' },
+    privateStoreChain: { status: 'conditional' }, proven: [...edges] });
+  const run = (result, side = 0, diagnostics = true, entries = current) => {
+    proofs = [healthy(), healthy()]; proofs[side] = result; calls = []; events.length = 0;
+    const accepted = invoke(ts, entries, old, candidate, previous, roots, diagnostics);
+    return { accepted, lines: events.map(value => JSON.parse(value.slice(value.indexOf(' ') + 1))) };
+  };
+  const cases = [
+    ['reason', () => ({ reason: 'PROGRAM_SYNTAX_UNKNOWN' })],
+    ['store-graph', () => ({ reason: healthy().reason, storeGraph: { status: 'unproven' } })],
+    ['private-store-chain', () => ({ reason: healthy().reason, storeGraph: { status: 'conditional' },
+      privateStoreChain: { status: 'unproven' } })],
+    ...edges.map(edge => [edge, () => ({ ...healthy(), proven: edges.filter(value => value !== edge) })]),
+  ];
+  for (const side of [0, 1]) for (const [site, make] of cases) {
+    const result = run(make(), side);
+    assert.equal(result.accepted, false);
+    assert.deepEqual(calls, side === 0 ? [0] : [0, 1], 'original proof evaluation stops at the first refusal');
+    assert.deepEqual(result.lines, [{ stage: 'video', code: site === 'reason' ? 'PROGRAM_SYNTAX_UNKNOWN' : 'COMPATIBILITY_UNKNOWN',
+      site: `ingress-${site}`, side: side === 0 ? 'candidate' : 'rollback' }]);
+  }
+  let reads = 0;
+  const secret = { reason: 'SECRET', get at() { reads++; throw Error('SECRET'); }, toJSON() { reads++; throw Error('SECRET'); } };
+  assert.equal(run(secret).lines[0].code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(reads, 0);
+  assert.doesNotMatch(events.join(''), /SECRET/u);
+  const proxyReason = new Proxy({}, { get() { reads++; throw Error('SECRET'); },
+    getOwnPropertyDescriptor() { reads++; throw Error('SECRET'); } });
+  assert.equal(run({ reason: proxyReason }).lines[0].code, 'COMPATIBILITY_UNKNOWN'); assert.equal(reads, 0);
+  for (const side of [0, 1]) assert.deepEqual(run(Error('SECRET'), side).lines,
+    [{ stage: 'video', code: 'COMPATIBILITY_UNKNOWN', site: 'ingress', side: side === 0 ? 'candidate' : 'rollback' }]);
+  for (const value of [false, 'true', 1]) assert.equal(run(secret, 0, value).lines.length, 0);
+  const unbound = run(secret, 0, true, [...current]);
+  assert.equal(unbound.accepted, false); assert.equal(unbound.lines[0].code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(unbound.lines[0].side, undefined);
+  sinkFailure = true; assert.equal(run(secret).accepted, false); assert.equal(events.length, 0); sinkFailure = false;
+  assert.equal(run(healthy()).accepted, true); assert.deepEqual(calls, [0, 1]); assert.equal(events.length, 0);
+});
+
 test('private rollback diagnostic privacy uses only natural captured AST identity and fixed refusal sites', async t => {
   const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
   const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
@@ -124,12 +199,9 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   const segments = [
     [video.slice(video.indexOf('    for (const key of new Set'), video.indexOf('    for (const key of projectedKeys)')), 'remaining-entry'],
     [video.match(/      site = 'projected-equality';\r?\n      if [^\n]+/u)[0], 'projected-equality'],
-    [video.slice(video.indexOf("      if (ingress.reason"), video.indexOf("    site = 'family'")), 'ingress'],
     [video.slice(video.indexOf("    site = 'family'"), video.indexOf('  } catch')), 'family'],
   ];
   for (let [body, expected] of segments) {
-    // The ingress snippet includes its original enclosing loop's closing brace.
-    if (expected === 'ingress') body = body.slice(0, body.lastIndexOf('    }'));
     events.length = 0;
     const reject = (error, reason) => { functions.emit(ts,current,old,candidate,previous,roots,'video',expected,error,key,reason); return false; };
     const family = deployLockSource.match(/function finiteVideoFamilyClosure\([^\n]+\) \{[\s\S]*?\n\}/u)[0];

@@ -2702,12 +2702,16 @@ function finiteVideoFamilyClosure(candidate, rollback) {
   return { status: 'conditional', reachable: [...reachable], transitions };
 }
 
-function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots, branch, site, error, moduleKey, familyCode) {
+function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots, branch, site, error, moduleKey, familyCode, ingressSide) {
   try {
-    let code = 'COMPATIBILITY_UNKNOWN', module;
+    let code = 'COMPATIBILITY_UNKNOWN', module, side;
     const stages = ['video', 'selected-guide'];
     const sites = ['context', 'model', 'library', 'projected-keys', 'remaining-entry', 'captured-source',
-      'projected-runtime', 'transpile', 'projected-equality', 'ingress', 'family', 'builtin'];
+      'projected-runtime', 'transpile', 'projected-equality', 'ingress', 'family', 'builtin',
+      'ingress-reason', 'ingress-store-graph', 'ingress-private-store-chain',
+      'ingress-materializer-host', 'ingress-host-slot-result', 'ingress-host-before-session',
+      'ingress-session-prefix', 'ingress-session-checkpoint-prefix', 'ingress-verified-base',
+      'ingress-store-capability-use', 'ingress-generic-private-store-chain'];
     if (!stages.includes(branch) || !sites.includes(site)) return;
     const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
     const bound = [left, right].every((owner, index) => owner && owner.ts === ts && owner.roots === roots
@@ -2730,7 +2734,55 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
         'SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL', 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN',
         'SELECTED_GUIDE_RESIDUAL_MISSING', 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', 'SELECTED_GUIDE_SUPPLEMENTARY_SOURCE_UNKNOWN',
         'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN', 'IMAGE_CAPTURED_SOURCE_IDENTITY_CHANGED', 'IMAGE_PROJECTED_RUNTIME_INVALID']);
+      const ingressCodes = new Set([
+        'ASSISTANT_COUNT_UNBOUND', 'ASSISTANT_HISTORY_LOOP_UNKNOWN', 'ASSISTANT_MESSAGE_ORIGIN_UNKNOWN',
+        'ASSISTANT_RESPONSE_UNBOUND', 'ASSISTANT_TURN_ORIGIN_UNKNOWN', 'BASE_PROOF_UNKNOWN', 'BASE_READER_MISSING',
+        'BASE_REPLAY_ORIGIN_UNKNOWN', 'BASE_TASK_NOT_VERIFIED', 'BINDING_assistantMessages_UNKNOWN',
+        'BINDING_attempt_UNKNOWN', 'BINDING_binding_UNKNOWN', 'BINDING_cursor_UNKNOWN', 'BINDING_known_UNKNOWN',
+        'BINDING_materializer_UNKNOWN', 'BINDING_native_UNKNOWN', 'BINDING_paper_UNKNOWN', 'BINDING_preceding_UNKNOWN',
+        'BINDING_prepared_UNKNOWN', 'BINDING_rebuilt_UNKNOWN', 'BINDING_retry_UNKNOWN', 'BINDING_saved_UNKNOWN',
+        'BINDING_session_UNKNOWN', 'BINDING_slots_UNKNOWN', 'BINDING_source_UNKNOWN', 'BINDING_state_UNKNOWN',
+        'BINDING_store_UNKNOWN', 'BINDING_task_UNKNOWN', 'CALLER_SELECTED_SAVED_STATE', 'COMPLETED_CHECKPOINT_UNKNOWN',
+        'EXTRA_LIVE_OR_REPLAY_CALLER', 'EXTRA_MATERIALIZER_CALLER', 'EXTRA_UNBOUND_FACTORY_CALLER',
+        'FACTORY_ALIAS_OR_ESCAPE_UNKNOWN', 'FRESH_HISTORY_NOT_EMPTY', 'FUNCTION_blocked_UNKNOWN',
+        'FUNCTION_checkHistory_UNKNOWN', 'FUNCTION_compareNativeAgentCheckpoint_UNKNOWN', 'FUNCTION_completeOnce_UNKNOWN',
+        'FUNCTION_createJournalNativeTaskStore_UNKNOWN', 'FUNCTION_createNativeAgentSession_UNKNOWN',
+        'FUNCTION_createNativeIllustrationMaterializer_UNKNOWN', 'FUNCTION_createNativeTaskStore_UNKNOWN',
+        'FUNCTION_nativeAgentSdkRequest_UNKNOWN', 'FUNCTION_persist_UNKNOWN', 'FUNCTION_readNativeAgentExecution_UNKNOWN',
+        'FUNCTION_read_UNKNOWN', 'FUNCTION_replayNativeVideoPlan_UNKNOWN', 'FUNCTION_requireNativeVideoStoryboard_UNKNOWN',
+        'FUNCTION_runHostedNativeTask_UNKNOWN', 'FUNCTION_runNativeIllustrationTask_UNKNOWN', 'FUNCTION_stopped_UNKNOWN',
+        'FUNCTION_validateSourceHistory_UNKNOWN', 'HOST_HISTORY_ARGUMENT_UNBOUND', 'HOST_HISTORY_CHECK_BYPASS',
+        'HOST_HISTORY_NOT_DECODED', 'HOST_MESSAGES_BINDING_UNKNOWN', 'HOST_RESULT_ASSIGNMENT_UNKNOWN',
+        'HOST_SESSION_CALL_UNKNOWN', 'HOST_SESSION_STATEMENT_UNKNOWN', 'HOST_SLOT_GUARDS_UNKNOWN',
+        'HOST_SLOT_GUARD_BYPASS', 'HOST_SLOT_ITERABLE_UNKNOWN', 'HOST_SLOT_LOOP_UNKNOWN', 'HOST_SLOT_NOT_AUTHENTICATED',
+        'HOST_STORE_SESSION_ORIGIN_UNKNOWN', 'HOST_TOOL_RESULT_ORIGIN_UNKNOWN', 'HOST_TOOL_RESULT_UNBOUND',
+        'IMPORT_BINDING_UNKNOWN', 'INITIAL_PREFIX_UNBOUND', 'LATEST_PREFIX_NOT_RETAINED', 'LATE_SPREAD_OVERRIDES_BINDING',
+        'LIVE_BASE_NOT_RECONSTRUCTED', 'LIVE_BASE_UNKNOWN', 'LOCAL_ORIGIN_UNKNOWN', 'MODEL_SELECTED_SLOT_RESULT',
+        'MUTABLE_ORIGIN_UNKNOWN', 'OBJECT_BINDING_UNKNOWN', 'PAID_CHECKPOINT_ORIGIN_UNKNOWN', 'PAPER_CALL_NOT_BOUND',
+        'PAPER_CALL_NOT_MATERIALIZER', 'PRIOR_PREFIX_UNBOUND', 'PRIVATE_CAS_REFERENCE_UNKNOWN',
+        'PRIVATE_EXPECTED_MEMBERSHIP_UNKNOWN', 'PRIVATE_EXPECTED_ORIGIN_UNKNOWN', 'PRIVATE_HASH_ORIGIN_UNKNOWN',
+        'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN', 'PRIVATE_KNOWN_USE_UNKNOWN', 'PRIVATE_LOCAL_ORIGIN_UNKNOWN',
+        'PRIVATE_PREPARED_REFERENCE_UNKNOWN', 'PRIVATE_READ_REFERENCE_UNKNOWN', 'PRIVATE_REFERENCE_ESCAPE_UNKNOWN',
+        'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', 'PRIVATE_SERIALIZER_RETURN_UNKNOWN', 'PRIVATE_UPDATE_TRANSACTION_UNKNOWN',
+        'PRIVATE_UPLOAD_ORIGIN_UNKNOWN', 'PROGRAM_SOURCE_MISSING', 'PROGRAM_SYNTAX_UNKNOWN', 'REJECTION_NOT_TERMINAL',
+        'REPLAY_COMPARISON_NOT_TERMINAL', 'REPLAY_CP_ORIGIN_UNKNOWN', 'REPLAY_NOT_COMPLETED_CP_FINISH',
+        'REPLAY_SELECTED_SAVED_STATE', 'REPLAY_WHOLE_ARTIFACT_UNBOUND', 'RETRY_STARTED_ORIGIN_UNKNOWN',
+        'SAVED_STATE_ORIGIN_UNKNOWN', 'SEMANTIC_CALL_BINDING_UNKNOWN', 'SESSION_CURSOR_ORIGIN_UNKNOWN',
+        'SESSION_MESSAGES_BINDING_UNKNOWN', 'SESSION_OPTIONS_BINDING_UNKNOWN', 'SESSION_PREFIX_CALL_BYPASS',
+        'SESSION_REQUEST_NOT_DECODED', 'SESSION_STATE_ORIGIN_UNKNOWN', 'SOURCE_ANALYSIS_UNKNOWN',
+        'STARTED_CHECKPOINT_UNKNOWN', 'STORE_CAPABILITY_INPUT_ESCAPE_UNKNOWN', 'STORE_CAS_SUPPLIER_UNKNOWN',
+        'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', 'STORE_EFFECTIVE_MEMBER_UNKNOWN',
+        'STORE_FACTORY_INSTANCE_COUNT_UNKNOWN', 'STORE_FACTORY_RESULT_UNKNOWN', 'STORE_HOST_IDENTITY_UNKNOWN',
+        'STORE_INPUT_IDENTITY_UNKNOWN', 'STORE_INSTANCE_ESCAPE_UNKNOWN', 'STORE_JOURNAL_CAS_SUPPLIER_UNKNOWN',
+        'STORE_MARKER_IDENTITY_UNKNOWN', 'STORE_METHOD_ESCAPE_UNKNOWN', 'STORE_METHOD_NOT_AWAITED_UNKNOWN',
+        'STORE_PERSIST_SUPPLIER_UNKNOWN', 'STORE_RETURN_SUPPLIER_UNKNOWN', 'STORE_RETURN_UNKNOWN',
+        'STORE_SESSION_ESCAPE_UNKNOWN', 'STORE_SESSION_IDENTITY_UNKNOWN', 'STORE_SHARED_SUPPLIER_UNKNOWN',
+        'STORE_SUBSTITUTE_INSTANCE_UNKNOWN', 'STORE_UNEXPECTED_WRITER_UNKNOWN', 'STORE_UNKNOWN_CONSUMER',
+        'STORE_UPDATE_SUPPLIER_UNKNOWN',
+      ]);
+      if (branch === 'video' && site.startsWith('ingress') && ['candidate', 'rollback'].includes(ingressSide)) side = ingressSide;
       const thrown = data(error, 'reason');
+      if (branch === 'video' && site === 'ingress-reason' && ingressCodes.has(thrown)) code = thrown;
       if ((branch === 'selected-guide' ? selected : new Set(['VIDEO_CONSTRUCTOR_NOT_PURE', 'VIDEO_TRANSFER_UNKNOWN'])).has(thrown)) code = thrown;
       if (branch === 'video' && site === 'family' && ['OLD_CONSTRUCTOR_CHANGED', 'READER_CAPABILITY_REMOVED',
         'RETAINED_CONSTRUCTOR_CHANGED', 'FRESH_SOURCE_UNKNOWN', 'TRANSFER_SOURCE_UNKNOWN', 'ROLLBACK_FAMILY_NOT_CLOSED'].includes(familyCode)) code = familyCode;
@@ -2754,15 +2806,15 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
         if (module) break;
       }
     }
-    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site, ...(module ? { module } : {}) })}`);
+    console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site, ...(module ? { module } : {}), ...(side ? { side } : {}) })}`);
   } catch { /* Diagnostics never replace the original refusal. */ }
 }
 
 function finiteVideoPairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots, diagnostics = false) {
-  let site = 'context', moduleKey;
+  let site = 'context', moduleKey, ingressSide;
   const reject = (error, familyCode) => {
     if (diagnostics === true) emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots,
-      'video', site, error, moduleKey, familyCode);
+      'video', site, error, moduleKey, familyCode, ingressSide);
     return false;
   };
   try {
@@ -2810,11 +2862,17 @@ function finiteVideoPairCompatibility(ts, current, previous, candidateRoot, roll
     // codec gate is introduced, and unrelated origins gain no new A constructor.
     site = 'ingress'; moduleKey = undefined;
     for (const context of [left, right]) {
+      site = 'ingress';
+      ingressSide = context === left ? 'candidate' : 'rollback';
       const ingress = proveNativeVideoReceiptIngress(ts, context.program, context.root);
-      if (ingress.reason !== 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN'
-        || ingress.storeGraph.status !== 'conditional' || ingress.privateStoreChain.status !== 'conditional'
+      let ingressReason;
+      if ((site = 'ingress-reason', ingressReason = ingress.reason, ingressReason !== 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN')
+        || (site = 'ingress-store-graph', ingress.storeGraph.status !== 'conditional')
+        || (site = 'ingress-private-store-chain', ingress.privateStoreChain.status !== 'conditional')
         || !['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix', 'session-checkpoint-prefix',
-          'verified-base', 'store-capability-use', 'generic-private-store-chain'].every(edge => ingress.proven.includes(edge))) return reject();
+          'verified-base', 'store-capability-use', 'generic-private-store-chain']
+          .every(edge => (site = `ingress-${edge}`, ingress.proven.includes(edge))))
+        return reject(site === 'ingress-reason' ? { reason: ingressReason } : undefined);
     }
     site = 'family';
     const family = finiteVideoFamilyClosure(candidate, rollback);
