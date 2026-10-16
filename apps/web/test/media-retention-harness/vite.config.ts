@@ -16,6 +16,7 @@ export default {
   } }],
   resolve: { alias: {
     '@': fileURLToPath(new URL('../../', import.meta.url)),
+    '@openscience/domain/browser-result': fileURLToPath(new URL('../../../../packages/domain/src/retrieval/browser-result.ts', import.meta.url)),
     '@openscience/domain/workspace-guide-contract': fileURLToPath(new URL('../../../../packages/domain/src/agent/workspace-guide-contract.ts', import.meta.url)),
     '@openscience/domain/storyboard-visible-action': fileURLToPath(new URL('../../../../packages/domain/src/assets/storyboard-visible-action.ts', import.meta.url)),
   } },
