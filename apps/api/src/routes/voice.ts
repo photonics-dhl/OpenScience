@@ -9,7 +9,7 @@ import { AgentError, findHermesVoiceSubmission, getHermesVoiceAudio, getHermesVo
   isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY,
   type HermesVoiceDeps, type HermesVoicePreset } from '@openscience/domain';
 import { requireCurrentUser } from './session-guard';
-import { sendPresentationAssetContent } from './presentation-asset-content';
+import { sendHermesVoiceAudioContent } from './presentation-asset-content';
 
 export type VoiceRouteDeps = AuthDeps & { storage?: StorageAdapter; voiceRuntime?: SynclipVoiceRuntime; malwareScanner?: MalwareScanner };
 const idSchema = z.string().uuid();
@@ -97,8 +97,6 @@ export function registerHermesVoiceRoutes(app: FastifyInstance, deps: VoiceRoute
     const user = await requireCurrentUser(deps, req, reply); if (!user) return;
     const { id: taskId } = z.object({ id: idSchema }).parse(req.params);
     const audio = await getHermesVoiceAudio(domain(), { userId: user.userId, taskId });
-    return sendPresentationAssetContent(deps.storage!, { id: taskId, objectKey: audio.objectKey,
-      contentHash: audio.sha256, size: audio.bytes, contentType: audio.contentType,
-      kind: 'audio', generator: 'synclip', generatorVersion: 'hermes-voice' }, reply, 'private', req.headers);
+    return sendHermesVoiceAudioContent(deps.storage!, taskId, audio, reply, req.headers);
   });
 }

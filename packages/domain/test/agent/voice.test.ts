@@ -240,6 +240,27 @@ describe('Hermes voice recording and submission', () => {
 });
 
 describe('Hermes voice current authority and source', () => {
+  it('WAV reader keeps exact MIME, extension, owner/task/hash and private storage metadata binding', async () => {
+    const f = fixture(); const task = await submitHermesVoiceReply(f.deps, f.replyInput); const execution = await f.claim(task.id);
+    await withHermesVoiceSubmission(f.deps, execution, async () => ({ providerId: 'existing-wav-result', credits: 1 }));
+    const bytes = wav(); bytes.writeUInt32LE(24000, 24); bytes.writeUInt32LE(48000, 28);
+    const sha256 = sha256HexBuffer(bytes);
+    const audio = { objectKey: `derived/hermes-voice/${id(1)}/${task.id}/${sha256}.wav`, sha256, bytes: bytes.length, contentType: 'audio/wav' as const };
+    const completed = { phase: 'completed' as const, audio };
+    for (const bad of [
+      { ...audio, contentType: 'audio/mpeg' }, { ...audio, objectKey: audio.objectKey.replace('.wav', '.mp3') },
+      { ...audio, objectKey: audio.objectKey.replace(id(1), id(88)) }, { ...audio, objectKey: audio.objectKey.replace(task.id, id(88)) },
+      { ...audio, objectKey: audio.objectKey.replace(sha256, 'a'.repeat(64)) }, { ...audio, bytes: 16 * 1024 * 1024 + 1 },
+    ]) await expect(saveHermesVoiceCheckpoint(f.deps, execution.identity, { ...completed, audio: bad as never })).rejects.toThrow();
+    f.objects.set(audio.objectKey, { bytes, contentType: audio.contentType });
+    await saveHermesVoiceCheckpoint(f.deps, execution.identity, completed);
+    await finalizeHermesVoiceTask(f.deps, execution);
+    expect(await getHermesVoiceAudio(f.deps, { userId: id(1), taskId: task.id })).toEqual(audio);
+    f.objects.get(audio.objectKey)!.contentType = 'audio/mpeg';
+    await expect(getHermesVoiceAudio(f.deps, { userId: id(1), taskId: task.id })).rejects.toThrow();
+    expect(readHermesVoiceCheckpoint(f.row(task.id).result)?.providerId).toBe('existing-wav-result');
+    expect(f.db.usageLedger.filter(row => row.kind === 'consume')).toHaveLength(1);
+  });
   it.each(['owner', 'session', 'kind', 'trash', 'workspace', 'membership'])('requires live %s authority for reads and submission recovery', async mutation => {
     const f = fixture(); const task = await f.submit();
     if (mutation === 'owner') f.db.agentSessions[0].userId = id(88);

@@ -362,6 +362,8 @@ export class SynclipAudioClient {
 }
 
 export interface SynclipAudioBytes { bytes: Buffer; format: 'mp3'; contentType: 'audio/mpeg' }
+export type HermesVoiceAudioBytes = SynclipAudioBytes | { bytes: Buffer; format: 'wav'; contentType: 'audio/wav' };
+const hermesVoiceAudioMaxBytes = 16 * 1024 * 1024;
 const mpeg1Bitrates = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] as const;
 const mpeg2Bitrates = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160] as const;
 
@@ -407,6 +409,37 @@ export function validateSynclipAudioBytes(bytes: Buffer): SynclipAudioBytes {
   return { bytes, format: 'mp3', contentType: 'audio/mpeg' };
 }
 
+/** The paid Hermes result evidenced PCM16 mono/24kHz. Other WAV codecs remain unsupported. */
+export function validateHermesVoiceAudioBytes(bytes: Buffer): HermesVoiceAudioBytes {
+  if (!Buffer.isBuffer(bytes)) throw invalid();
+  if (bytes.length > hermesVoiceAudioMaxBytes) throw new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE');
+  if (bytes.toString('latin1', 0, 4) !== 'RIFF') return validateSynclipAudioBytes(bytes);
+  if (bytes.length < 46 || bytes.readUInt32LE(4) !== bytes.length - 8 || bytes.toString('latin1', 8, 12) !== 'WAVE') throw invalid();
+  let offset = 12, chunks = 0, format = false, data = false;
+  while (offset < bytes.length) {
+    // Bound zero-length metadata chunks as well as the total untrusted byte count.
+    if (++chunks > 128 || offset + 8 > bytes.length) throw invalid();
+    const id = bytes.toString('latin1', offset, offset + 4), size = bytes.readUInt32LE(offset + 4);
+    const start = offset + 8, end = start + size, next = end + (size & 1);
+    if (end > bytes.length || next > bytes.length) throw invalid();
+    if (id === 'fmt ') {
+      if (format || data) throw invalid();
+      if (size !== 16 || bytes.readUInt16LE(start) !== 1 || bytes.readUInt16LE(start + 2) !== 1
+        || bytes.readUInt32LE(start + 4) !== 24_000 || bytes.readUInt32LE(start + 8) !== 48_000
+        || bytes.readUInt16LE(start + 12) !== 2 || bytes.readUInt16LE(start + 14) !== 16) {
+        throw new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED');
+      }
+      format = true;
+    } else if (id === 'data') {
+      if (!format || data || size === 0 || size % 2 !== 0) throw invalid();
+      data = true;
+    }
+    offset = next;
+  }
+  if (!format || !data) throw invalid();
+  return { bytes, format: 'wav', contentType: 'audio/wav' };
+}
+
 export type SynclipAudioDownloadRequestOptions = RequestOptions & Pick<TcpSocketConnectOpts, 'autoSelectFamily'>;
 export interface SynclipAudioDownloadOptions {
   timeoutMs?: number;
@@ -431,6 +464,24 @@ for (const [address, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0',
 
 /** Download a saved completed result without credentials, redirects, or another provider request. */
 export async function downloadSynclipAudio(task: SynclipAudioTask, options: SynclipAudioDownloadOptions = {}): Promise<SynclipAudioBytes> {
+  return downloadAudio(task, options, { maxBytes: SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES,
+    accept: 'audio/mpeg,application/octet-stream', types: ['audio/mpeg', 'application/octet-stream'],
+    decode: bytes => validateSynclipAudioBytes(bytes) });
+}
+
+/** Dedicated Hermes output only; commercial MP3 callers keep their existing contract. */
+export async function downloadHermesVoiceAudio(task: SynclipAudioTask, options: SynclipAudioDownloadOptions = {}): Promise<HermesVoiceAudioBytes> {
+  return downloadAudio(task, options, { maxBytes: hermesVoiceAudioMaxBytes,
+    accept: 'audio/mpeg,audio/wav,application/octet-stream', types: ['audio/mpeg', 'audio/wav', 'application/octet-stream'],
+    decode: (bytes, mime) => {
+      const audio = validateHermesVoiceAudioBytes(bytes);
+      if (mime !== 'application/octet-stream' && mime !== audio.contentType) throw invalid();
+      return audio;
+    } });
+}
+
+async function downloadAudio<T>(task: SynclipAudioTask, options: SynclipAudioDownloadOptions,
+  format: { maxBytes: number; accept: string; types: readonly string[]; decode: (bytes: Buffer, mime: string) => T }): Promise<T> {
   validateDownloadOptions(options);
   const value = validateSynclipAudioTask(task, record(task) ? String(task.task_id) : '');
   const now = (options.now ?? Date.now)();
@@ -450,7 +501,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
       || addresses.some(item => !record(item) || item.family !== 4 || typeof item.address !== 'string'
         || isIP(item.address) !== 4 || blocked.check(item.address, 'ipv4'))) throw invalid();
     const address = addresses[0]!.address;
-    return new Promise<SynclipAudioBytes>((accept, reject) => {
+    return new Promise<T>((accept, reject) => {
       let settled = false;
       const chunks: Buffer[] = [];
       let partial: Buffer | undefined;
@@ -470,7 +521,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
           if (options.all) callback(null, [{ address, family: 4 }]);
           else callback(null, address, 4);
         },
-        headers: { Accept: 'audio/mpeg,application/octet-stream', 'Accept-Encoding': 'identity' } }, response => {
+        headers: { Accept: format.accept, 'Accept-Encoding': 'identity' } }, response => {
         incoming = response;
         response.on('error', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
         response.on('aborted', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
@@ -481,11 +532,11 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
         const encoding = response.headers['content-encoding'];
         const contentType = response.headers['content-type'];
         if ((encoding !== undefined && encoding !== 'identity') || typeof contentType !== 'string'
-          || !['audio/mpeg', 'application/octet-stream'].includes(contentType.split(';')[0]!.trim().toLowerCase())) {
+          || !format.types.includes(contentType.split(';')[0]!.trim().toLowerCase())) {
           fail(new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED')); return;
         }
         const length = response.headers['content-length'];
-        if (length !== undefined && (typeof length !== 'string' || !/^\d+$/u.test(length) || Number(length) > SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES)) {
+        if (length !== undefined && (typeof length !== 'string' || !/^\d+$/u.test(length) || Number(length) > format.maxBytes)) {
           fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return;
         }
         let size = 0;
@@ -493,7 +544,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
           if (settled) return;
           if (!Buffer.isBuffer(chunk)) { fail(invalid()); return; }
           size += chunk.length;
-          if (size > SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES) { fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return; }
+          if (size > format.maxBytes) { fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return; }
           // Coalesce tiny network chunks so the byte cap also bounds retained Buffer objects.
           for (let offset = 0; offset < chunk.length;) {
             if (!partial || partialSize === partial.length) {
@@ -511,7 +562,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
           if (length !== undefined && size !== Number(length)) { fail(invalid()); return; }
           try {
             if (partial) chunks[chunks.length - 1] = partial.subarray(0, partialSize);
-            const result = validateSynclipAudioBytes(Buffer.concat(chunks, size));
+            const result = format.decode(Buffer.concat(chunks, size), contentType.split(';')[0]!.trim().toLowerCase());
             chunks.length = 0;
             partial = undefined;
             settled = true;
