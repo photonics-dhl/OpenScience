@@ -173,3 +173,38 @@ For a later upgrade, take a completed stopped-stack backup first. Langfuse autom
 ## Remaining integration work
 
 Installation and real metadata readback completed on 2026-09-14; current source/image identifiers and the separate connector are recorded in CURRENT. The API read back ten existing successful calls and two existing image failures; this does not establish scientific quality or complete historical coverage. Scheduled backups/retention, SSO and SMTP are not installed. Keep the existing private owner credential file for administrator access; do not paste its contents into chat.
+
+## Worker SDK shutdown: isolated image preparation
+
+**Preconditions:** the reviewed two-file patch applies only to the installed
+Langfuse Worker4.35.0 image pinned in `worker-sdk-image/Dockerfile`. It retains
+the original business drain and awaits one memoized NodeSDK shutdown before the
+final completion message. Local source and packaging reviews are complete; actual
+image consumption and complete Worker exit remain separate, unproved results.
+The existing stage and evidence are recorded only in CURRENT.
+
+**Execution (A only):** copy the committed `worker-sdk-image` directory and its
+adjacent `server-resource-maintenance-20261015-worker-lifecycle.test.cjs` to a
+private staging directory. Invoke `bash worker-sdk-image/verify-isolated.sh <full-source-sha>`
+with the actual pushed commit. The script accepts only the existing local Docker
+engine/default builder and cached pinned base. It builds two COPY changes, then
+uses isolated network-none, read-only containers with no application environment,
+production volumes, daemon socket or real app entry. No install/pull fallback or
+service switch is authorized by this command. The flags do not promise absolute
+daemon-wide network isolation.
+
+**Recovery:** A changes no running service. Keep the original image, actual
+installed Compose, live data, pending audit references and test evidence. If A
+fails, stop and diagnose its exact output; do not retry a production stop, replace
+the base, increase deadlines or force an exit. Existing same-source tags are not
+overwritten. No cleanup is part of this stage.
+
+**Verification:** the actual image files must match both reviewed files. The
+original-image TAP must contain the expected one pass/six failures and two
+CONTROL_DRAIN_COMPLETE markers, not an import/setup failure; the candidate must
+pass all seven cases without skips using its installed SDK. Preserve both TAP
+files and exact image IDs. This proves the bounded SDK shutdown contract only.
+Old-to-new process handoff (B), full Worker exit (C), unknown in-flight records
+and the separately authorized ClickHouse maintenance remain unresolved. The old
+process has not loaded this fix; another blind stop300 or hot copy cannot prove
+it has. Do not change the running Compose or start a second queue consumer.
