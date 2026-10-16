@@ -9,6 +9,9 @@ import { SynclipAudioClient, type SynclipAudioDownloadOptions } from '@openscien
 import { createHermesVoiceHandlers } from '../src/voice';
 
 const authority = vi.hoisted(() => ({ load: vi.fn(), withSubmission: vi.fn(), save: vi.fn(), finalize: vi.fn(), discarded: vi.fn() }));
+// Compiled CJS barrel getters cannot be spied on directly. Keep the real
+// implementations in a Vitest-owned namespace; only localDownload replaces I/O.
+vi.mock('@openscience/ai-gateway', async original => ({ ...await original<typeof import('@openscience/ai-gateway')>() }));
 vi.mock('@openscience/domain', async original => ({ ...await original<typeof import('@openscience/domain')>(),
   loadHermesVoiceExecution: authority.load, withHermesVoiceSubmission: authority.withSubmission,
   saveHermesVoiceCheckpoint: authority.save, finalizeHermesVoiceTask: authority.finalize,
