@@ -697,7 +697,7 @@ jobs:
 
   skill-path:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 70
     services:
       redis:
         image: redis:7-alpine
@@ -756,6 +756,11 @@ jobs:
             npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
           )
           ROLLBACK_ROOT="$rollback_root" node --input-type=module -e "import { verifyApplicationRollbackReaders } from './infra/scripts/production-deploy-lock.mjs'; console.log('R04_PAIR', process.env.GITHUB_SHA, process.env.ROLLBACK_REF); await verifyApplicationRollbackReaders({ candidateRoot: process.env.GITHUB_WORKSPACE, rollbackRoot: process.env.ROLLBACK_ROOT, diagnostics: true });"
+      - name: Storyboard selection lifecycle and media retention
+        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-media-retention.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/storyboard-lifecycle-browser
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+          WEB_BASE_URL: http://127.0.0.1:3037
       - name: Verify Synclip voice contracts and the private task path
         run: |
           npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/synclip-audio-api.test.ts test/synclip-asr-api.test.ts test/synclip-voice.test.ts
@@ -890,11 +895,6 @@ jobs:
         env:
           PLAYWRIGHT_CHANNEL: chrome
       - run: npx pnpm@9.15.0 --filter @openscience/web exec vitest run test/presentation-media-retention.test.tsx test/existing-scene-image-review.test.tsx
-      - name: Storyboard selection lifecycle and media retention
-        run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-media-retention.spec.ts --config playwright.config.ts --workers 1 --output ../../tmp/storyboard-lifecycle-browser
-        env:
-          PLAYWRIGHT_CHANNEL: chrome
-          WEB_BASE_URL: http://127.0.0.1:3037
       - run: npx pnpm@9.15.0 --filter @openscience/web exec playwright test presentation-workbench.spec.ts --grep "saved science retry|saved PNG review-only|rejected scene image remains|private narration result consumer|normal narration audition action|restores a scoped pending task|presentation task read recovery|shows a terminal task failure" --config playwright.config.ts --workers 1 --output ../../tmp/presentation-retry-browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
@@ -911,6 +911,7 @@ jobs:
             tmp/hermes-entry-browser/
             tmp/hermes-guide-browser/
             tmp/storyboard-lifecycle-browser/
+            tmp/media-retention-check/harness.log
             tmp/presentation-retry-browser/
           if-no-files-found: ignore
           retention-days: 7

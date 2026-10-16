@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, openSync, readdirSync, closeSync } from 'node:fs';
+import { mkdirSync, openSync, readdirSync, closeSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { expect, test, type Page } from 'playwright/test';
+import { expect, test, type ConsoleMessage, type Page } from 'playwright/test';
 import english from '../../messages/en.json';
 
 const harnessUrl = 'http://127.0.0.1:3037';
@@ -28,6 +28,44 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(() => { harness?.kill(); if (log !== undefined) closeSync(log); });
+
+const failureObservations = new WeakMap<Page, {
+  pageErrors: string[]; consoleErrors: string[]; dropped: { pageErrors: number; consoleErrors: number };
+  detach(): void;
+}>();
+test.beforeEach(({ page }) => {
+  const pageErrors: string[] = [], consoleErrors: string[] = [], dropped = { pageErrors: 0, consoleErrors: 0 };
+  const record = (kind: keyof typeof dropped, text: string) => {
+    const buffer = kind === 'pageErrors' ? pageErrors : consoleErrors;
+    if (buffer.length < 12) buffer.push(text.slice(0, 1500));
+    else dropped[kind] += 1;
+  };
+  const onPageError = (error: Error) => { try { record('pageErrors', error.message); } catch { /* Diagnostics must not affect the test. */ } };
+  const onConsoleError = (message: ConsoleMessage) => {
+    try { if (message.type() === 'error') record('consoleErrors', message.text()); } catch { /* Keep the original failure. */ }
+  };
+  failureObservations.set(page, { pageErrors, consoleErrors, dropped, detach() {
+    try { page.off('pageerror', onPageError); } finally { page.off('console', onConsoleError); }
+  } });
+  try { page.on('pageerror', onPageError); } catch { /* Keep the original test behavior if observation is unavailable. */ }
+  try { page.on('console', onConsoleError); } catch { /* Do not turn a diagnostic failure into the test failure. */ }
+});
+test.afterEach(async ({ page }, testInfo) => {
+  const observation = failureObservations.get(page);
+  if (!observation) return;
+  failureObservations.delete(page);
+  try { observation.detach(); } catch { /* A closed page must not replace the original result. */ }
+  if (testInfo.status === testInfo.expectedStatus || !['failed', 'timedOut', 'interrupted'].includes(testInfo.status ?? '')) return;
+  try {
+    const output = testInfo.outputPath('harness-errors.json');
+    mkdirSync(path.dirname(output), { recursive: true });
+    writeFileSync(output, JSON.stringify({ pageErrors: observation.pageErrors, consoleErrors: observation.consoleErrors,
+      dropped: observation.dropped }, null, 2));
+  } catch { /* Preserve the original assertion if writing diagnostics fails. */ }
+  try {
+    if (!page.isClosed()) await page.screenshot({ path: testInfo.outputPath('harness-page.png'), timeout: 2000 });
+  } catch { /* Buffered text remains useful if the page or screenshot is unavailable. */ }
+});
 
 const guideImage = (letter: string) => `${letter}1000000-0000-4000-8000-000000000001`;
 async function selectedGuideFixture(page: Page, withChild = false) {
