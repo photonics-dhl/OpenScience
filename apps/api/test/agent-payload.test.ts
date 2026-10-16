@@ -1,6 +1,123 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+import Fastify, { type FastifyInstance } from 'fastify';
+import cookie from '@fastify/cookie';
+import * as domain from '@openscience/domain';
+import * as zod from 'zod';
+import { createSession } from '@openscience/auth';
+import { plannedFixture, id, hash } from '../../../packages/domain/test/agent/first-image-continuation-fixture';
+import { selectedGuidePresentationContext, buildGuidePresentationContext } from '../../web/components/hermes/HermesAssistantDrawer';
+import { buildApp } from '../src/app';
+import { httpStatusForError } from '../src/error-map';
+import * as sessionGuard from '../src/routes/session-guard';
+import { createFakeRedis, createFakeMailer } from './helpers/fakes';
 
 import { agentSessionBodySchema, agentTaskBodySchema } from '../src/routes/agent';
+
+const selectedApps: FastifyInstance[] = [];
+afterEach(async () => { await Promise.all(selectedApps.splice(0).map(app => app.close())); });
+
+function changeOnce(source: string, before: string, after: string) {
+  expect(source.split(before)).toHaveLength(2);
+  const changed = source.replace(before, after);
+  expect(changed).toBe(source.slice(0, source.indexOf(before)) + after + source.slice(source.indexOf(before) + before.length));
+  return changed;
+}
+function writerOverlay() {
+  const source = readFileSync(new URL('../../web/components/hermes/HermesAssistantDrawer.tsx', import.meta.url), 'utf8');
+  const ast = ts.createSourceFile('drawer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const writer = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'buildGuidePresentationContext');
+  if (!writer) throw new Error('Actual UI writer was not found');
+  const changed = changeOnce(writer.getText(ast), 'return legacyGuidePresentationContext(input);', 'return selectedGuidePresentationContext(input);');
+  const code = ts.transpileModule(changed, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const module = { exports: {} as { buildGuidePresentationContext: typeof buildGuidePresentationContext } };
+  new Function('exports', 'selectedGuidePresentationContext', code)(module.exports, selectedGuidePresentationContext);
+  return module.exports.buildGuidePresentationContext;
+}
+function routeOverlay() {
+  const source = readFileSync(new URL('../src/routes/agent.ts', import.meta.url), 'utf8');
+  const changed = changeOnce(source, 'listAgentTasks, parseWorkspaceGuidePayload,',
+    'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage as parseWorkspaceGuidePayload,');
+  const code = ts.transpileModule(changed, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const module = { exports: {} as typeof import('../src/routes/agent') };
+  const imports: Record<string, unknown> = { '@openscience/domain': domain, zod, './session-guard': sessionGuard };
+  new Function('require', 'exports', code)((name: string) => {
+    if (!Object.hasOwn(imports, name)) throw new Error(`Unexpected actual-route dependency: ${name}`);
+    return imports[name];
+  }, module.exports);
+  return module.exports;
+}
+async function selectedApiFixture(writerStage: boolean) {
+  const f = await plannedFixture();
+  const parent = f.db.presentationAssets[0]; parent.status = 'approved';
+  const sceneImage = { storyboardAssetId: parent.id, sceneIndex: 0 };
+  const base = await domain.requireSceneImageParent(f.prisma, { researchObjectId: id(3), versionId: id(4), sourceClaimIds: [id(6)], sceneImage });
+  const image = { id: id(55), researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', deletedAt: null,
+    contentHash: hash, objectKey: 'private/selected.png', provenance: { subtype: 'storyboard_scene_image', contentType: 'image/png', sceneImage, parentIdentity: base!.identity } };
+  f.db.presentationAssets.push(image); f.db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: id(6) });
+  const redis = Object.assign(createFakeRedis(), { lpush: vi.fn(async () => 1) });
+  const token = await createSession(redis, { userId: id(1), status: 'email_verified' });
+  const deps = { ...f.deps, prisma: f.prisma, redis, audit: f.deps.audit!, mailer: createFakeMailer() };
+  const session = await domain.createAgentSession(deps, { userId: id(1), researchObjectId: id(3), kind: 'workspace.guide' });
+  let app: FastifyInstance;
+  if (writerStage) {
+    app = Fastify({ logger: false });
+    await app.register(cookie, { secret: 'test-secret' });
+    app.setErrorHandler((error, request, reply) => { const mapped = httpStatusForError(error, String(request.id)); void reply.status(mapped.status).send(mapped.body); });
+    routeOverlay().registerAgentRoutes(app, deps);
+  } else app = await buildApp({ ...deps, cookieSecret: 'test-secret', secureCookies: false });
+  selectedApps.push(app);
+  const input = { actorId: id(1), goal: 'Make the left line clearer', presentation: { researchObjectId: id(3), versionId: id(4) },
+    imageContext: { actorId: id(1), researchObjectId: id(3), versionId: id(4), selectedImageAssetId: image.id, images: [{ assetId: image.id, label: 'Relation' }] } };
+  const projection = (writerStage ? writerOverlay() : buildGuidePresentationContext)(input);
+  const payload = { goal: input.goal, locale: 'en', route: 'research-object-edit', target: null,
+    context: { tasks: [], researchObjects: [], presentation: projection.presentation } };
+  const body = { sessionId: session.id, kind: 'workspace.guide', payload };
+  const send = (next = body) => app.inject({ method: 'POST', url: '/agent/tasks', cookies: { openscience_session: token },
+    headers: { 'idempotency-key': 'selected-http-once' }, payload: next });
+  return { ...f, app, image, body, send, redis, token };
+}
+
+describe('selected-image reader stage and actual writer overlay HTTP', () => {
+  it('keeps actual R UI emission legacy and rejects a manual selected member before charge', async () => {
+    const f = await selectedApiFixture(false);
+    expect(f.body.payload.context.presentation).not.toHaveProperty('selectedImageAssetId');
+    const tasks = f.db.agentTasks.length, ledger = f.db.usageLedger.length;
+    const forged = { ...f.body, payload: { ...f.body.payload, context: { ...f.body.payload.context,
+      presentation: { ...f.body.payload.context.presentation!, selectedImageAssetId: f.image.id } } } };
+    expect((await f.send(forged)).statusCode).toBe(400);
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger); expect(f.redis.lpush).not.toHaveBeenCalled();
+    const created = await f.send(); expect(created.statusCode).toBe(201);
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
+    expect(f.db.usageLedger.filter(row => row.idempotencyKey === `agent-task-reserve:${created.json().task.id}`)).toHaveLength(1);
+  });
+  it('uses both actual W consumption points, charges once and replays exact accepted source after removal and null legacy context', async () => {
+    const f = await selectedApiFixture(true);
+    const ledger = f.db.usageLedger.length;
+    expect(f.body.payload.context.presentation).toHaveProperty('selectedImageAssetId', f.image.id);
+    const first = await f.send(); expect(first.statusCode, first.body).toBe(201);
+    const task = first.json().task;
+    expect(task.result.selectedImageReference).toMatchObject({ assetId: f.image.id, versionId: id(4) });
+    const stored = f.db.agentTasks.find(row => row.id === task.id)!;
+    stored.interestContext = null; f.image.deletedAt = new Date() as never;
+    const replay = await f.send(); expect(replay.statusCode, replay.body).toBe(201); expect(replay.json().task.id).toBe(task.id);
+    expect(stored.payload).toEqual(f.body.payload);
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
+    expect(f.db.usageLedger.filter(row => row.idempotencyKey === `agent-task-reserve:${task.id}`)).toHaveLength(1);
+    expect(f.db.agentTasks.filter(row => row.idempotencyKey === 'selected-http-once')).toHaveLength(1);
+  });
+  it.each(['viewer', 'deleted', 'version', 'session-ro'])('denies W %s at actual auth/source code without task or debit', async change => {
+    const f = await selectedApiFixture(true);
+    if (change === 'viewer') f.db.memberships[0].role = 'viewer';
+    if (change === 'deleted') f.image.deletedAt = new Date() as never;
+    if (change === 'version') f.image.versionId = id(99);
+    if (change === 'session-ro') f.db.agentSessions.find(row => row.id === f.body.sessionId)!.researchObjectId = id(99);
+    const tasks = f.db.agentTasks.length, ledger = f.db.usageLedger.length;
+    const response = await f.send(); expect(response.statusCode).toBe(change === 'viewer' ? 403 : 404);
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger); expect(f.redis.lpush).not.toHaveBeenCalled();
+  });
+});
 
 const validGuide = {
   sessionId: '00000000-0000-4000-8000-000000000001',

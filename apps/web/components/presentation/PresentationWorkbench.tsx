@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useVersionLabels } from '@/components/research/useVersionLabels';
-import { presentationAssetContentUrl, type PresentationAsset, type PresentationClaim, type VersionSummary } from '@/lib/api';
+import { presentationAssetContentUrl, type PresentationAsset, type PresentationClaim, type VersionSummary, type HermesImageContext } from '@/lib/api';
 import type { SceneImageRequest, StoryboardRequest } from '@/lib/api';
 import { StoryboardPanel } from './StoryboardPanel';
 import { StoryboardPlans } from './StoryboardPlans';
@@ -59,13 +59,15 @@ export interface PresentationWorkbenchProps {
   resultsOnly?: boolean;
   editorLayout?: boolean;
   imageShortcutReady?: boolean;
+  imageContext?: HermesImageContext;
+  onImageContextChange?(context: Omit<HermesImageContext, 'actorId'>): void;
 }
 
 const MAX_SELECTED_CLAIMS = 12;
 
 export function PresentationWorkbench({
   researchObjectId = '', researchTitle, claims, assets, version, canWrite, readonlyReason, loading = false, loadFailed = false, task = null,
-  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false, editorLayout = false, imageShortcutReady = true,
+  onCreateClaim, onUploadPaperFigure, onGenerate, onAskHermes, onGenerateStoryboard, onGenerateSceneImage, onGenerateVideo, onResumeTask, onRetryTask, onRetryData, onTransition, onAssetDeleted, renderReviewAction, renderStyleChoices, working = false, error = '', resultsOnly = false, editorLayout = false, imageShortcutReady = true, imageContext, onImageContextChange,
 }: PresentationWorkbenchProps) {
   const t = useTranslations('presentation');
   const versionLabels = useVersionLabels();
@@ -132,6 +134,7 @@ export function PresentationWorkbench({
         description: narrativeScene?.narration?.trim() || `${t(`assetStatus.${asset.status}`)} · ${t('notEvidence')}`,
       };
     };
+    const scopedImageContext = imageContext?.researchObjectId === researchObjectId && imageContext.versionId === version.versionId ? imageContext : undefined;
     const activeMediaAssets = mediaAssets.filter((asset) => asset.status !== 'rejected');
     const imageSlides = activeMediaAssets.filter((asset) => asset.kind !== 'video' && asset.kind !== 'svg').sort((left, right) => {
       const approval = Number(right.status === 'approved') - Number(left.status === 'approved');
@@ -153,7 +156,13 @@ export function PresentationWorkbench({
       <div className="min-w-0 text-os-ink" data-presentation-results="true" data-editor-media={editorLayout ? 'true' : undefined}>
         {loading ? <p className="m-0 pb-4 text-sm text-os-muted-paper" role="status">{t('loadingPreviews')}</p> : null}
         <div className="grid min-w-0 gap-8 md:grid-cols-[minmax(0,3fr)_minmax(220px,2fr)]">
-          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} descriptionLabel={editorLayout ? t('editorCaption') : undefined} renderActions={renderActions} eager />
+          <ResearchMediaDeck title={t('coreImageTitle')} slides={imageSlides} emptyTitle={t('imagePlaceholderTitle')} emptyBody={t('imagePlaceholderBody')} emptyKind="image" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} descriptionLabel={editorLayout ? t('editorCaption') : undefined} renderActions={renderActions} eager
+            activeSlideId={scopedImageContext?.selectedImageAssetId}
+            pendingSlideId={scopedImageContext?.pendingImageAssetId}
+            missingSelectionBody={t(scopedImageContext?.pendingImageAssetId && scopedImageContext.pendingImageAssetId === scopedImageContext.selectedImageAssetId ? 'loadingSelectedImage' : 'selectedImageRemoved')}
+            onActiveSlideChange={onImageContextChange ? id => onImageContextChange({ ...scopedImageContext, researchObjectId, versionId: version.versionId, selectedImageAssetId: id,
+              pendingImageAssetId: id === scopedImageContext?.pendingImageAssetId && !imageSlides.some(slide => slide.id === id) ? id ?? undefined : undefined,
+              images: imageSlides.map(slide => ({ assetId: slide.id, label: slide.label })) }) : undefined} />
           <ResearchMediaDeck title={t('researchVideoTitle')} slides={videoSlides} emptyTitle={t('videoPlaceholderTitle')} emptyBody={t('videoPlaceholderBody')} emptyKind="video" openImageLabel={t('viewFullSize')} previousLabel={t('previousSlide')} nextLabel={t('nextSlide')} positionLabel={(current, total) => t('slidePosition', { current, total })} descriptionLabel={editorLayout ? t('editorCaption') : undefined} renderActions={renderActions} />
         </div>
         {deletionNotice}

@@ -459,6 +459,9 @@ export function createHandlers(
   // BGE serves one CPU inference at a time. Keep indexing jobs serial in this
   // worker, including source authorization after waiting; other handlers stay concurrent.
   let searchIndexTail: Promise<unknown> = Promise.resolve();
+  const nativeAgent: NonNullable<Parameters<typeof createPresentationGenerationHandler>[0]>['nativeAgent'] = options.nativeAgentInboxRoot && options.parserCascade ? { gateway, inboxRoot: options.nativeAgentInboxRoot,
+    runtime: nativeAgentRuntimeFromEnv(process.env), semanticSearchFor: options.nativeSemanticSearch,
+    renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } : undefined;
   return {
     ...createHermesVoiceHandlers(options.voiceRuntime),
     'demo.echo': async () => {
@@ -926,12 +929,9 @@ export function createHandlers(
     'review.analyze': async (deps, task) => reviewAnalyzeHandler(gateway, deps, task),
     'visualization.plan': async (_deps, task) => visualizationPlanHandler(gateway, task), // P1E-1
     'presentation.generate': createPresentationGenerationHandler({ gateway, videoSpool: options.videoSpool,
-      ...(options.nativeAgentInboxRoot && options.parserCascade ? { nativeAgent: { gateway, inboxRoot: options.nativeAgentInboxRoot,
-        runtime: nativeAgentRuntimeFromEnv(process.env),
-        semanticSearchFor: options.nativeSemanticSearch,
-        renderPages: async (input, pages) => (await options.parserCascade!.renderPages(input, pages, NATIVE_IMAGE_REQUEST_MAX_BYTES)).pages } } : {}) }),
+      ...(nativeAgent ? { nativeAgent } : {}) }),
     'presentation.figure-audit': createPresentationFigureAuditHandler(gateway),
-    'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task),
+    'workspace.guide': async (deps, task) => workspaceGuideHandler(gateway, deps, task, nativeAgent),
     ...(options.searchIndexer === undefined ? {} : {
       'search.index': async (_deps: WorkerDeps, task) => {
         const run = searchIndexTail.then(async () => options.searchIndexer!.index(await authorizeSearchIndexJob(_deps, task), operation => _deps.prisma.$transaction(async tx => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { readNativeAgentExecution, initialNativeAgentExecution, compareNativeAgentCheckpoint, nativeAgentTerminalResult,
   supportsNativeIllustration, type NativeAgentCheckpointReference } from '../../src/agent/native-agent-execution';
-import { projectAgentTaskResult, persistAgentTaskInTransaction, persistHistoricalSourceTaskInTransaction, markTaskProgress } from '../../src/agent/agent';
+import { projectAgentTaskResult, persistAgentTaskInTransaction, persistHistoricalSourceTaskInTransaction, markTaskProgress, getAgentTask } from '../../src/agent/agent';
+import { getIngestionTask } from '../../src/ingestion/ingestion-service';
 import { fixture as sourceFixture } from './direct-source-review-fixture';
 
 const runtime = { runtimeId: 'installed-0.10-snapshot', skillCatalogueId: 'selected-science-catalogue', model: 'MiniMax-M3' };
@@ -23,6 +24,37 @@ function fixture() {
   } } };
   return { task, tx: tx as never, mockTx: tx };
 }
+
+it('keeps ordinary opaque extensions through real late paid CAS and authenticated historical readers', async () => {
+  const f = sourceFixture(), owner = f.db.agentTasks.find(row => row.id === f.ids.failed)!;
+  const opaque = { selectedImageContext: { note: 'ordinary retained history', assetId: 'ordinary retained asset extension' }, selectedImageReply: { text: 'ordinary retained reply' },
+    selectedImageReference: { note: 'ordinary retained reference', assetId: 'opaque legacy asset' },
+    selectedImageDraft: { note: 'ordinary retained draft', values: [null, { preserved: true }] } };
+  const source = owner.result.sourceMapRef;
+  const started = { ...reference('started'), taskId: owner.id, artifactId: source.artifactId,
+    documentSha256: source.contentHash, sourceMapHash: source.serializedSha256 };
+  Object.assign(owner, { status: 'failed', executionAttempt: 2 });
+  Object.assign(owner.result, initialNativeAgentExecution(runtime, 'paper-author'), opaque);
+  owner.result.nativeAgentExecution.checkpoint = started;
+  const completed = { ...started, state: 'completed' as const, responseHash: 'f'.repeat(64), finishReason: 'stop' as const, hasToolCalls: false };
+  const ledger = structuredClone(f.db.usageLedger);
+  await compareNativeAgentCheckpoint(f.prisma as never, { taskId: owner.id, executionAttempt: 1, expected: started, next: completed, paidCompletion: true });
+  expect(owner.executionAttempt).toBe(2);
+  expect(readNativeAgentExecution(owner.result)?.checkpoint?.executionAttempt).toBe(1);
+  expect(owner.result).toMatchObject(opaque);
+  expect((await getAgentTask(f.deps, { userId: f.input.actorId, taskId: owner.id })).result).toMatchObject(opaque);
+  expect((await getIngestionTask(f.deps, { userId: f.input.actorId, taskId: f.ids.source })).task.result).toMatchObject(opaque);
+  const saved = structuredClone(owner.result);
+  expect((await markTaskProgress(f.deps, { taskId: owner.id, status: 'failed' })).result).toMatchObject(opaque);
+  owner.status = 'succeeded';
+  expect((await markTaskProgress(f.deps, { taskId: owner.id, status: 'succeeded', result: { summary: 'must not replace history' } })).result).toMatchObject(opaque);
+  expect(owner.result).toEqual(saved);
+  expect(readNativeAgentExecution(owner.result)?.checkpoint).toEqual(completed);
+  expect(f.db.usageLedger).toEqual(ledger);
+  await expect(getAgentTask(f.deps, { userId: 'not-the-owner', taskId: owner.id })).rejects.toMatchObject({ code: 'RESEARCH_OBJECT_NOT_FOUND' });
+  f.db.memberships[0]!.userId = 'not-the-member';
+  await expect(getIngestionTask(f.deps, { userId: f.input.actorId, taskId: f.ids.source })).rejects.toMatchObject({ code: 'WORKSPACE_NOT_FOUND' });
+});
 
 describe('image review tool-final contract and pure checkpoint finalization', () => {
   const policy = 'image-review-tool-final-v1' as const;
