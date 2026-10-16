@@ -187,6 +187,8 @@ v9真实结果进一步限定能力：342f87eb已记录science v9及完整scienc
 
 ### 当前技术债与处理
 
+Hermes 对话语音：可见入口沿 `HermesAssistantDrawer` 的录音/朗读控件，经原voice API、Domain任务/收费及Worker `voice.reply` 调用Gateway `synclip-audio-api.ts`。首次真实标准TTS已获供应商completed/14秒/1积分，但下载实际返回audio/wav，被共享MP3-only校验拒绝，原submitted checkpoint/供应商ID保留，未保存或播放音频；平台点数与供应商费用分开，完整原件见CURRENT。当前Worker无已验证的ffmpeg/ffprobe，不能热装或借宿主转码。后继采用独立Hermes PCM WAV reader先行、写端另步：专用私有API保权限/hash/Range/no-store/nosniff，旧MP3和商业下载语义保留；原paid任务只按原ID恢复，真实麦克风/ASR与播放听感仍待验。同一产物头部已实际确认24kHz/单声道/16bit PCM，4096字节前缀不等完整body验证或产品完成；发布身份与操作窗口只见CURRENT。
+
 #### 2026-10-13 架构与服务器运维只读审查
 
 初始源码审查固定在 `ea529de3a20c0177c2bc5d0fc4276616f8e51796`，由独立 High 架构/运维审查及主会话核对；服务器采样为北京时间18:38、18:47，生产观测`ca23b7fc0bd37706b12194a483f17e15caa815a5`。初始调查没有生产变更，未证实P0或执行入侵复现。下表保留原发现并原地记录后续整改：P1优先于相关发布处理，P2随涉及模块开发处理；优先级不等于发布授权。21:00–21:36追加资源调查发现R13；用户随后授权旧网页通道完全退役，R10于2026-10-14两阶段发布与原子归档闭合，R08仍为本地候选未部署。这些是有日期的证据，不能替代唯一CURRENT。
