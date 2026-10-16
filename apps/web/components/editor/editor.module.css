@@ -108,6 +108,88 @@
 
 .mathSurface[data-read-only] { cursor: auto; }
 
+.readingCore {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.readingCore .prose { max-width: none; margin-inline: 0; }
+
+.readingHeader h2,
+.readingSectionHeader h2,
+.readingSectionHeader h3 {
+  margin: 0;
+  color: var(--craft-ink, #182f35);
+  font-family: var(--font-reading-serif, Georgia, serif);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.readingHeader h2,
+.readingSectionHeader h2 { font-size: clamp(1.5rem, 2vw, 1.875rem); }
+.readingSectionHeader h3 { font-size: 1.25rem; }
+
+.chapterNavigation {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 24px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--craft-rule, #dce5e5);
+}
+
+.chapterNavigation a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-block: 8px;
+  border-bottom: 2px solid transparent;
+  color: var(--craft-muted, #51666c);
+  font-size: 14px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.chapterNavigation a[aria-current='location'] {
+  border-bottom-color: var(--craft-accent, #125d66);
+  color: var(--craft-accent, #125d66);
+}
+
+.readingSectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.readingEdit {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--craft-accent, #125d66);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.readingCore .passage { padding-block: 24px 28px; scroll-margin-block: 24px; }
+.readingCore .passage:first-child { padding-top: 20px; }
+.readingCore .mathSurface,
+.readingCore .proseInput { max-width: 80ch; padding: 0; min-height: 0; }
+.readingCore .mathSurface { cursor: auto; }
+.readingCore .proseInput { padding: 12px; background: var(--craft-tint, #edf4f3); }
+
+.chapterNavigation a:focus-visible,
+.readingEdit:focus-visible,
+.readingCore .passage:focus-visible {
+  outline: 2px solid var(--craft-accent, #125d66);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 .sourceLink {
   display: inline-flex;
   min-height: 44px;
@@ -196,11 +278,14 @@
 @media (hover: hover) and (pointer: fine) {
   .proseInput:not(:focus-visible):hover,
   .mathSurface:not([data-read-only]):not(:focus-visible):hover { background: #f4f8f7; }
+  .readingCore .mathSurface:not([data-read-only]):not(:focus-visible):hover { background: transparent; }
   .outline li > button:not([aria-current='step']):hover { background: #eaf0f1; color: var(--craft-ink, #182f35); }
   .suggestions [data-extract-sdf]:not(:disabled):hover { background: #0d4850; }
 }
 
 @media (max-width: 640px) {
+  .chapterNavigation { column-gap: 20px; }
+  .readingSectionHeader { gap: 12px; }
   .passage { padding-block: 24px 28px; }
   .proseInput { padding-left: 0; font-size: 17px; }
   .sourceLink { margin-left: 0; }

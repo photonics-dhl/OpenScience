@@ -398,6 +398,10 @@ test('plain editor visits keep the contribution view as the default', async ({ p
   await expect(page).toHaveURL(new RegExp(roPath + '/edit$'));
   await expect(page.getByRole('navigation', { name: 'Research sections', exact: true }).getByRole('button', { name: 'Core contribution', exact: true })).toHaveAttribute('data-active', 'true');
   await expect(page.locator('[data-workbench-section="content"]')).toHaveAttribute('aria-hidden', 'true');
+  const contribution = page.locator('#research-section-insight');
+  await expect(contribution.getByRole('heading', { name: 'Core contribution', exact: true })).toBeVisible();
+  await expect(contribution.getByRole('button', { name: 'Core contribution · Edit', exact: true })).toBeVisible();
+  await expect(contribution.getByRole('textbox')).toHaveCount(0);
 });
 
 test('only the primary left pointer invokes the toolbar avatar, without capture or drag', async ({ page }) => {
@@ -649,19 +653,45 @@ test('editing presents the contribution and six fields from the existing researc
     await expect(content).toBeVisible();
     await expect(content.locator('[data-sdf-node]')).toHaveCount(6);
     await expect(page.locator('[data-workbench-section="media"]')).toHaveAttribute('aria-hidden', 'true');
-    for (const name of ['Problem', 'Insight', 'Method', 'Results', 'Limitations', 'Reproducibility']) {
-      const button = content.getByRole('button', { name, exact: true });
+    await expect(content.getByRole('heading', { name: 'Research content', exact: true })).toBeVisible();
+    await expect(content.getByRole('textbox')).toHaveCount(0);
+    const chapters = content.getByRole('navigation');
+    for (const [key, name] of [
+      ['problem', 'Research question'], ['insight', 'Core insight'], ['method', 'Research method'],
+      ['results', 'Main results'], ['limitations', 'Limitations and boundaries'], ['reproducibility', 'Reproducibility'],
+    ] as const) {
+      const chapter = chapters.getByRole('link', { name, exact: true });
+      await expect(chapter).toHaveAttribute('href', `#research-section-${key}`);
+      await chapter.click();
+      await expect(content.locator(`#research-section-${key}`)).toBeFocused();
+      await expect(chapter).toHaveAttribute('aria-current', 'location');
+      await expect(content.getByRole('textbox')).toHaveCount(0);
+      const button = content.getByRole('button', { name: `${name} · Edit`, exact: true });
       expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await button.click();
+      await expect(content.getByRole('textbox')).toHaveCount(1);
+      await expect(content.getByRole('textbox', { name, exact: true })).toBeFocused();
+      await expect(content.getByRole('textbox', { name, exact: true })).toHaveValue(reviewCore[key]);
       expect((await content.getByRole('textbox', { name, exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
+    await chapters.getByRole('link', { name: 'Research question', exact: true }).click();
+    await expect(content.getByRole('textbox')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: test.info().outputPath(`editing-initial-${viewport.width}.png`), fullPage: false });
     await page.screenshot({ path: test.info().outputPath(`editing-full-${viewport.width}.png`), fullPage: true });
-    const field = content.getByRole('textbox', { name: 'Problem', exact: true });
-    await content.getByRole('button', { name: 'Problem', exact: true }).focus();
+    const field = content.getByRole('textbox', { name: 'Research question', exact: true });
+    await content.getByRole('button', { name: 'Research question · Edit', exact: true }).focus();
     await page.keyboard.press('Enter');
     await expect(field).toBeFocused();
+    await expect(field).toHaveValue(reviewCore.problem);
+    await page.screenshot({ path: test.info().outputPath(`editing-one-field-${viewport.width}.png`), fullPage: false });
+    await content.getByRole('button', { name: 'Research method · Edit', exact: true }).click();
+    await expect(content.getByRole('textbox')).toHaveCount(1);
+    await expect(field).toHaveCount(0);
+    await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toBeFocused();
+    await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toHaveValue(reviewCore.method);
+    await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
     await expect(field).toHaveValue(reviewCore.problem);
     const opener = label(page);
     await opener.focus();
@@ -669,6 +699,8 @@ test('editing presents the contribution and six fields from the existing researc
     await assertConversation(page, viewport.width >= 1024 ? 'complementary' : 'dialog');
     await page.screenshot({ path: test.info().outputPath(`editing-hermes-open-${viewport.width}.png`), fullPage: false });
     await closeTo(page, opener, viewport.width < 1024, 'document-flow');
+    await expect(content.getByRole('textbox')).toHaveCount(0);
+    await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
     await expect(field).toHaveValue(reviewCore.problem);
   }
 });
@@ -754,6 +786,7 @@ test.describe('short desktop Hermes conversation', () => {
       await assertConversation(page, 'complementary');
       await expect(page.locator('.hermes-assistant-overlay')).toHaveCount(0);
       const field = page.locator('#sdf-field-problem');
+      await page.locator('[data-workbench-section="content"]').getByRole('button', { name: 'Research question · Edit', exact: true }).click();
       await field.click();
       await expect(field).toBeFocused();
       expect((await field.boundingBox())!.width).toBeGreaterThan(600);

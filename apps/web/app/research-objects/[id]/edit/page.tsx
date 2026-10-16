@@ -593,7 +593,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       setConfirmationIntent(null);
       setIngestionTasks((current) => current.map((candidate) => candidate.id === task.id ? { ...task, confirmation: null } : candidate));
       setIngestionMessage(t('legacyRefreshStarted'));
-    } catch (cause) {
+    } catch {
       try {
         const detail = await getIngestionTask(ingestionProposal.detail.task.id);
         if (detail.task.agentTaskId && detail.task.agentTaskId !== ingestionProposal.detail.task.agentTaskId) {
@@ -665,7 +665,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     const frozenCore = { ...currentCore.current };
     if (SDF_FIELDS.every((field) => frozenCore[field] === serverCore.current[field])) return;
     const baseVersion = serverVersion.current;
-    let run!: Promise<void>;
+    let run: Promise<void> | undefined = undefined;
     run = (async (): Promise<void> => {
       writingDraft.current = true;
       setServerSaveState('saving');
@@ -1047,7 +1047,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     if (writingDraft.current || activeWrite.current) throw new Error(tw('savingContent'));
 
     const intent: PrepareVersionIntent = previous ?? { signature, idempotencyKey: crypto.randomUUID() };
-    let run!: Promise<PreparedVersion>;
+    let run: Promise<PreparedVersion> | undefined = undefined;
     run = (async (): Promise<PreparedVersion> => {
       writingDraft.current = true;
       setErrorMsg(null);
@@ -1277,7 +1277,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         main={
           <div className={styles.document}>
             {(activeView === 'contribution' || draftPrompt || historyMessage || errorMsg) ? <section className={styles.leadSection} aria-label={tw('contribution')}>
-              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} /> : null}
+              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} readFirst /> : null}
               {draftPrompt && (
               <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
@@ -1314,7 +1314,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             <section className={`${styles.contentSection} ${activeView !== 'content' && activeView !== 'materials' ? styles.viewPanelHidden : ''}`} id="workbench-content" data-workbench-section="content" aria-hidden={activeView === 'content' || activeView === 'materials' ? undefined : true}>
 
             {activeView === 'content' && ingestionReviewActive && <button type="button" className={styles.secondaryButton} onClick={() => { setHermesOpen(true); if (sourceReviewRef.current) sourceReviewRef.current.open = true; }}>{th('reviewInHermes')}</button>}
-            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} /> : null}
+            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} readFirst chapterNavigation /> : null}
 
             {activeView === 'content' && readingRecord && snapshotReady ? <WorkbenchClaimReader key={`${readingRecord.versionId}:${contentRefresh}`} record={readingRecord} /> : null}
 

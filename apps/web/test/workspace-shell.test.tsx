@@ -9,6 +9,15 @@ vi.mock('next-intl', () => ({
     outline: 'Outline',
     coreEdit: 'Write & SDF',
     suggestions: 'Evidence & Hermes',
+    edit: 'Edit',
+    'reading.title': 'Research content',
+    'reading.navigation': 'Content chapters',
+    'reading.fields.problem': 'Research question',
+    'reading.fields.insight': 'Core insight',
+    'reading.fields.method': 'Research method',
+    'reading.fields.results': 'Main results',
+    'reading.fields.limitations': 'Limitations and boundaries',
+    'reading.fields.reproducibility': 'Reproducibility',
   })[key] ?? key,
 }));
 
@@ -136,6 +145,56 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(editable).not.toMatch(/>0[1-6]</);
     expect(reading).not.toContain('<button');
     expect(reading.match(/data-read-only="true"/g)).toHaveLength(6);
+  });
+
+  it('starts the opted-in content as six readable sections with working chapter targets', () => {
+    const core = { schemaVersion: '0.1.0', problem: '$E=mc^2$ [S12]', insight: 'Shared contribution', method: 'Method', results: 'Results', limitations: 'Limits', reproducibility: 'Protocol' };
+    const onEdit = vi.fn();
+    const markup = renderToStaticMarkup(createElement(CoreEditor, {
+      core, activeField: 'problem', onEdit, onSelectField: () => undefined, readFirst: true, chapterNavigation: true,
+    }));
+    expect(markup).toContain('Research content</h2>');
+    expect(markup).toContain('aria-label="Content chapters"');
+    expect(markup.match(/<h3\b/g)).toHaveLength(6);
+    for (const field of ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']) {
+      expect(markup).toContain(`href="#research-section-${field}"`);
+      expect(markup).toContain(`id="research-section-${field}"`);
+    }
+    expect(markup.match(/aria-current="location"/g)).toHaveLength(1);
+    expect(markup.match(/<button\b/g)).toHaveLength(6);
+    expect(markup).toContain('aria-label="Research question · Edit"');
+    expect(markup).toContain('class="katex"');
+    expect(markup).not.toContain('[S12]');
+    expect(markup).not.toContain('<textarea');
+    expect(markup).not.toContain('role="button"');
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it('keeps contribution reading focused on the same insight without a chapter menu', () => {
+    const markup = renderToStaticMarkup(createElement(CoreEditor, {
+      core: { schemaVersion: '0.1.0', problem: 'Question', insight: 'Shared contribution', method: '', results: '', limitations: '', reproducibility: '' },
+      activeField: 'problem', onEdit: () => undefined, onSelectField: () => undefined,
+      readFirst: true, fields: ['insight'], headingLabels: { insight: 'Core contribution' },
+    }));
+    expect(markup).toContain('Core contribution</h2>');
+    expect(markup).toContain('Shared contribution');
+    expect(markup).toContain('aria-label="Core contribution · Edit"');
+    expect(markup.match(/<section\b/g)).toHaveLength(1);
+    expect(markup).not.toContain('<nav');
+    expect(markup).not.toContain('<textarea');
+    expect(markup).not.toContain('Research content</h2>');
+  });
+
+  it('keeps opted-in ingestion review non-editable while retaining chapter navigation', () => {
+    const markup = renderToStaticMarkup(createElement(CoreEditor, {
+      core: { schemaVersion: '0.1.0', problem: 'Question', insight: 'Insight', method: '', results: '', limitations: '', reproducibility: '' },
+      activeField: null, onEdit: () => undefined, onSelectField: () => undefined,
+      readFirst: true, chapterNavigation: true, readOnly: true,
+    }));
+    expect(markup).toContain('aria-label="Content chapters"');
+    expect(markup.match(/data-read-only="true"/g)).toHaveLength(6);
+    expect(markup).not.toContain('<button');
+    expect(markup).not.toContain('<textarea');
   });
 
   it('keeps upload format details secondary and gives preview actions touch targets', () => {

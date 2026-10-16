@@ -621,6 +621,18 @@
     }
   },
   "editor": {
+    "reading": {
+      "title": "研究内容",
+      "navigation": "研究章节",
+      "fields": {
+        "problem": "研究问题",
+        "insight": "核心洞见",
+        "method": "研究方法",
+        "results": "主要结果",
+        "limitations": "局限与边界",
+        "reproducibility": "可复现性"
+      }
+    },
     "savedVersionSources": "核查最近保存版本的来源",
     "draftRevision": "私有草稿",
     "common": {

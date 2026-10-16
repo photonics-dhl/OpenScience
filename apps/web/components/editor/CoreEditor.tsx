@@ -72,7 +72,7 @@ function ProseTextarea({ autoFocus = false, field, label, value, placeholder, on
   );
 }
 
-export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false, fields, headingLabels }: {
+export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false, fields, headingLabels, readFirst = false, chapterNavigation = false }: {
   core: SdfCore;
   onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
   activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
@@ -80,6 +80,8 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
   readOnly?: boolean;
   fields?: Array<keyof Omit<SdfCore, 'schemaVersion'>>;
   headingLabels?: Partial<Record<keyof Omit<SdfCore, 'schemaVersion'>, string>>;
+  readFirst?: boolean;
+  chapterNavigation?: boolean;
 }) {
   const t = useTranslations('editor');
   const visibleFields = fields?.length ? fields : FIELDS;
@@ -88,26 +90,52 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
     : visibleFields[0] ?? 'problem';
   const hermesStage = useOptionalHermesWorkspaceStage();
   const [editingField, setEditingField] = useState<keyof Omit<SdfCore, 'schemaVersion'> | null>(null);
+  const showChapters = readFirst && chapterNavigation;
+  const Heading = showChapters ? 'h3' : 'h2';
+  const fieldLabel = (field: keyof Omit<SdfCore, 'schemaVersion'>) => headingLabels?.[field] ?? t(readFirst ? `reading.fields.${field}` : field);
+
+  function beginEditing(field: keyof Omit<SdfCore, 'schemaVersion'>) {
+    setEditingField(field);
+    onSelectField(field);
+    window.requestAnimationFrame(() => document.getElementById(`sdf-field-${field}`)?.focus());
+  }
+
+  useEffect(() => {
+    if (readFirst && readOnly) setEditingField(null);
+  }, [readFirst, readOnly]);
 
   useEffect(() => {
     hermesStage?.requestGuide(HERMES_FIELD_ANCHORS[current]);
   }, [current, hermesStage]);
 
   return (
-    <article aria-label={t('coreEdit')} className={styles.core} data-reading-role="body">
+    <article aria-label={t('coreEdit')} className={`${styles.core}${readFirst ? ` ${styles.readingCore}` : ''}`} data-reading-role="body">
+      {showChapters ? <header className={styles.readingHeader}>
+        <h2>{t('reading.title')}</h2>
+        <nav aria-label={t('reading.navigation')} className={styles.chapterNavigation}>
+          {visibleFields.map((field) => <a
+            aria-current={current === field ? 'location' : undefined}
+            href={`#research-section-${field}`}
+            key={field}
+            onClick={() => {
+              onSelectField(field);
+              window.requestAnimationFrame(() => document.getElementById(`research-section-${field}`)?.focus({ preventScroll: true }));
+            }}
+          >{fieldLabel(field)}</a>)}
+        </nav>
+      </header> : null}
       <div className={styles.prose}>
         {visibleFields.map((field, index) => (
-          <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field}>
-            <h2 className={styles.sectionHeading}>
+          <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field} tabIndex={showChapters ? -1 : undefined}>
+            {readFirst ? <div className={styles.readingSectionHeader}>
+              <Heading>{fieldLabel(field)}</Heading>
+              {!readOnly ? <button aria-label={`${fieldLabel(field)} · ${t('edit')}`} className={styles.readingEdit} type="button" onClick={() => beginEditing(field)}>{t('edit')}</button> : null}
+            </div> : <h2 className={styles.sectionHeading}>
               <span aria-hidden="true" className={styles.sectionMarker} />
-              {readOnly ? <span>{headingLabels?.[field] ?? t(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => {
-                setEditingField(field);
-                onSelectField(field);
-                window.requestAnimationFrame(() => document.getElementById(`sdf-field-${field}`)?.focus());
-              }}>{headingLabels?.[field] ?? t(field)}</button>}
-            </h2>
+              {readOnly ? <span>{fieldLabel(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => beginEditing(field)}>{fieldLabel(field)}</button>}
+            </h2>}
             <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
-              {readOnly ? <ScientificText hideSourceMarkers as="p" className={styles.mathSurface} data-reading-role="reading" data-read-only="true">{core[field] || t(`hints.${field}`)}</ScientificText> : hasExplicitMath(core[field]) && editingField !== field ? (
+              {readOnly || (readFirst && editingField !== field) ? <ScientificText hideSourceMarkers as="p" className={styles.mathSurface} data-reading-role="reading" data-read-only={readOnly ? 'true' : undefined}>{core[field] || t(`hints.${field}`)}</ScientificText> : hasExplicitMath(core[field]) && editingField !== field ? (
                 <ScientificText
                   hideSourceMarkers
                   aria-label={`${t(field)} · ${t('coreEdit')}`}
@@ -130,7 +158,7 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
                 <ProseTextarea
                   autoFocus={editingField === field}
                   field={field}
-                  label={t(field)}
+                  label={readFirst ? fieldLabel(field) : t(field)}
                   onBlur={() => setEditingField((editing) => editing === field ? null : editing)}
                   onChange={(value) => onEdit(field, value)}
                   onFocus={() => { setEditingField(field); onSelectField(field); }}

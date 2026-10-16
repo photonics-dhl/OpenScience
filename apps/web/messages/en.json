@@ -621,6 +621,18 @@
     }
   },
   "editor": {
+    "reading": {
+      "title": "Research content",
+      "navigation": "Content chapters",
+      "fields": {
+        "problem": "Research question",
+        "insight": "Core insight",
+        "method": "Research method",
+        "results": "Main results",
+        "limitations": "Limitations and boundaries",
+        "reproducibility": "Reproducibility"
+      }
+    },
     "savedVersionSources": "Check sources in the latest saved version",
     "draftRevision": "Private draft",
     "common": {

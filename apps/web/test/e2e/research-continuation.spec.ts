@@ -203,7 +203,14 @@ test('the confirmed paper is included in the next commit through the editor', as
   await expect(assistant).not.toHaveAttribute('aria-modal');
   await assistant.getByRole('button', { name: 'Close Hermes', exact: true }).click();
   await expect(assistant).toHaveCount(0);
+  const content = page.locator('[data-workbench-section="content"]');
+  await expect(content.getByRole('textbox')).toHaveCount(0);
+  await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
+  await expect(content.getByRole('textbox')).toHaveCount(1);
   await page.locator('#sdf-field-problem').fill(editedCore.problem);
+  await content.getByRole('heading', { name: 'Research content', exact: true }).click();
+  await expect(content.getByRole('textbox')).toHaveCount(0);
+  await expect(content.locator('#research-section-problem')).toContainText(editedCore.problem);
   await expect.poll(() => saves).toBe(1);
   expect(commits).toBe(0);
   await page.locator('[data-hermes-input-owner="true"]').click();
