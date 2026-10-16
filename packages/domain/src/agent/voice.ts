@@ -57,10 +57,11 @@ export function validateHermesVoiceRecording(recording: Buffer): { bytes: number
 
 function validAudio(audio: unknown): audio is HermesVoiceAudio {
   return record(audio) && keysAllowed(audio, ['objectKey', 'sha256', 'bytes', 'contentType'])
-    && nonempty(audio.objectKey) && /^derived\/hermes-voice\/[^\s?#\\]+\.mp3$/u.test(audio.objectKey)
+    && nonempty(audio.objectKey) && /^derived\/hermes-voice\/[^\s?#\\]+\.(?:mp3|wav)$/u.test(audio.objectKey)
     && !audio.objectKey.split('/').includes('..') && hash(audio.sha256)
     && Number.isSafeInteger(audio.bytes) && Number(audio.bytes) > 0 && Number(audio.bytes) <= 20 * 1024 * 1024
-    && audio.contentType === 'audio/mpeg';
+    && ((audio.contentType === 'audio/mpeg' && audio.objectKey.endsWith('.mp3'))
+      || (audio.contentType === 'audio/wav' && audio.objectKey.endsWith('.wav') && Number(audio.bytes) <= 16 * 1024 * 1024));
 }
 function readPayload(value: unknown, kind: string): HermesVoicePayload {
   if (!record(value)) blocked('语音请求数据已改变');
@@ -97,7 +98,7 @@ export function readHermesVoiceCheckpoint(result: unknown): HermesVoiceCheckpoin
   if (cp.phase === 'completed' && (payload.operation === 'transcription'
     ? typeof cp.transcript !== 'string' || cp.transcript.length > 20_000 || cp.audio !== undefined
     : !validAudio(cp.audio) || cp.transcript !== undefined
-      || cp.audio.objectKey !== `derived/hermes-voice/${encodeURIComponent(String(cp.identity.userId))}/${cp.identity.taskId}/${cp.audio.sha256}.mp3`)) blocked('私有语音完成回执无效');
+      || cp.audio.objectKey !== `derived/hermes-voice/${encodeURIComponent(String(cp.identity.userId))}/${cp.identity.taskId}/${cp.audio.sha256}.${cp.audio.contentType === 'audio/wav' ? 'wav' : 'mp3'}`)) blocked('私有语音完成回执无效');
   return cp as unknown as HermesVoiceCheckpoint;
 }
 

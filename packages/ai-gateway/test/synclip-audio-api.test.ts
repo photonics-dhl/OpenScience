@@ -7,7 +7,7 @@ import {
   SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES, SYNCLIP_AUDIO_MAX_REQUEST_BYTES, SYNCLIP_AUDIO_MAX_RESPONSE_BYTES,
   SYNCLIP_AUDIO_MAX_TEXT_BYTES, SynclipAudioClient, SynclipAudioError, downloadSynclipAudio,
   validateSynclipAudioBytes, validateSynclipAudioRequest, validateSynclipAudioTask, validateSynclipAudioVoices,
-  createSynclipAudioPriceQuote, validateSynclipAudioQuote,
+  createSynclipAudioPriceQuote, validateSynclipAudioQuote, validateHermesVoiceAudioBytes, downloadHermesVoiceAudio,
   type SynclipAudioClientConfig, type SynclipAudioDownloadOptions, type SynclipAudioDownloadRequestOptions,
   type SynclipAudioRequest,
 } from '../src/synclip-audio-api';
@@ -325,6 +325,21 @@ describe('Synclip audio uncertain responses and bounds', () => {
 });
 
 describe('Synclip audio download transport', () => {
+  it('does not repeat MIME normalization for the existing one-argument MP3 decoder', async () => {
+    const split = String.prototype.split;
+    let normalizations = 0, result;
+    const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (this: string, separator, limit) {
+      if (String(this) === 'audio/mpeg' && separator === ';' && ++normalizations > 1)
+        throw new Error('second normalization');
+      return Reflect.apply(split, this, [separator, limit]);
+    });
+    try {
+      const transport = downloadTransport();
+      result = await downloadSynclipAudio(completed(), { resolve: resolvePublic(), request: transport.request });
+    } finally { spy.mockRestore(); }
+    expect(result).toEqual({ bytes: mp3, format: 'mp3', contentType: 'audio/mpeg' });
+    expect(normalizations).toBe(1);
+  });
   it('pins a single public IPv4, preserves TLS host and sends no credentials', async () => {
     const resolve = resolvePublic();
     const transport = downloadTransport();
@@ -520,5 +535,82 @@ describe('Synclip audio byte format boundary', () => {
   it('rejects an oversized byte buffer even outside the downloader', () => {
     expect(() => validateSynclipAudioBytes(Buffer.alloc(SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES + 1)))
       .toThrowError(expect.objectContaining({ code: 'SYNCLIP_AUDIO_RESPONSE_TOO_LARGE' }));
+  });
+});
+
+describe('Hermes WAV reader output boundary', () => {
+  function pcm() {
+    // Same header profile as the existing paid result; payload is synthetic.
+    const bytes = Buffer.alloc(44 + 480);
+    bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8);
+    bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22);
+    bytes.writeUInt32LE(24000, 24); bytes.writeUInt32LE(48000, 28);
+    bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(480, 40);
+    return bytes;
+  }
+  it('validates the evidenced complete PCM profile while preserving the legacy MP3 boundary', async () => {
+    const bytes = pcm();
+    expect(validateHermesVoiceAudioBytes(bytes)).toEqual({ bytes, format: 'wav', contentType: 'audio/wav' });
+    expect(validateHermesVoiceAudioBytes(mp3)).toEqual(validateSynclipAudioBytes(mp3));
+    expect(() => validateSynclipAudioBytes(bytes)).toThrow();
+    const transport = downloadTransport(bytes, { 'content-type': 'audio/wav', 'content-length': String(bytes.length) });
+    await expect(downloadHermesVoiceAudio(completed(), { resolve: resolvePublic(), request: transport.request }))
+      .resolves.toEqual({ bytes, format: 'wav', contentType: 'audio/wav' });
+    const legacy = downloadTransport(bytes, { 'content-type': 'audio/wav' });
+    await expect(downloadSynclipAudio(completed(), { resolve: resolvePublic(), request: legacy.request })).rejects.toThrow();
+  });
+  it.each([['RIFF', 0], ['WAVE', 8], ['fmt', 12], ['data', 36]] as const)('rejects high-bit corruption in the exact %s marker', (_marker, offset) => {
+    const bytes = pcm(); bytes[offset] = bytes[offset]! | 0x80;
+    expect(() => validateHermesVoiceAudioBytes(bytes)).toThrow();
+  });
+  it.each(['riff-length', 'truncated', 'chunk-length', 'fmt-length', 'codec', 'channels', 'rate', 'byte-rate', 'alignment', 'bits', 'empty-data', 'odd-data', 'duplicate-fmt', 'duplicate-data', 'trailing-byte', 'oversize'])('rejects %s in the complete WAV body', mutation => {
+    let bytes = pcm();
+    if (mutation === 'riff-length') bytes.writeUInt32LE(bytes.length, 4);
+    if (mutation === 'truncated') bytes = bytes.subarray(0, bytes.length - 2);
+    if (mutation === 'chunk-length') bytes.writeUInt32LE(0xffffffff, 40);
+    if (mutation === 'fmt-length') bytes.writeUInt32LE(18, 16);
+    if (mutation === 'codec') bytes.writeUInt16LE(3, 20);
+    if (mutation === 'channels') bytes.writeUInt16LE(2, 22);
+    if (mutation === 'rate') bytes.writeUInt32LE(16000, 24);
+    if (mutation === 'byte-rate') bytes.writeUInt32LE(1, 28);
+    if (mutation === 'alignment') bytes.writeUInt16LE(4, 32);
+    if (mutation === 'bits') bytes.writeUInt16LE(8, 34);
+    if (mutation === 'empty-data') { bytes = bytes.subarray(0, 44); bytes.writeUInt32LE(0, 40); bytes.writeUInt32LE(36, 4); }
+    if (mutation === 'odd-data') { bytes = bytes.subarray(0, 523); bytes.writeUInt32LE(479, 40); bytes.writeUInt32LE(bytes.length - 8, 4); }
+    if (mutation === 'duplicate-fmt') { bytes = Buffer.concat([bytes, bytes.subarray(12, 36)]); bytes.writeUInt32LE(bytes.length - 8, 4); }
+    if (mutation === 'duplicate-data') { bytes = Buffer.concat([bytes, bytes.subarray(36)]); bytes.writeUInt32LE(bytes.length - 8, 4); }
+    if (mutation === 'trailing-byte') { bytes = Buffer.concat([bytes, Buffer.from([0])]); bytes.writeUInt32LE(bytes.length - 8, 4); }
+    if (mutation === 'oversize') bytes = Buffer.alloc(16 * 1024 * 1024 + 1);
+    expect(() => validateHermesVoiceAudioBytes(bytes)).toThrow();
+  });
+  it('walks bounded padded metadata chunks and rejects missing padding or excessive empty chunks', () => {
+    const original = pcm(), junk = Buffer.from([74, 85, 78, 75, 1, 0, 0, 0, 7, 0]);
+    const bytes = Buffer.concat([original.subarray(0, 36), junk, original.subarray(36)]);
+    bytes.writeUInt32LE(bytes.length - 8, 4);
+    expect(validateHermesVoiceAudioBytes(bytes).format).toBe('wav');
+    const broken = Buffer.concat([original.subarray(0, 36), junk.subarray(0, 9), original.subarray(36)]);
+    broken.writeUInt32LE(broken.length - 8, 4); expect(() => validateHermesVoiceAudioBytes(broken)).toThrow();
+    const many = Buffer.concat([original.subarray(0, 36), ...Array.from({ length: 129 }, () => Buffer.from('JUNK\0\0\0\0')), original.subarray(36)]);
+    many.writeUInt32LE(many.length - 8, 4); expect(() => validateHermesVoiceAudioBytes(many)).toThrow();
+  });
+  it.each([['audio/mpeg', 'wav'], ['audio/wav', 'mp3'], ['text/html', 'wav']])('rejects declared %s with %s bytes', async (mime, format) => {
+    const transport = downloadTransport(format === 'wav' ? pcm() : mp3, { 'content-type': mime });
+    await expect(downloadHermesVoiceAudio(completed(), { resolve: resolvePublic(), request: transport.request })).rejects.toThrow();
+  });
+  it.each([' Audio/WAV ; charset=binary', ' Application/Octet-Stream ; fixture=true'])('normalizes raw Hermes MIME %s inside its dedicated decoder', async mime => {
+    const bytes = pcm(), transport = downloadTransport(bytes, { 'content-type': mime });
+    await expect(downloadHermesVoiceAudio(completed(), { resolve: resolvePublic(), request: transport.request }))
+      .resolves.toEqual({ bytes, format: 'wav', contentType: 'audio/wav' });
+  });
+  it('bounds Hermes bytes to the private delivery limit and preserves pinned no-credential transport', async () => {
+    const transport = downloadTransport(pcm(), { 'content-type': 'audio/wav', 'content-length': String(16 * 1024 * 1024 + 1) });
+    await expect(downloadHermesVoiceAudio(completed(), { resolve: resolvePublic(), request: transport.request }))
+      .rejects.toMatchObject({ code: 'SYNCLIP_AUDIO_RESPONSE_TOO_LARGE' });
+    expect(transport.incoming.destroyed).toBe(true);
+    expect(transport.request.mock.calls[0]![1]).toMatchObject({ rejectUnauthorized: true, family: 4, agent: false,
+      headers: { Accept: 'audio/mpeg,audio/wav,application/octet-stream', 'Accept-Encoding': 'identity' } });
+    const unsafe = vi.fn();
+    await expect(downloadHermesVoiceAudio(completed(), { resolve: async () => [{ address: '127.0.0.1', family: 4 }], request: unsafe })).rejects.toThrow();
+    expect(unsafe).not.toHaveBeenCalled();
   });
 });

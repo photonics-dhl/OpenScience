@@ -34,7 +34,7 @@ export interface HermesVoiceIdentity {
   kind: HermesVoiceTaskKind; executionAttempt: number;
 }
 export interface HermesVoiceAudio {
-  objectKey: string; sha256: string; bytes: number; contentType: 'audio/mpeg';
+  objectKey: string; sha256: string; bytes: number; contentType: 'audio/mpeg' | 'audio/wav';
 }
 export interface HermesVoiceCheckpoint {
   identity: HermesVoiceIdentity; request: HermesVoicePayload;

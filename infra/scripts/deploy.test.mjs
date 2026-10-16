@@ -823,13 +823,171 @@ function voicePairSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   assert.ok(component.startsWith('function finiteVoiceSourceModel('), 'finite voice proof must exist inside the original verifier');
-  return runInNewContext(`${component}; ({ model: finiteVoiceSourceModel, writer: finiteVoiceWriterSourceModel, pair: finiteVoicePairCompatibility })`,
+  return runInNewContext(`${component}; ({ model: finiteVoiceSourceModel, writer: finiteVoiceWriterSourceModel, formatReader: typeof finiteVoiceFormatReaderSourceModel === 'function' ? finiteVoiceFormatReaderSourceModel : undefined, pair: finiteVoicePairCompatibility, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
     { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
 }
 
 // Preserve the actually released reader and all its mutations independently of
 // the current writer phase. These historical source Programs grant no authority.
 const releasedVoiceReaderSource = { sourceRef: '70e81398903db9cfd6f46cbab51db18ba5f7cb05' };
+
+// Retain the previous pure-selector fixture after the format reader evolves.
+// The two MP3 runtime modules were unchanged by the released selector writer.
+// Reuse the already retained reader oracle; no additional CI ref is needed.
+// This remains an explicit source overlay, never a release or collector grant.
+async function retainedVoiceWriterProgram(changes = new Map(), options = {}) {
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const historical = historicalVideoSource(root, releasedVoiceReaderSource.sourceRef);
+  const overlays = new Map(['packages/ai-gateway/src/synclip-audio-api.ts', 'packages/domain/src/agent/voice.ts']
+    .map(path => [path, historical.sources.get(resolve(root, path).replaceAll('\\', '/').toLowerCase())]));
+  for (const [path, change] of changes) {
+    const original = overlays.get(path) ?? (existsSync(resolve(root, path)) ? readFileSync(resolve(root, path), 'utf8') : '');
+    overlays.set(path, typeof change === 'function' ? change(original) : change);
+  }
+  return videoIngressProgram(overlays, options);
+}
+
+test('voice format reader source reconstructs the actual previous MP3 runtime without granting collector authority', async () => {
+  const methods = voicePairSourceComponents();
+  const current = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+  let model;
+  const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+  try { model = methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 120) ?? ''}`); }
+  assert.equal(model.phase, 'format-reader');
+  assert.equal(model.projected.size, 2);
+  for (const [path, value] of model.projected) assert.deepEqual(videoPairRuntime(current.ts, value.text),
+    videoPairRuntime(previous.ts, previous.program.getSourceFile(resolve(previous.projectRoot, path)).text), path);
+  assert.equal(methods.pair(current.ts, voiceSourceEntries(current), voiceSourceEntries(previous), current.projectRoot, previous.projectRoot, []), false);
+  assert.equal(methods.pair(current.ts, voiceSourceEntries(current), voiceSourceEntries(previous), current.projectRoot, previous.projectRoot, methods.defaultRoots), false,
+    'even the matching roots token cannot replace the private successful collector provenance');
+  const terms = voiceSourceEntries(current), oldTerms = voiceSourceEntries(previous);
+  const corrupt = values => values.map(([key, value]) => [key, key === 'module:packages/ai-gateway/src/synclip-audio-api.ts' ? ['forged-runtime'] : value]);
+  assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), corrupt(terms), oldTerms),
+    error => error.reason === 'VOICE_MP3_SOURCE_ENTRY_UNBOUND');
+  assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), terms, corrupt(oldTerms)),
+    error => error.reason === 'VOICE_MP3_SOURCE_ENTRY_UNBOUND');
+});
+
+test('voice format reader source rejects changed producers, late receipts, security and unclassified entries', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const gateway = 'packages/ai-gateway/src/synclip-audio-api.ts', voice = 'packages/domain/src/agent/voice.ts';
+  const worker = 'apps/agent-worker/src/voice.ts', index = 'apps/agent-worker/src/index.ts';
+  const previous = await videoIngressProgram(new Map(), rollback);
+  const cases = [
+    ['fresh download injection', worker, text => text.replace("    if (!checkpoint) {", "    if (!checkpoint) { options.downloadAudio = async () => ({ bytes: Buffer.alloc(48), format: 'mp3', contentType: 'audio/mpeg' });"), true],
+    ['saved-ID download injection', worker, text => text.replace('    if (!checkpoint.providerId)', "    if (checkpoint) options.downloadAudio = async () => ({ bytes: Buffer.alloc(48), format: 'mp3', contentType: 'audio/mpeg' });\n    if (!checkpoint.providerId)"), true],
+    ['production factory injection', index, text => text.replace('createHermesVoiceHandlers(options.voiceRuntime)', 'createHermesVoiceHandlers(options.voiceRuntime, { downloadAudio: undefined })'), true],
+    ['extra audio receipt caller', voice, text => `${text}\nexport async function extraAudioCaller(deps, prepared, received) { return saveHermesVoiceCheckpoint(deps, prepared.identity, { phase: 'submitted', ...received }); }\n`, true],
+    ['late receipt status write', voice, text => text.replace('data: { result: result as unknown as Prisma.InputJsonObject }', "data: { status: 'pending', result: result as unknown as Prisma.InputJsonObject }")],
+    ['owner path weakening', voice, text => text.replace('!audio.objectKey.split', 'audio.objectKey.split')],
+    ['source authority weakening', voice, text => text.replace("source.status !== 'succeeded'", "source.status !== 'succeeded' && false")],
+    ['default MIME change', gateway, text => text.replace("types: ['audio/mpeg', 'application/octet-stream']", "types: ['audio/mpeg', 'audio/wav', 'application/octet-stream']")],
+    ['old byte limit change', gateway, text => text.replace('SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES = 32', 'SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES = 64')],
+    ['TLS change', gateway, text => text.replace('rejectUnauthorized: true', 'rejectUnauthorized: false')],
+    ['credential change', gateway, text => text.replace("headers: { Accept: format.accept,", "headers: { Authorization: 'forbidden-fixture', Accept: format.accept,")],
+    ['new constant eager effect', gateway, text => text.replace('hermesVoiceAudioMaxBytes = 16 * 1024 * 1024', 'hermesVoiceAudioMaxBytes = Number(16 * 1024 * 1024)')],
+    ['dynamic capability escape', gateway, text => `${text}\nexport async function escapedOutput() { return import('@openscience/ai-gateway'); }\n`],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const candidate = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
+    const context = { ...videoPairContext(candidate), canonical: node => videoPairRuntime(candidate.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(candidate.ts, context, videoPairContext(old), voiceSourceEntries(candidate), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+  assert.throws(() => methods.formatReader(actual.ts, context, videoPairContext(previous),
+    [...voiceSourceEntries(actual), ['module:packages/new/src/unclassified.ts', []]], voiceSourceEntries(previous)),
+  error => error.reason === 'VOICE_MP3_RESIDUAL_ENTRY_CHANGED');
+});
+
+test('voice format reader rejects both actual High P1 counterexamples', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const worker = 'apps/agent-worker/src/voice.ts', gateway = 'packages/ai-gateway/src/synclip-audio-api.ts';
+  const cases = [
+    ['MP3 put retained but saved receipt comes from an additional WAV write', worker, text => text.replace(
+      "const storedAudio = { objectKey, sha256, bytes: audio.bytes.length, contentType: 'audio/mpeg' as const };",
+      "const wavKey = objectKey.replace(/\\.mp3$/u, '.wav'); await deps.storage.putObject(wavKey, audio.bytes, { contentType: 'audio/wav', sha256 }); const storedAudio = { objectKey: wavKey, sha256, bytes: audio.bytes.length, contentType: 'audio/wav' as const };")],
+    ['both callbacks replace split before the candidate-only second normalization', gateway, text => text
+      .replace('format.decode(Buffer.concat(chunks, size), contentType)', "format.decode(Buffer.concat(chunks, size), contentType.split(';')[0]!.trim().toLowerCase())")
+      .replace('const result = ', "String.prototype.split = function () { throw new Error('second normalization'); }; const result = ")],
+  ];
+  for (const [name, path, mutate] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = await videoIngressProgram(new Map([[path, mutate]]), rollback);
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice format reader guards signatures and new output recovery references', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const cases = [
+    ['reader default evaluation', 'packages/domain/src/agent/voice.ts', text => text.replace('function validAudio(audio: unknown)', 'function validAudio(audio: unknown = globalThis)'), true],
+    ['kernel default evaluation', 'packages/ai-gateway/src/synclip-audio-api.ts', text => text.replace('decode: (bytes: Buffer, mime: string) => T }): Promise<T>', 'decode: (bytes: Buffer, mime: string) => T } = {} as never): Promise<T>')],
+    ['fresh and submitted new output', 'apps/agent-worker/src/voice.ts', text => text.replaceAll('downloadSynclipAudio', 'downloadHermesVoiceAudio'), true],
+    ['namespace output capability', 'apps/agent-worker/src/voice.ts', text => `import * as outputGateway from '@openscience/ai-gateway';\n${text}\nconst exposedOutput = () => outputGateway;\n`, true],
+    ['existing runtime loader capability', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace("loadRuntimeModule('yauzl')", "loadRuntimeModule('@openscience/ai-gateway')"), true],
+  ];
+  const previous = await videoIngressProgram(new Map(), rollback);
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice format reader binds immutable saved audio and the unique storage write', async t => {
+  const methods = voicePairSourceComponents(), path = 'apps/agent-worker/src/voice.ts';
+  const rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const cases = [
+    ['middle receipt field rewrite', text => text.replace('          try {', "          storedAudio.contentType = 'audio/wav' as never;\n          try {")],
+    ['receipt spread override', text => text.replaceAll('audio: storedAudio', "audio: { ...storedAudio, contentType: 'audio/wav' }")],
+    ['unclassified computed storage write', text => text.replace('          try {', "          await workerDeps.storage!['putObject']('unclassified.wav', Buffer.alloc(2), { contentType: 'audio/wav' });\n          try {")],
+  ];
+  for (const [name, mutate] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = await videoIngressProgram(new Map([[path, mutate]]), rollback);
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice format reader rejects shadowed save and late-discard receipt symbols', async () => {
+  const methods = voicePairSourceComponents(), path = 'apps/agent-worker/src/voice.ts';
+  const shadow = text => text.replace('          try {', '          await (async (storedAudio) => {\n          try {')
+    .replace(/            throw error;\r?\n          \}/u,
+      "$&\n          })({ objectKey: `derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${'b'.repeat(64)}.wav`, sha256: 'b'.repeat(64), bytes: 48, contentType: 'audio/wav' as const });");
+  const current = await videoIngressProgram(new Map([[path, shadow]]), { trackedSourceOnly: true });
+  const previous = await videoIngressProgram(new Map([[path, shadow]]), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+  const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+  assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)),
+    error => error.reason === 'VOICE_MP3_LOCAL_BINDING_CHANGED');
+});
+
+test('voice format reader closes module factory escapes without erasing decoder evaluation', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const previous = await videoIngressProgram(new Map(), rollback);
+  const cases = [
+    ['module factory alias', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace('const loadRuntimeModule = createRequire(__filename);', 'const factoryAlias = createRequire; const loadRuntimeModule = factoryAlias(__filename);'), true],
+    ['module namespace factory', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace("import { createRequire } from 'node:module';", "import * as nativeModule from 'node:module';").replace('createRequire(__filename)', 'nativeModule.createRequire(__filename)'), true],
+    ['decoder extra evaluation', 'packages/ai-gateway/src/synclip-audio-api.ts', text => text.replace('format.decode(Buffer.concat(chunks, size), contentType)', 'format.decode(Buffer.concat(chunks, size), (Date.now(), contentType))')],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
 
 test('voice reader source proof preserves the actual old runtime and source-only Programs grant no deployment authority', async () => {
   const methods = voicePairSourceComponents(), actual = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
@@ -918,7 +1076,7 @@ function voiceSourceEntries(value) {
 test('voice writer source transition permits only the pure selector while retaining reader and every remaining entry', async () => {
   const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const key = 'packages/domain/src/agent/voice-contract.ts';
-  const writer = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const writer = await retainedVoiceWriterProgram(new Map(), { trackedSourceOnly: true });
   const entries = voiceSourceEntries;
   const a = entries(writer), b = entries(reader);
   const model = methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), a, b);
@@ -941,7 +1099,7 @@ test('voice writer source transition permits only the pure selector while retain
   const privateGate = value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;',
     'if (isHermesVoiceTaskKind(kind)) return isHermesVoiceWriterEnabled() ? rawResult as Record<string, unknown> : null;');
   const unsafeReader = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), releasedVoiceReaderSource);
-  const unsafeWriter = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), { trackedSourceOnly: true });
+  const unsafeWriter = await retainedVoiceWriterProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), { trackedSourceOnly: true });
   assert.throws(() => methods.writer(unsafeWriter.ts, videoPairContext(unsafeWriter), videoPairContext(unsafeReader), entries(unsafeWriter), entries(unsafeReader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the same new private phase-dependent behavior in both roots must reject');
 });
@@ -955,7 +1113,7 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
   const changes = new Map([[client, value => `import '../generated/voice-source-boundary.js';\n${value}`]]);
   const ambientSources = new Map([[extra, text]]);
   const reader = await videoIngressProgram(changes, { ...releasedVoiceReaderSource, ambientSources });
-  const raw = await videoIngressProgram(changes, { ambientSources });
+  const raw = await retainedVoiceWriterProgram(changes, { ambientSources });
   const get = value => value.program.getSourceFile(resolve(value.projectRoot, extra));
   assert.equal(get(raw)?.text, text, 'the default filesystem view must resolve the ambient module');
   const file = raw.program.getSourceFile(resolve(raw.projectRoot, client));
@@ -965,11 +1123,11 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
     ?.some(node => node.getSourceFile() === get(raw)), 'the real import must bind the extra JS before comparison');
   assert.throws(() => methods.writer(raw.ts, videoPairContext(raw), videoPairContext(reader), voiceSourceEntries(raw), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
-  const scoped = await videoIngressProgram(changes, { ambientSources, trackedSourceOnly: true });
+  const scoped = await retainedVoiceWriterProgram(changes, { ambientSources, trackedSourceOnly: true });
   assert.equal(Boolean(get(scoped)), false, 'the source inventory must exclude ambient JS during resolution, not after comparison');
   assert.equal(get(reader), undefined);
   assert.equal(methods.writer(scoped.ts, videoPairContext(scoped), videoPairContext(reader), voiceSourceEntries(scoped), voiceSourceEntries(reader)).phase, 'writer');
-  const explicit = await videoIngressProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
+  const explicit = await retainedVoiceWriterProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
   assert.equal(get(explicit)?.text, text, 'an explicit source mutation must remain visible even outside the tracked inventory');
   assert.throws(() => methods.writer(explicit.ts, videoPairContext(explicit), videoPairContext(reader), voiceSourceEntries(explicit), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
@@ -979,7 +1137,7 @@ test('voice writer tracked runtime mutations retain exact current bytes and stri
   const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const path = 'packages/ai-gateway/src/synclip-audio-api.ts';
   const text = readFileSync(resolve(reader.projectRoot, path), 'utf8') + '\nexport const voiceSourceMutationSentinel = true;\n';
-  const writer = await videoIngressProgram(new Map([[path, text]]), { trackedSourceOnly: true });
+  const writer = await retainedVoiceWriterProgram(new Map([[path, text]]), { trackedSourceOnly: true });
   assert.equal(writer.program.getSourceFile(resolve(writer.projectRoot, path)).text, text,
     'tracked-source inventory must preserve the exact current mutation, not read a HEAD blob');
   assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), voiceSourceEntries(writer), voiceSourceEntries(reader)),
