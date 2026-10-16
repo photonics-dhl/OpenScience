@@ -6360,6 +6360,287 @@ function finiteSdfReadablePairCompatibility(ts, current, previous, candidateRoot
   } catch { return false; }
 }
 
+// This direction is W over an already capable R, separate from introducing R.
+// Stored partial legacy JSON stays opaque; R may reject restoring it. No part
+// of this finite proof fills missing fields or changes a stored identity.
+function finiteSdfFormattedWriterSourceModel(ts, context, rollbackContext) {
+  const fail = (reason, node) => { throw { reason: `SDF_W_${reason}`, node }; };
+  const need = (condition, reason, node) => { if (!condition) fail(reason, node); };
+  const nodes = (scope, predicate) => { const values = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return values; };
+  const one = (values, reason) => { need(values.length === 1, reason); return values[0]; };
+  const file = (owner, path) => { const value = owner.program.getSourceFile(resolve(owner.root, path)); need(value, 'SOURCE_MISSING'); return value; };
+  const symbol = node => { let value = ts.isShorthandPropertyAssignment(node.parent)
+    ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const tokens = text => {
+    const ast = ts.createSourceFile('sdf-term.ts', text, ts.ScriptTarget.ES2022, true);
+    const visit = node => { const children = []; ts.forEachChild(node, child => { children.push(visit(child)); });
+      return [node.kind, ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) ? node.operator
+        : ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? node.text : null, children]; };
+    return JSON.stringify(visit(ast));
+  };
+  const same = (node, text) => !!node && tokens(node.getText()) === tokens(text);
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), 'FUNCTION_MISSING');
+  const variable = (source, name) => one(nodes(source, node => ts.isVariableDeclaration(node) && node.name.getText() === name), 'VARIABLE_MISSING');
+  const term = (scope, text, reason) => { const matches = nodes(scope, node => same(node, text));
+    const outer = matches.filter(node => !matches.some(other => other !== node && other.pos <= node.pos && other.end >= node.end));
+    need(outer.length === 1, reason, scope); return outer[0]; };
+  const schemaPath = 'packages/sdf-schema/src/', domainPath = 'packages/domain/src/';
+  const core = file(context, `${schemaPath}core.ts`), validate = file(context, `${schemaPath}validate.ts`);
+  // These are real source objects, not invented old schemas. Full residual
+  // equality below also retains their installed imports, options and vendors.
+  for (const path of [`${schemaPath}core.ts`, `${schemaPath}validate.ts`])
+    need(tokens(file(context, path).text) === tokens(file(rollbackContext, path).text), 'LEGACY_SCHEMA_CHANGED');
+  need(same(variable(core, 'SDF_CORE_VERSION').initializer, "'0.1.0'"), 'LEGACY_IDENTITY_CHANGED');
+  need(same(variable(core, 'SDF_CORE_FIELDS').initializer,
+    "['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',] as const"), 'LEGACY_FIELDS_CHANGED');
+  for (const [name, title, full] of [['coreSchema', 'OpenScience SDF Core', true], ['draftCoreSchema', 'OpenScience SDF Draft Core', false]]) {
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+      .map(key => `${key}: { type: 'string'${full ? ', minLength: 1' : ''} }`).join(',');
+    need(same(variable(core, name).initializer, `{ $schema: 'http://json-schema.org/draft-07/schema#', title: '${title}',
+      type: 'object', required: ['schemaVersion', ...SDF_CORE_FIELDS], properties: {
+        schemaVersion: { const: SDF_CORE_VERSION }, ${fields}, }, } as const`), 'LEGACY_OPAQUE_DOMAIN_CHANGED');
+  }
+  for (const [name, compiled, schema] of [['validateSdfCore', 'coreValidate', 'coreSchema'], ['validateSdfDraftCore', 'draftCoreValidate', 'draftCoreSchema']]) {
+    const validator = fn(validate, name);
+    need(same(variable(validate, compiled).initializer, `ajv.compile(${schema})`)
+      && validator.parameters.length === 1 && same(validator.parameters[0].name, 'doc')
+      && !validator.parameters[0].initializer && !validator.parameters[0].dotDotDotToken
+      && same(validator.body, `{ const ok = ${compiled}(doc); return { ok, errors: ${compiled}.errors ?? [] }; }`), 'LEGACY_VALIDATOR_CHANGED');
+  }
+  need(same(variable(validate, 'ajv').initializer, 'new Ajv({ allErrors: true })'), 'LEGACY_VALIDATOR_OPTIONS_CHANGED');
+  const readablePath = `${schemaPath}readable-core.ts`, readable = file(context, readablePath);
+  for (const path of [readablePath, `${schemaPath}index.ts`])
+    need(tokens(file(context, path).text) === tokens(file(rollbackContext, path).text), 'CAPABLE_READER_RUNTIME_CHANGED');
+  const full = fn(readable, 'validateReadableSdfCore'), draft = fn(readable, 'validateReadableSdfDraftCore');
+  const formatted = fn(readable, 'formattedCoreSchema'), identity = fn(readable, 'isFormattedIdentity'), parse = fn(readable, 'parseReadableSdfCore');
+  need(same(variable(readable, 'SDF_READABLE_CORE_VERSION').initializer, "'0.2.0'"), 'READABLE_IDENTITY_CHANGED');
+  need(same(formatted.body, `{
+    return { type: 'object', required: ['schemaVersion', ...SDF_CORE_FIELDS], properties: {
+      schemaVersion: { const: SDF_READABLE_CORE_VERSION },
+      ...Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, { type: 'string', ...(full ? { minLength: 1 } : {}) }])),
+      fieldFormats: { type: 'object', properties: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, { enum: ['plain', 'markdown'] }])), additionalProperties: false, },
+    }, };
+  }`), 'READABLE_SCHEMA_CHANGED');
+  need(same(identity.body, `{ return !!doc && typeof doc === 'object' && !Array.isArray(doc)
+    && (doc as { schemaVersion?: unknown }).schemaVersion === SDF_READABLE_CORE_VERSION; }`), 'OPAQUE_REINTERPRETED');
+  for (const [node, old, compiled] of [[full, 'validateSdfCore', 'fullValidate'], [draft, 'validateSdfDraftCore', 'draftValidate']])
+    need(same(node.body, `{ if (!isFormattedIdentity(doc)) return ${old}(doc); const ok = ${compiled}(doc); return { ok, errors: ${compiled}.errors ?? [] }; }`), 'READABLE_FALLBACK_CHANGED');
+  need(same(parse.body, '{ return validateReadableSdfDraftCore(doc).ok ? doc as ReadableSdfCore : null; }'), 'READABLE_NORMALIZATION');
+  // Bound all eager work: a private Ajv with the existing installed package,
+  // two finite schemas, no defaults/coercion/removal or arbitrary initializers.
+  const declarations = new Map([
+    ['SDF_READABLE_CORE_VERSION', "'0.2.0'"], ['ajv', 'new Ajv({ allErrors: true })'],
+    ['fullValidate', 'ajv.compile(formattedCoreSchema(true))'], ['draftValidate', 'ajv.compile(formattedCoreSchema(false))'],
+  ]);
+  const functions = new Set([formatted, identity, full, draft, parse]);
+  const imports = ["import Ajv from 'ajv';", "import { SDF_CORE_FIELDS, type SdfCore } from './core';",
+    "import { validateSdfCore, validateSdfDraftCore, type ValidationResult } from './validate';"];
+  let importCount = 0;
+  for (const statement of readable.statements) {
+    if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) continue;
+    if (ts.isImportDeclaration(statement)) { need(imports.some(text => same(statement, text)), 'INITIALIZATION_IMPORT_CHANGED', statement); importCount++; continue; }
+    if (functions.has(statement)) {
+      need(!statement.asteriskToken && !statement.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+        && (statement.modifiers?.map(node => node.kind).join(',') ?? '') === ([full, draft, parse].includes(statement) ? String(ts.SyntaxKind.ExportKeyword) : '')
+        && statement.parameters.length === 1 && !statement.parameters[0].initializer
+        && !statement.parameters[0].dotDotDotToken
+        && same(statement.parameters[0].name, statement === formatted ? 'full' : 'doc'), 'READABLE_FUNCTION_EFFECT_CHANGED', statement);
+      continue;
+    }
+    need(ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const
+      && statement.declarationList.declarations.length === 1, 'INITIALIZATION_EFFECT_CHANGED', statement);
+    const value = statement.declarationList.declarations[0], name = value.name.getText();
+    need(declarations.has(name) && same(value.initializer, declarations.get(name)), 'INITIALIZATION_EFFECT_CHANGED', value);
+    need((statement.modifiers?.map(node => node.kind).join(',') ?? '')
+      === (name === 'SDF_READABLE_CORE_VERSION' ? String(ts.SyntaxKind.ExportKeyword) : ''), 'INITIALIZATION_EXPORT_CHANGED', statement);
+    declarations.delete(name);
+  }
+  need(importCount === 3 && declarations.size === 0, 'INITIALIZATION_INCOMPLETE');
+  for (const [name, declaration] of [['SDF_CORE_FIELDS', variable(core, 'SDF_CORE_FIELDS')],
+    ['validateSdfCore', fn(validate, 'validateSdfCore')], ['validateSdfDraftCore', fn(validate, 'validateSdfDraftCore')],
+    ['formattedCoreSchema', formatted], ['isFormattedIdentity', identity], ['validateReadableSdfDraftCore', draft]]) {
+    for (const use of nodes(readable, node => ts.isIdentifier(node) && node.text === name))
+      need(symbol(use) === symbol(declaration.name), 'READABLE_BINDING_CHANGED', use);
+  }
+
+  const previousSymbol = node => {
+    let value = ts.isShorthandPropertyAssignment(node.parent) ? rollbackContext.checker.getShorthandAssignmentValueSymbol(node.parent) : rollbackContext.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = rollbackContext.checker.getAliasedSymbol(value); return value;
+  };
+  const runtime = text => {
+    const result = ts.transpileModule(text, { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!result.diagnostics?.some(value => value.category === ts.DiagnosticCategory.Error), 'PROJECTED_RUNTIME_INVALID');
+    return tokens(result.outputText);
+  };
+  const commitPath = domainPath + 'commit/commits.ts', sdfPath = domainPath + 'research-object/sdf.ts';
+  const commits = file(context, commitPath), oldCommits = file(rollbackContext, commitPath);
+  const wrapper = fn(commits, 'createCommit'), internal = fn(commits, 'createCommitInternal');
+  const stored = fn(commits, 'createStoredSnapshotCommit'), legacy = fn(commits, 'isStoredLegacyCore');
+  const oldWrapper = fn(oldCommits, 'createCommit'), oldInternal = fn(oldCommits, 'createCommitInternal'), oldStored = fn(oldCommits, 'createStoredSnapshotCommit');
+  const parameters = values => values.map(node => node.name.getText() + (node.initializer ? '=' + node.initializer.getText() : '') + (node.dotDotDotToken ? '...' : '')).join(',');
+  need(parameters(wrapper.parameters) === parameters(oldWrapper.parameters)
+    && parameters(internal.parameters) === 'deps,input,ctx,transaction,systemExecution,storedCore,composeHistory=false'
+    && parameters(oldInternal.parameters) === 'deps,input,ctx,transaction,systemExecution,storedCore', 'COMMIT_SIGNATURE_CHANGED');
+  need(same(wrapper.body, "{\n  if (!transaction && (input.idempotencyKey?.startsWith('ingestion-confirm:') || input.idempotencyKey?.startsWith('hermes-ingestion:'))) {\n    throw new CommitError('VALIDATION_ERROR', 'Reserved ingestion idempotency key');\n  }\n  if (input.sdfCore?.schemaVersion === '0.2.0' && !systemExecution) {\n    const write = async (tx: Prisma.TransactionClient) => {\n      await lockTrashReferences(tx);\n      await tx.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;\n      return createCommitInternal(deps, input, ctx, tx, undefined, undefined, !transaction);\n    };\n    return transaction ? write(transaction) : deps.prisma.$transaction(write, { isolationLevel: 'Serializable', timeout: 30_000 }).catch((error: unknown) => {\n      if ((error as { code?: string }).code === 'P2034') throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');\n      throw error;\n    });\n  }\n  return createCommitInternal(deps, input, ctx, transaction, systemExecution);\n}") && same(oldWrapper.body, '{ return createCommitInternal(deps, input, ctx, transaction, systemExecution); }'), 'AUTHOR_TRANSACTION_CHANGED', wrapper);
+  need(same(legacy.body, "{\n  if (!core || typeof core !== 'object' || Array.isArray(core)) return false;\n  return (core.schemaVersion === undefined || core.schemaVersion === '0.1.0')\n    && SDF_NODE_TYPES.every(field => core[field] === undefined || typeof core[field] === 'string');\n}") && parameters(legacy.parameters) === 'core'
+    && !legacy.modifiers?.length && !legacy.asteriskToken, 'STORED_PARTIAL_SOURCE_CHANGED', legacy);
+  const types = file(context, domainPath + 'research-object/types.ts'), nodeTypes = variable(types, 'SDF_NODE_TYPES');
+  need(same(nodeTypes.initializer, '[...SDF_CORE_FIELDS] as const')
+    && symbol(term(legacy, 'SDF_NODE_TYPES', 'STORED_FIELDS_CHANGED')) === symbol(nodeTypes.name)
+    && symbol(one(nodes(nodeTypes.initializer, node => ts.isIdentifier(node) && node.text === 'SDF_CORE_FIELDS'), 'STORED_FIELDS_CHANGED')) === symbol(variable(core, 'SDF_CORE_FIELDS').name), 'STORED_FIELDS_BINDING_CHANGED');
+  const check = variable(internal, 'check'), partial = variable(internal, 'storedPartial');
+  need(same(check.initializer, 'systemExecution ? validateSdfDraftCore(finalCore) : validateReadableSdfDraftCore(finalCore)'), 'AUTHOR_VALIDATOR_CHANGED', check);
+  need(symbol(check.initializer.whenTrue.expression) === symbol(fn(validate, 'validateSdfDraftCore').name)
+    && symbol(check.initializer.whenFalse.expression) === symbol(draft.name), 'AUTHOR_VALIDATOR_BINDING_CHANGED');
+  need(same(partial.initializer, 'storedCore === finalCore && isStoredLegacyCore(storedCore)'), 'STORED_PARTIAL_SOURCE_CHANGED', partial);
+  need(same(partial.parent.parent, 'const storedPartial = storedCore === finalCore && isStoredLegacyCore(storedCore);'), 'STORED_PARTIAL_DECLARATION_CHANGED', partial);
+  const rejection = term(internal, "if (!check.ok && !storedPartial) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');", 'AUTHOR_VALIDATION_GUARD_CHANGED');
+  const oldCheck = variable(oldInternal, 'check');
+  need(same(oldCheck.initializer, 'storedCore === undefined ? validateSdfDraftCore(finalCore) : validateReadableSdfDraftCore(storedCore)')
+    && previousSymbol(oldCheck.initializer.whenTrue.expression) === previousSymbol(fn(file(rollbackContext, schemaPath + 'validate.ts'), 'validateSdfDraftCore').name)
+    && previousSymbol(oldCheck.initializer.whenFalse.expression) === previousSymbol(fn(file(rollbackContext, readablePath), 'validateReadableSdfDraftCore').name), 'CAPABLE_STORED_READER_CHANGED');
+  const upgrade = term(internal, "if (storedCore === undefined && branch.isDefault && finalCore.schemaVersion === '0.2.0' && liveCore.schemaVersion !== '0.2.0') {\n    if (!isStoredLegacyCore(liveCore)) throw new CommitError('VALIDATION_ERROR', '当前草稿格式不支持升级');\n    if (!isDeepStrictEqual(prevManifest?.coreJson, liveCore)) {\n      if (!transaction) throw new CommitError('VALIDATION_ERROR', '格式升级需要事务');\n      await createCommitInternal(deps, {\n        researchObjectId: ro.id, userId: input.userId, version: input.version, branchId: input.branchId,\n        sdfCore: liveCore, message: 'Save original draft before formatting',\n      }, ctx, transaction, undefined, liveCore, true);\n      const current = await transaction.researchObject.findUnique({ where: { id: ro.id } });\n      if (!current) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');\n      return createCommitInternal(deps, { ...input, version: current.version }, ctx, transaction, systemExecution, undefined, composeHistory);\n    }\n  }", 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED');
+  const live = variable(internal, 'liveCore'), manifest = variable(internal, 'prevManifest');
+  need(same(live.initializer, '(ro.sdfDocument?.coreJson as Record<string, unknown> | undefined) ?? predecessorCore'), 'CHECKPOINT_LIVE_SOURCE_CHANGED');
+  const deepImport = term(commits, "import { isDeepStrictEqual } from 'node:util';", 'DEEP_IMPORT_CHANGED');
+  const deepName = deepImport.importClause.namedBindings.elements[0].name, deepAlias = context.checker.getSymbolAtLocation(deepName);
+  need(deepAlias && !deepImport.importClause.isTypeOnly && !deepImport.importClause.namedBindings.elements[0].isTypeOnly, 'DEEP_IMPORT_BINDING_CHANGED');
+  const deepCall = term(upgrade, 'isDeepStrictEqual(prevManifest?.coreJson, liveCore)', 'CHECKPOINT_DEEP_ARGUMENTS_CHANGED');
+  need(context.checker.getSymbolAtLocation(deepCall.expression) === deepAlias
+    && symbol(deepCall.arguments[0].expression) === symbol(manifest.name)
+    && symbol(deepCall.arguments[1]) === symbol(live.name), 'CHECKPOINT_DEEP_BINDING_CHANGED');
+  const carry = one(nodes(internal, node => ts.isIfStatement(node) && same(node.expression, '!transaction || composeHistory')), 'COMPOSE_HISTORY_CHANGED');
+  need(same(stored.body, "{\n  await transaction.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;\n  const ro = await transaction.researchObject.findUnique({ where: { id: input.researchObjectId }, include: { sdfDocument: true } });\n  if (!ro || ro.deletedAt) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');\n  await requireCommitAuthority({ ...deps, prisma: transaction as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, true);\n  if (ro.version !== input.version) throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');\n  let core: Record<string, unknown>;\n  let artifacts: ArtifactReference[] | undefined;\n  if (input.source.kind === 'version') {\n    const source = await transaction.version.findFirst({\n      where: { id: input.source.versionId, researchObjectId: ro.id },\n      include: { manifest: { include: { entries: true } } },\n    });\n    if (!source?.manifest) throw new CommitError('VALIDATION_ERROR', '所选历史稿不存在');\n    const artifactIds = source.manifest.entries.map(entry => entry.artifactId);\n    if (await transaction.artifact.count({ where: { id: { in: artifactIds }, workspaceId: ro.workspaceId, deletedAt: null } }) !== new Set(artifactIds).size) {\n      throw new CommitError('VALIDATION_ERROR', '历史材料已移入回收站，请先恢复相关材料');\n    }\n    core = source.manifest.coreJson as Record<string, unknown>;\n    artifacts = source.manifest.entries.map(entry => ({ artifactId: entry.artifactId, logicalPath: entry.logicalPath }));\n  } else {\n    if (!ro.sdfDocument) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不存在');\n    core = ro.sdfDocument.coreJson as Record<string, unknown>;\n  }\n  return createCommitInternal(deps, {\n    researchObjectId: ro.id, userId: input.userId, version: input.version, message: input.message,\n    sdfCore: core, ...(artifacts ? { artifacts } : {}),\n  }, ctx, transaction, undefined, core);\n}") && same(oldStored.body, "{\n  await transaction.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;\n  const ro = await transaction.researchObject.findUnique({ where: { id: input.researchObjectId }, include: { sdfDocument: true } });\n  if (!ro || ro.deletedAt) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');\n  await requireCommitAuthority({ ...deps, prisma: transaction as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, true);\n  if (ro.version !== input.version) throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');\n  let core: Record<string, unknown>;\n  let artifacts: ArtifactReference[] | undefined;\n  if (input.source.kind === 'version') {\n    const source = await transaction.version.findFirst({\n      where: { id: input.source.versionId, researchObjectId: ro.id },\n      include: { manifest: { include: { entries: true } } },\n    });\n    if (!source?.manifest) throw new CommitError('VALIDATION_ERROR', '所选历史稿不存在');\n    const artifactIds = source.manifest.entries.map(entry => entry.artifactId);\n    if (await transaction.artifact.count({ where: { id: { in: artifactIds }, workspaceId: ro.workspaceId, deletedAt: null } }) !== new Set(artifactIds).size) {\n      throw new CommitError('VALIDATION_ERROR', '历史材料已移入回收站，请先恢复相关材料');\n    }\n    core = source.manifest.coreJson as Record<string, unknown>;\n    artifacts = source.manifest.entries.map(entry => ({ artifactId: entry.artifactId, logicalPath: entry.logicalPath }));\n  } else {\n    if (!ro.sdfDocument) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不存在');\n    core = ro.sdfDocument.coreJson as Record<string, unknown>;\n  }\n  return createCommitInternal(deps, {\n    researchObjectId: ro.id, userId: input.userId, version: input.version, message: input.message,\n    sdfCore: core, ...(artifacts ? { artifacts } : {}),\n  }, ctx, transaction, undefined, core);\n}")
+    && parameters(stored.parameters) === 'deps,input,ctx,transaction' && parameters(oldStored.parameters) === 'deps,input,ctx,transaction', 'STORED_SOURCE_CHANGED', stored);
+  const authority = fn(commits, 'requireCommitAuthority');
+  need(symbol(term(stored, "requireCommitAuthority({ ...deps, prisma: transaction as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, true)", 'STORED_AUTHORITY_CHANGED').expression) === symbol(authority.name), 'STORED_AUTHORITY_BINDING_CHANGED');
+  const allowedInternal = new Set(nodes(wrapper, node => ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'createCommitInternal').map(node => node.expression));
+  const storedCall = stored.body.statements.at(-1).expression;
+  allowedInternal.add(storedCall.expression);
+  for (const call of nodes(upgrade, node => ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'createCommitInternal')) allowedInternal.add(call.expression);
+  need(allowedInternal.size === 5 && [...allowedInternal].every(node => symbol(node) === symbol(internal.name)), 'INTERNAL_CALL_BINDING_CHANGED');
+  need(!internal.asteriskToken && internal.modifiers?.length === 1 && internal.modifiers[0].kind === ts.SyntaxKind.AsyncKeyword, 'INTERNAL_EXPORT_CHANGED');
+  const allowedLegacy = new Set(nodes(internal, node => ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'isStoredLegacyCore').map(node => node.expression));
+  need(allowedLegacy.size === 2 && [...allowedLegacy].every(node => symbol(node) === symbol(legacy.name)), 'STORED_PARTIAL_BINDING_CHANGED');
+  const restorePath = domainPath + 'commit/restore-draft.ts', restore = file(context, restorePath), oldRestore = file(rollbackContext, restorePath);
+  need(runtime(restore.text) === runtime(oldRestore.text), 'RESTORE_RUNTIME_CHANGED');
+  const newRestoreCalls = [
+    `createStoredSnapshotCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, source: { kind: 'current-draft' }, message: 'Save draft before restoring history' }, ctx, tx)`,
+    `createStoredSnapshotCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, source: { kind: 'version', versionId: source.id }, message: \`Restore draft from \${source.createdAt.toISOString()}\`, }, ctx, tx)`,
+  ];
+
+  const allowedStored = new Set();
+  for (const text of newRestoreCalls) {
+    const call = term(restore, text, 'RESTORE_SOURCE_CHANGED'), oldCall = term(oldRestore, text, 'CAPABLE_RESTORE_SOURCE_CHANGED');
+    need(symbol(call.expression) === symbol(stored.name) && previousSymbol(oldCall.expression) === previousSymbol(oldStored.name), 'RESTORE_SOURCE_BINDING_CHANGED'); allowedStored.add(call.expression);
+  }
+  for (const source of context.program.getSourceFiles()) {
+    if (source.isDeclarationFile) continue;
+    for (const use of nodes(source, ts.isIdentifier)) {
+      const target = symbol(use);
+      if (target === symbol(internal.name)) need(use === internal.name || allowedInternal.has(use), 'INTERNAL_ESCAPE', use);
+      if (target === symbol(legacy.name)) need(use === legacy.name || allowedLegacy.has(use), 'STORED_PARTIAL_ESCAPE', use);
+      if (target === symbol(stored.name)) need(use === stored.name || allowedStored.has(use)
+        || ts.isImportSpecifier(use.parent) && use.parent.name === use && source === restore, 'STORED_ESCAPE', use);
+      if (context.checker.getSymbolAtLocation(use) === deepAlias) need(use === deepName || use === deepCall.expression, 'DEEP_IMPORT_ESCAPE', use);
+    }
+    const exposes = specifier => { const module = context.checker.getSymbolAtLocation(specifier);
+      return module && context.checker.getExportsOfModule(module).some(value => {
+        if (value.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value);
+        return [symbol(stored.name), symbol(internal.name), symbol(legacy.name)].includes(value);
+      }); };
+    for (const statement of source.statements) {
+      if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings && ts.isNamespaceImport(statement.importClause.namedBindings)) need(!exposes(statement.moduleSpecifier), 'STORED_NAMESPACE_ESCAPE', statement);
+      if (ts.isExportDeclaration(statement) && statement.moduleSpecifier && (!statement.exportClause || !ts.isNamedExports(statement.exportClause))) need(!exposes(statement.moduleSpecifier), 'STORED_NAMESPACE_EXPORT', statement);
+    }
+    for (const call of nodes(source, ts.isCallExpression)) if ((call.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(call.expression) && call.expression.text === 'require') && call.arguments.length === 1 && ts.isStringLiteral(call.arguments[0])) need(!exposes(call.arguments[0]), 'STORED_DYNAMIC_ESCAPE', call);
+  }
+  const projected = new Map();
+  const project = (path, edits) => {
+    const source = file(context, path), rollback = file(rollbackContext, path); let text = source.text, boundary = text.length;
+    for (const edit of edits.map(edit => ({ start: edit.node ? edit.node.getStart() : edit.start, end: edit.node ? edit.node.end : edit.end, text: edit.text })).sort((a,b) => b.start-a.start)) {
+      need(edit.end <= boundary && edit.start <= edit.end, 'PROJECTION_OVERLAP'); boundary = edit.start;
+      text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
+    }
+    need(runtime(text) === runtime(rollback.text), 'MODULE_RESIDUAL_CHANGED', source); projected.set(path, { source, rollback, text });
+  };
+  project(commitPath, [
+    { node: deepImport, text: '' }, { node: legacy, text: '' }, { node: wrapper.body, text: oldWrapper.body.getText() },
+    { start: internal.parameters.at(-2).end, end: internal.parameters.at(-1).end, text: '' },
+    { node: check.initializer, text: oldCheck.initializer.getText() }, { node: partial.parent.parent, text: '' },
+    { node: rejection, text: "if (!check.ok) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');" },
+    { node: upgrade, text: '' }, { node: carry.expression, text: '!transaction' },
+  ]);
+  const sdf = file(context, sdfPath), oldSdf = file(rollbackContext, sdfPath), getter = fn(sdf, 'getSdfDocument'), updater = fn(sdf, 'updateSdfDocument');
+  const oldGetter = fn(oldSdf, 'getSdfDocument'), oldUpdater = fn(oldSdf, 'updateSdfDocument');
+  const newGet = term(getter, "return {\n    version: ro.version,\n    core: ro.sdfDocument.coreJson as Record<string, unknown>,\n    nodes: ro.sdfDocument.nodes.map((n) => ({ nodeType: n.nodeType, content: n.content })),\n  };", 'SDF_CURRENT_READ_CHANGED');
+  const oldGet = one(oldGetter.body.statements.filter(ts.isReturnStatement), 'CAPABLE_SDF_READ_CHANGED');
+  need(same(oldGet, 'return { core: ro.sdfDocument.coreJson as Record<string,string>, nodes: ro.sdfDocument.nodes.map((n) => ({ nodeType: n.nodeType, content: n.content })), };'), 'CAPABLE_SDF_READ_CHANGED');
+  const readImport = term(sdf, "import { validateReadableSdfDraftCore } from '@openscience/sdf-schema';", 'SDF_VALIDATOR_IMPORT_CHANGED');
+  const readCheck = term(updater, 'validateReadableSdfDraftCore(input.core)', 'SDF_AUTHOR_VALIDATOR_CHANGED');
+  need(symbol(readCheck.expression) === symbol(draft.name), 'SDF_AUTHOR_VALIDATOR_BINDING_CHANGED');
+  const updated = variable(updater, 'updated');
+  need(ts.isVariableStatement(updated.parent.parent)
+    && (updated.parent.parent.declarationList.flags & ts.NodeFlags.Const)
+    && updated.parent.declarations.length === 1, 'SDF_TRANSACTION_DECLARATION_CHANGED', updated);
+  need(ts.isAwaitExpression(updated.initializer), 'SDF_TRANSACTION_CHANGED');
+  const txCall = one(nodes(updated.initializer, node => ts.isCallExpression(node) && same(node.expression, 'deps.prisma.$transaction')), 'SDF_TRANSACTION_CHANGED'), txArrow = txCall.arguments[0];
+  need(same(txCall.expression, 'deps.prisma.$transaction') && ts.isArrowFunction(txArrow) && parameters(txArrow.parameters) === 'tx', 'SDF_TRANSACTION_CHANGED');
+  const tail = txArrow.body.statements.slice(-3), expectedTail = ["const current = await tx.researchObject.findUnique({ where: { id: ro.id }, include: { sdfDocument: { include: { nodes: true } } } });","if (!current?.sdfDocument) throw new ResearchObjectError('VALIDATION_ERROR', 'SDF 文档不存在');","return { version: current.version, core: current.sdfDocument.coreJson as Record<string, unknown>,\n      nodes: current.sdfDocument.nodes.map(node => ({ nodeType: node.nodeType, content: node.content })) };"];
+  need(tail.length === 3 && tail.every((node,index) => same(node, expectedTail[index])), 'SDF_ACTUAL_REVISION_CHANGED');
+  const reload = variable(txArrow, 'current'), txSymbol = symbol(txArrow.parameters[0].name);
+  need(symbol(reload.initializer.expression.expression.expression.expression) === txSymbol, 'SDF_RELOAD_TRANSACTION_CHANGED');
+  const finalReturn = one(updater.body.statements.filter(ts.isReturnStatement), 'SDF_RETURN_CHANGED');
+  need(same(finalReturn, 'return updated;') && symbol(finalReturn.expression) === symbol(updated.name), 'SDF_RETURN_CHANGED');
+  const oldFinal = one(oldUpdater.body.statements.filter(ts.isReturnStatement), 'CAPABLE_SDF_RETURN_CHANGED');
+  need(same(oldFinal, 'return getSdfDocument(deps, { userId: input.userId, roId: input.roId });') && previousSymbol(oldFinal.expression.expression) === previousSymbol(oldGetter.name), 'CAPABLE_SDF_RETURN_CHANGED');
+  const exportPath = domainPath + 'export/validate.ts';
+  for (const owner of [context, rollbackContext]) {
+    const source = file(owner, exportPath), call = term(source, 'validateReadableSdfCore(core)', 'CAPABLE_EXPORT_CHANGED');
+    const checkerSymbol = owner === context ? symbol : previousSymbol;
+    need(checkerSymbol(call.expression) === checkerSymbol(fn(file(owner, readablePath), 'validateReadableSdfCore').name), 'CAPABLE_EXPORT_BINDING_CHANGED');
+  }
+  project(sdfPath, [ { node: readImport, text: "import { validateSdfDraftCore } from '@openscience/sdf-schema';" },
+    { node: readCheck, text: 'validateSdfDraftCore(input.core)' }, { node: newGet, text: oldGet.getText() },
+    { start: updated.parent.parent.getStart(), end: updated.initializer.getStart(), text: '' },
+    ...tail.map(node => ({ node, text: '' })), { node: finalReturn, text: oldFinal.getText() } ]);
+  return { domain: 'author-formatted-private-with-opaque-checkpoint', partialHistory: 'preserved-opaque; capable-reader-rejects-partial-restore',
+    projected, external: { source: commits, specifier: 'node:util', removedImport: deepImport } };
+}
+
+function finiteSdfFormattedWriterPairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
+  try {
+    const captured = finiteImageCollectedContexts(ts, current, previous, candidateRoot, rollbackRoot, roots);
+    if (!captured) return false;
+    const { left, right } = captured, model = finiteSdfFormattedWriterSourceModel(ts, left, right);
+    const a = new Map(current), b = new Map(previous), affected = new Set();
+    for (const [path,value] of model.projected) {
+      if (right.modules.get(resolve(right.root,path)) !== value.rollback || !a.has('module:'+path) || !b.has('module:'+path)) return false;
+      const projected = finiteImageProjectedRuntime(ts,left,path,value);
+      if (JSON.stringify(projected.canonical) !== JSON.stringify(b.get('module:'+path)) || projected.imports.includes(model.external.specifier)) return false;
+      affected.add('module:'+path);
+    }
+    const externalPath = relative(left.root,model.external.source.fileName).replaceAll('\\','/');
+    const key = externalPath + ':external:' + model.external.specifier;
+    if (left.modules.get(resolve(left.root,externalPath)) !== model.external.source || a.get(key) !== 'node-builtin' || b.has(key)
+      || !builtinModules.includes(model.external.specifier) && !builtinModules.includes(model.external.specifier.replace(/^node:/u,''))) return false;
+    const existingBuiltin = [...right.modules].some(([path,source]) => {
+      const entry = relative(right.root,path).replaceAll('\\','/') + ':external:' + model.external.specifier;
+      return b.get(entry) === 'node-builtin' && right.program.getSourceFile(path) === source
+        && source.statements.some(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === model.external.specifier && node.importClause && !node.importClause.isTypeOnly);
+    });
+    if (!existingBuiltin) return false;
+    affected.add(key);
+    for (const key of new Set([...a.keys(),...b.keys()])) if (!affected.has(key)
+      && (!a.has(key) || !b.has(key) || JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key)))) return false;
+    return true;
+  } catch { return false; }
+}
+
 function rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot) {
   const left = new Map(current), right = new Map(previous);
   const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
@@ -6432,7 +6713,8 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
           || finiteImageCapablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteImageFirstPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteVoicePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
-          || finiteSdfReadablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
+          || finiteSdfReadablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+          || finiteSdfFormattedWriterPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
       if (diagnostics === true) {
         try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }
         catch { /* Diagnostic failure cannot permit rollback or replace the rejection. */ }

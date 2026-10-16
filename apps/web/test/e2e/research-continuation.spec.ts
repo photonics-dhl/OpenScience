@@ -856,13 +856,15 @@ test.describe('formatted research authoring', () => {
     const beforeItalic = savedCore.insight as string;
     await page.getByRole('button', { name: 'Core contribution · Edit', exact: true }).tap();
     input = page.getByRole('textbox', { name: 'Core contribution', exact: true });
+    const beforeItalicDisplay = await input.inputValue();
     await input.press('End');
     await input.press('ArrowLeft'); await input.press('ArrowLeft');
     await input.press('Control+Shift+ArrowLeft');
     await input.press('Control+i');
     await expect(input).toBeFocused();
     await page.getByRole('button', { name: 'Undo format', exact: true }).tap();
-    await expect(input).toHaveValue(beforeItalic);
+    await expect(input).toHaveValue(beforeItalicDisplay);
+    await expect.poll(() => savedCore.insight).toBe(beforeItalic);
     await page.getByRole('button', { name: 'Link', exact: true }).tap();
     const linkInput = page.getByLabel('Link address');
     await linkInput.fill('javascript:alert(1)');
@@ -874,6 +876,7 @@ test.describe('formatted research authoring', () => {
     await page.getByRole('heading', { name: 'Core contribution', exact: true }).click();
     await expect(page.getByRole('link', { name: 'final', exact: true })).toHaveAttribute('href', 'https://example.org/source');
     await expect.poll(() => String(savedCore.insight)).toContain('https://example.org/source');
+    expect(savedCore.insight).toContain('[S12]');
     expect(revision).toBeGreaterThanOrEqual(4);
     await page.getByRole('navigation', { name: 'Research sections' }).getByRole('button', { name: 'Research content', exact: true }).click();
     await page.getByRole('button', { name: 'Research method · Edit', exact: true }).click();

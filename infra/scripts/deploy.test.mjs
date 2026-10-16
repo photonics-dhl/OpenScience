@@ -93,14 +93,15 @@ test('rollback verifier dispatches guarded finite proofs only after original def
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
     finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
     finiteSdfReadablePairCompatibility(...args){events.push(['sdf',...args]);return accept==='sdf';},
+    finiteSdfFormattedWriterPairCompatibility(...args){events.push(['formatted',...args]);return accept==='formatted';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first','voice','sdf']){
+  for(const allowed of ['video','capable','first','voice','sdf','formatted']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf'].slice(0,['video','capable','first','voice','sdf'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf','formatted'].slice(0,['video','capable','first','voice','sdf','formatted'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -825,12 +826,17 @@ function sdfReadableSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   return runInNewContext(`${component}; ({ model: typeof finiteSdfReadableSourceModel === 'function' ? finiteSdfReadableSourceModel : undefined,
-    pair: typeof finiteSdfReadablePairCompatibility === 'function' ? finiteSdfReadablePairCompatibility : undefined, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
+    pair: typeof finiteSdfReadablePairCompatibility === 'function' ? finiteSdfReadablePairCompatibility : undefined,
+    writer: typeof finiteSdfFormattedWriterSourceModel === 'function' ? finiteSdfFormattedWriterSourceModel : undefined,
+    writerPair: typeof finiteSdfFormattedWriterPairCompatibility === 'function' ? finiteSdfFormattedWriterPairCompatibility : undefined,
+    defaultRoots: APPLICATION_ROLLBACK_READERS })`,
     { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
 }
 
+const releasedSdfReadableSource = { sourceRef: '052a9115fa485a4fc613dfe353a1904202c84697', trackedSourceOnly: true };
+
 test('SDF readable R source proof preserves the actual 764 runtime and old opaque domain', async () => {
-  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const actual = await videoIngressProgram(new Map(), releasedSdfReadableSource);
   const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
   const methods = sdfReadableSourceComponents();
   assert.equal(typeof methods.model, 'function', 'the original finite verifier must cover readable R');
@@ -847,6 +853,101 @@ test('SDF readable R source proof preserves the actual 764 runtime and old opaqu
   for (const values of [[], [['module:reader', 'opaque']], JSON.parse(JSON.stringify([['module:reader', 'opaque']]))])
     assert.equal(methods.pair(actual.ts, values, values.slice(), actual.projectRoot, old.projectRoot, methods.defaultRoots), false,
       'uncollected and cloned arrays cannot borrow the actual Program proof');
+});
+
+test('SDF formatted W source proof accounts for the full writer over the capable released reader', async () => {
+  const methods = sdfReadableSourceComponents();
+  assert.equal(typeof methods.writer, 'function', 'the bounded writer family must exist independently of R introduction');
+  const current = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const previous = await videoIngressProgram(new Map(), releasedSdfReadableSource);
+  const model = methods.writer(current.ts, videoPairContext(current), videoPairContext(previous));
+  assert.equal(model.domain, 'author-formatted-private-with-opaque-checkpoint');
+  assert.equal(model.partialHistory, 'preserved-opaque; capable-reader-rejects-partial-restore');
+  assert.equal(model.projected.size, 2);
+  for (const [file, value] of model.projected) assert.deepEqual(videoPairRuntime(current.ts, value.text),
+    videoPairRuntime(previous.ts, previous.program.getSourceFile(resolve(previous.projectRoot, file)).text), file);
+  assert.equal(methods.writerPair(current.ts, [], [], current.projectRoot, previous.projectRoot, []), false);
+  for (const values of [[], [['module:reader', 'source-only']]]) {
+    assert.equal(methods.writerPair(current.ts, values, values.slice(), current.projectRoot, previous.projectRoot, methods.defaultRoots), false,
+      'uncollected arrays cannot acquire the original collector authority');
+    assert.equal(methods.writerPair(current.ts, values, JSON.parse(JSON.stringify(values)), current.projectRoot, previous.projectRoot, methods.defaultRoots), false,
+      'cloning source-only entries cannot create collector provenance');
+  }
+});
+
+test('SDF formatted W rejects writer, source, authority, history and reader mutations with precise reasons', async t => {
+  const methods = sdfReadableSourceComponents();
+  const previous = await videoIngressProgram(new Map(), releasedSdfReadableSource);
+  const commits = 'packages/domain/src/commit/commits.ts', sdf = 'packages/domain/src/research-object/sdf.ts';
+  const readable = 'packages/sdf-schema/src/readable-core.ts';
+  const cases = [
+    ['legacy opaque schema', 'packages/sdf-schema/src/core.ts', text => text.replace("title: 'OpenScience SDF Draft Core',", "title: 'OpenScience SDF Draft Core', additionalProperties: false,"), 'LEGACY_SCHEMA_CHANGED'],
+    ['opaque format map stays opaque', readable, text => text.replace('(doc as { schemaVersion?: unknown }).schemaVersion === SDF_READABLE_CORE_VERSION', "'fieldFormats' in doc"), 'OPAQUE_REINTERPRETED', true],
+    ['future identity is not coerced', readable, text => text.replace('return validateSdfDraftCore(doc);', "return validateSdfDraftCore({ ...doc as object, schemaVersion: '0.1.0' });"), 'READABLE_FALLBACK_CHANGED', true],
+    ['explicit format map stays finite', readable, text => text.replace("enum: ['plain', 'markdown']", "enum: ['plain', 'markdown', 'html']"), 'READABLE_SCHEMA_CHANGED', true],
+    ['reader Ajv cannot strip values', readable, text => text.replace('new Ajv({ allErrors: true })', 'new Ajv({ allErrors: true, removeAdditional: true })'), 'INITIALIZATION_EFFECT_CHANGED', true],
+    ['reader cannot eagerly call code', readable, text => `${text}\nconst eager = Date.now();\n`, 'INITIALIZATION_EFFECT_CHANGED', true],
+    ['reader initialization import stays bound', readable, text => text.replace("import Ajv from 'ajv';", "import Ajv from './validate';"), 'INITIALIZATION_IMPORT_CHANGED', true],
+    ['system gate stays legacy', commits, text => text.replace('systemExecution ? validateSdfDraftCore(finalCore)', 'systemExecution ? validateReadableSdfDraftCore(finalCore)'), 'AUTHOR_VALIDATOR_CHANGED'],
+    ['author transaction and row lock', commits, text => text.replace('WHERE id = ${input.researchObjectId}::uuid FOR UPDATE', 'WHERE id = ${input.researchObjectId}::uuid'), 'AUTHOR_TRANSACTION_CHANGED'],
+    ['caller cannot provide partial trust', commits, text => text.replace('storedCore === finalCore && isStoredLegacyCore(storedCore)', '(input as any).trusted || isStoredLegacyCore(storedCore)'), 'STORED_PARTIAL_SOURCE_CHANGED'],
+    ['partial source requires exact identity', commits, text => text.replace('storedCore === finalCore && isStoredLegacyCore(storedCore)', 'isStoredLegacyCore(storedCore)'), 'STORED_PARTIAL_SOURCE_CHANGED'],
+    ['partial declaration cannot hide an initializer', commits, text => text.replace('const storedPartial = storedCore === finalCore && isStoredLegacyCore(storedCore);', 'const storedPartial = storedCore === finalCore && isStoredLegacyCore(storedCore), eager = Date.now();'), 'STORED_PARTIAL_DECLARATION_CHANGED'],
+    ['legacy partial helper cannot accept future schema', commits, text => text.replace("core.schemaVersion === '0.1.0'", "core.schemaVersion === '0.2.0'"), 'STORED_PARTIAL_SOURCE_CHANGED'],
+    ['raw caller is not a stored snapshot', commits, text => text.replace('core = source.manifest.coreJson as Record<string, unknown>;', 'core = (input as any).sdfCore;'), 'STORED_SOURCE_CHANGED'],
+    ['stored version remains same RO', commits, text => text.replace('where: { id: input.source.versionId, researchObjectId: ro.id }', 'where: { id: input.source.versionId }'), 'STORED_SOURCE_CHANGED'],
+    ['stored supplier keeps authority', commits, text => text.replace('ro.workspaceId, input.userId, true);', 'ro.workspaceId, input.userId, false);'), 'STORED_SOURCE_CHANGED'],
+    ['stored supplier keeps optimistic conflict', commits, text => text.replace('if (ro.version !== input.version) throw', 'if (false) throw'), 'STORED_SOURCE_CHANGED'],
+    ['stored artifacts remain retained', commits, text => text.replace('deletedAt: null } }) !== new Set(artifactIds).size', 'deletedAt: null } }) !== -1'), 'STORED_SOURCE_CHANGED'],
+    ['checkpoint retains opaque full live object', commits, text => text.replace('sdfCore: liveCore, message:', 'sdfCore: { problem: liveCore.problem }, message:'), 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED'],
+    ['checkpoint source is the live draft', commits, text => text.replace("const liveCore = (ro.sdfDocument?.coreJson as Record<string, unknown> | undefined) ?? predecessorCore;", 'const liveCore = predecessorCore;'), 'CHECKPOINT_LIVE_SOURCE_CHANGED'],
+    ['checkpoint requires transaction', commits, text => text.replace("if (!transaction) throw new CommitError('VALIDATION_ERROR', '格式升级需要事务');", ''), 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED'],
+    ['checkpoint uses actual next revision', commits, text => text.replace('version: current.version }, ctx, transaction, systemExecution', 'version: input.version + 1 }, ctx, transaction, systemExecution'), 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED'],
+    ['checkpoint composes evidence and history', commits, text => text.replace('ctx, transaction, undefined, liveCore, true)', 'ctx, transaction, undefined, liveCore, false)'), 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED'],
+    ['composeHistory gate is retained', commits, text => text.replace('if (!transaction || composeHistory)', 'if (!transaction)'), 'COMPOSE_HISTORY_CHANGED'],
+    ['six-field persistence is retained', commits, text => text.replace('for (const nodeType of SDF_NODE_TYPES)', "for (const nodeType of ['problem'])"), 'MODULE_RESIDUAL_CHANGED'],
+    ['ordinary authority is retained', commits, text => text.replace("if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role) || (isDefault && membership.role === 'contributor'))", 'if (false)'), 'MODULE_RESIDUAL_CHANGED'],
+    ['evidence carry is retained', commits, text => text.replace('await carryVersionEvidence(tx,', 'await carryVersionMedia(tx,'), 'MODULE_RESIDUAL_CHANGED'],
+    ['research freeze is retained', commits, text => text.replace('await freezeResearchRecord(tx,', 'await Promise.resolve(tx,'), 'MODULE_RESIDUAL_CHANGED'],
+    ['commit audit is retained', commits, text => text.replace("action: 'commit.create'", "action: 'commit.ignore'"), 'MODULE_RESIDUAL_CHANGED'],
+    ['deep equality exact two arguments', commits, text => text.replace('isDeepStrictEqual(prevManifest?.coreJson, liveCore)', 'isDeepStrictEqual(liveCore, liveCore)'), 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED'],
+    ['deep equality exact import alias', commits, text => text.replace("import { isDeepStrictEqual } from 'node:util';", "import { inspect as isDeepStrictEqual } from 'node:util';"), 'DEEP_IMPORT_CHANGED'],
+    ['deep equality has no extra caller', commits, text => `${text}\nconst extraDeep = isDeepStrictEqual({}, {});\n`, 'DEEP_IMPORT_ESCAPE'],
+    ['internal function cannot escape', commits, text => `${text}\nexport const escapeInternal = createCommitInternal;\n`, 'INTERNAL_ESCAPE'],
+    ['stored helper cannot escape', commits, text => `${text}\nexport const escapeStored = createStoredSnapshotCommit;\n`, 'STORED_ESCAPE'],
+    ['partial helper cannot escape', commits, text => `${text}\nexport const escapePartial = isStoredLegacyCore;\n`, 'STORED_PARTIAL_ESCAPE'],
+    ['namespace cannot acquire stored capability', 'packages/domain/src/commit/research-record.ts', text => `import * as snapshots from './commits';\n${text}\nexport const escape = () => snapshots;\n`, 'STORED_NAMESPACE_ESCAPE'],
+    ['dynamic import cannot acquire stored capability', 'packages/domain/src/commit/research-record.ts', text => `${text}\nexport async function escape() { return import('./commits'); }\n`, 'STORED_DYNAMIC_ESCAPE'],
+    ['restore cannot substitute source identity', 'packages/domain/src/commit/restore-draft.ts', text => text.replace("source: { kind: 'version', versionId: source.id }", "source: { kind: 'version', versionId: input.versionId + '-other' }"), 'RESTORE_RUNTIME_CHANGED'],
+    ['GET reports real revision', sdf, text => text.replace('version: ro.version,', 'version: ro.version + 1,'), 'SDF_CURRENT_READ_CHANGED'],
+    ['save reports actual transaction revision', sdf, text => text.replace('return { version: current.version,', 'return { version: input.version + 1,'), 'SDF_ACTUAL_REVISION_CHANGED'],
+    ['save reload stays inside transaction', sdf, text => text.replace('const current = await tx.researchObject.findUnique', 'const current = await deps.prisma.researchObject.findUnique'), 'SDF_ACTUAL_REVISION_CHANGED'],
+    ['save cannot hide another declaration', sdf, text => text.replace('const updated = await', 'const eager = Date.now(), updated = await'), 'SDF_TRANSACTION_DECLARATION_CHANGED'],
+    ['save body keeps lock', sdf, text => text.replace('WHERE id = ${ro.id}::uuid FOR UPDATE', 'WHERE id = ${ro.id}::uuid'), 'MODULE_RESIDUAL_CHANGED'],
+    ['full export validator stays readable', 'packages/domain/src/export/validate.ts', text => text.replace('validateReadableSdfCore(core)', 'validateSdfCore(core)'), 'CAPABLE_EXPORT_CHANGED'],
+  ];
+  for (const [name, path, mutate, reason, both] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await videoIngressProgram(new Map([[path, mutate]]), releasedSdfReadableSource) : previous;
+    assert.throws(() => methods.writer(current.ts, videoPairContext(current), videoPairContext(old)),
+      error => { assert.equal(error.reason, `SDF_W_${reason}`, name); return true; }, name);
+  });
+});
+
+test('SDF formatted W rejects remaining CAS and stored transaction mutations', async t => {
+  const methods = sdfReadableSourceComponents();
+  const previous = await videoIngressProgram(new Map(), releasedSdfReadableSource);
+  const path = 'packages/domain/src/commit/commits.ts';
+  const cases = [
+    ['CAS retains expected revision', text => text.replace('where: { id: ro.id, version: input.version, deletedAt: null }', 'where: { id: ro.id, deletedAt: null }'), 'MODULE_RESIDUAL_CHANGED'],
+    ['stored supplier retains row lock', text => text.replace('await transaction.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;', 'await transaction.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid`;'), 'STORED_SOURCE_CHANGED'],
+    ['checkpoint uses same transaction', text => text.replace('}, ctx, transaction, undefined, liveCore, true);', '}, ctx, undefined, undefined, liveCore, true);'), 'CHECKPOINT_SOURCE_TRANSACTION_CHANGED'],
+  ];
+  for (const [name, mutate, reason] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    assert.throws(() => methods.writer(current.ts, videoPairContext(current), videoPairContext(previous)),
+      error => { assert.equal(error.reason, `SDF_W_${reason}`, name); return true; }, name);
+  });
 });
 
 test('SDF readable R rejects changes to source, permission, revision, fresh admission and opaque semantics', async t => {
@@ -880,7 +981,7 @@ test('SDF readable R rejects changes to source, permission, revision, fresh admi
     ['changed old opaque domain', 'packages/sdf-schema/src/core.ts', text => text.replace("title: 'OpenScience SDF Draft Core',", "title: 'OpenScience SDF Draft Core', additionalProperties: false,")],
   ];
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedSdfReadableSource);
     const previous = both ? await videoIngressProgram(new Map([[path, mutate]]), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' }) : old;
     assert.throws(() => methods.model(current.ts, videoPairContext(current), videoPairContext(previous)),
       error => typeof error.reason === 'string' && error.reason.startsWith('SDF_R_'), name);
