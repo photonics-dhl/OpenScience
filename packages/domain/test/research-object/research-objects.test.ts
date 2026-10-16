@@ -47,6 +47,25 @@ describe('createResearchObject（验收步骤 2：个人空间建私有 RO）', 
     expect(db.sdfNodes.find((n) => n.nodeType === 'problem').content).toBe('P');
   });
 
+  it.each(['0.2.0', '0.3.0', '', null])('rejects explicit unsupported fresh core version %j before persistence', async (schemaVersion) => {
+    const { deps, db, user } = makeDeps();
+    const core = { schemaVersion, problem: 'P', fieldFormats: { problem: 'markdown' } } as unknown as Record<string, string>;
+    await expect(createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Unsupported', sdf: { core } }))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(db.researchObjects).toHaveLength(0);
+    expect(db.sdfDocuments).toHaveLength(0);
+    expect(db.sdfNodes).toHaveLength(0);
+  });
+
+  it.each([undefined, '0.1.0'])('retains admitted partial fresh cores and opaque extras with version %j', async (schemaVersion) => {
+    const { deps, db, user } = makeDeps();
+    const core = { ...(schemaVersion ? { schemaVersion } : {}), problem: '**literal**', fieldFormats: { problem: 'markdown' }, source_note: 'keep' } as unknown as Record<string, string>;
+    await createResearchObject(deps, { workspaceId: 'ws-1', userId: user.id, title: 'Legacy', sdf: { core } });
+    expect(db.sdfDocuments[0].coreJson).toEqual(core);
+    expect(db.sdfNodes.find((node) => node.nodeType === 'problem').content).toBe('**literal**');
+    expect(db.sdfNodes.find((node) => node.nodeType === 'results').content).toBe('');
+  });
+
   it('非成员创建 → 404（requireMembership 语义）', async () => {
     const { deps, db, user } = makeDeps();
     // 另建一个无 membership 的 workspace → 非成员

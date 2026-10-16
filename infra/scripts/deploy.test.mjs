@@ -275,14 +275,15 @@ test('rollback verifier dispatches guarded finite proofs only after original def
     finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
     finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
+    finiteSdfReadablePairCompatibility(...args){events.push(['sdf',...args]);return accept==='sdf';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first','voice']){
+  for(const allowed of ['video','capable','first','voice','sdf']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice'].slice(0,['video','capable','first','voice'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf'].slice(0,['video','capable','first','voice','sdf'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -909,7 +910,7 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
   const sourceInventory = new Set(files.filter(Boolean).map(file => key(join(projectRoot, file))));
   const changedFiles = [...changes].map(([file, change]) => {
     const filename = join(projectRoot, file);
-    if (historical) assert.ok(historical.sources.has(key(filename)), `mutation must target historical source: ${file}`);
+    if (historical && typeof change === 'function') assert.ok(historical.sources.has(key(filename)), `mutation must target historical source: ${file}`);
     const original = historical ? historical.sources.get(key(filename)) ?? '' : existsSync(filename) ? readFileSync(filename, 'utf8') : '';
     const updated = typeof change === 'function' ? change(original) : change;
     assert.notEqual(updated, original, `mutation must change ${file}`);
@@ -921,8 +922,8 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
   // An ambient output must not replace current tracked bytes; tracked changes
   // already have the explicit, exact-byte-checked mutation path above.
   for (const filename of ambient.keys()) assert.ok(!sourceInventory.has(filename), 'ambient input cannot replace tracked source');
-  // W source fixtures compare tracked source inventories, not installed roots.
-  // Keep actual working-tree bytes and explicit mutations, including new files.
+  // Source fixtures compare selected inventories, not installed roots. Historical
+  // roots admit only their own bytes and explicit inputs, never live app fallback.
   const readable = filename => !trackedSourceOnly || !ownsSource(filename)
     || sourceInventory.has(key(filename)) || overlays.has(key(filename));
   // Same source-only analysis boundary as rollbackReaderClosure: this is not a
@@ -932,10 +933,10 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
   const host = ts.createCompilerHost(options);
   const originalRead = host.readFile.bind(host), originalExists = host.fileExists.bind(host);
   host.readFile = filename => overlays.has(key(filename)) ? overlays.get(key(filename))
-    : historical && ownsSource(filename) ? historical.sources.get(key(filename))
+    : historical && ownsSource(filename) ? historical.sources.get(key(filename)) ?? (!trackedSourceOnly ? ambient.get(key(filename)) : undefined)
       : !readable(filename) ? undefined : ambient.has(key(filename)) ? ambient.get(key(filename)) : originalRead(filename);
   host.fileExists = filename => overlays.has(key(filename))
-    || (historical && ownsSource(filename) ? historical.sources.has(key(filename))
+    || (historical && ownsSource(filename) ? historical.sources.has(key(filename)) || (!trackedSourceOnly && ambient.has(key(filename)))
       : readable(filename) && (ambient.has(key(filename)) || originalExists(filename)));
   const source = host.getSourceFile.bind(host);
   host.getSourceFile = (filename, languageVersion, ...args) => overlays.has(key(filename))
@@ -967,8 +968,9 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
   const program = ts.createProgram([...new Set([...tracked, ...changedFiles.map(item => item.filename)])], options, host);
   assert.equal(program.getSyntacticDiagnostics().length, 0, 'actual Program must parse before a source-proof result');
   if (historical) for (const file of program.getSourceFiles().filter(file => ownsSource(file.fileName)))
-    assert.equal(file.text, overlays.get(key(file.fileName)) ?? historical.sources.get(key(file.fileName)),
-      'historical Program must contain only selected baseline bytes plus exact mutations');
+    assert.equal(file.text, overlays.get(key(file.fileName)) ?? historical.sources.get(key(file.fileName))
+      ?? (!trackedSourceOnly ? ambient.get(key(file.fileName)) : undefined),
+      'historical Program must contain only selected baseline bytes, exact mutations and explicitly visible ambient inputs');
   for (const item of changedFiles) assert.equal(program.getSourceFiles().find(file => key(file.fileName) === key(item.filename))?.text,
     item.updated, 'the real Program must contain the exact mutation before testing its rejection');
   return { ts, program, projectRoot };
@@ -1002,6 +1004,72 @@ function videoPairRuntime(ts, text) {
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
 
+function sdfReadableSourceComponents() {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  return runInNewContext(`${component}; ({ model: typeof finiteSdfReadableSourceModel === 'function' ? finiteSdfReadableSourceModel : undefined,
+    pair: typeof finiteSdfReadablePairCompatibility === 'function' ? finiteSdfReadablePairCompatibility : undefined, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+}
+
+test('SDF readable R source proof preserves the actual 764 runtime and old opaque domain', async () => {
+  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
+  const methods = sdfReadableSourceComponents();
+  assert.equal(typeof methods.model, 'function', 'the original finite verifier must cover readable R');
+  let model;
+  try { model = methods.model(actual.ts, videoPairContext(actual), videoPairContext(old)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 180) ?? ''}`); }
+  assert.equal(model.domain, 'stored-snapshot-copy-and-legacy-fresh');
+  assert.equal(model.projected.size, 6);
+  assert.equal(model.capsules.size, 1);
+  for (const [path, value] of model.projected) assert.deepEqual(videoPairRuntime(actual.ts, value.text),
+    videoPairRuntime(old.ts, old.program.getSourceFile(resolve(old.projectRoot, path)).text), path);
+  assert.equal(methods.pair(actual.ts, [], [], actual.projectRoot, old.projectRoot, []), false,
+    'source-only Programs must never acquire genuine DEFAULT collector authority');
+  for (const values of [[], [['module:reader', 'opaque']], JSON.parse(JSON.stringify([['module:reader', 'opaque']]))])
+    assert.equal(methods.pair(actual.ts, values, values.slice(), actual.projectRoot, old.projectRoot, methods.defaultRoots), false,
+      'uncollected and cloned arrays cannot borrow the actual Program proof');
+});
+
+test('SDF readable R rejects changes to source, permission, revision, fresh admission and opaque semantics', async t => {
+  const methods = sdfReadableSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
+  const commits = 'packages/domain/src/commit/commits.ts', readable = 'packages/sdf-schema/src/readable-core.ts';
+  const cases = [
+    ['fresh readable validator', commits, text => text.replace('storedCore === undefined ? validateSdfDraftCore(finalCore)', 'storedCore === undefined ? validateReadableSdfDraftCore(finalCore)')],
+    ['raw caller core', commits, text => text.replace('core = source.manifest.coreJson as Record<string, unknown>;', 'core = (input as any).sdfCore;')],
+    ['cross RO version', commits, text => text.replace('where: { id: input.source.versionId, researchObjectId: ro.id }', 'where: { id: input.source.versionId }')],
+    ['stored optimistic conflict', commits, text => text.replace('if (ro.version !== input.version) throw', 'if (false) throw')],
+    ['stored transaction lock', commits, text => text.replace('FOR UPDATE`;', '`;')],
+    ['missing artifact retention', commits, text => text.replace('deletedAt: null } }) !== new Set(artifactIds).size', 'deletedAt: null } }) !== -1')],
+    ['ordinary authority residual', commits, text => text.replace("if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role) || (isDefault && membership.role === 'contributor'))", 'if (false)')],
+    ['commit persistence residual', commits, text => text.replace('data: { version: input.version + 1 }', 'data: { version: input.version + 2 }')],
+    ['old opaque map reinterpreted', readable, text => text.replace("(doc as { schemaVersion?: unknown }).schemaVersion === SDF_READABLE_CORE_VERSION", "'fieldFormats' in doc")],
+    ['full reader uses draft validation', readable, text => text.replace('return validateSdfCore(doc);', 'return validateSdfDraftCore(doc);')],
+    ['unsupported identity coerced', readable, text => text.replace('return validateSdfDraftCore(doc);', "return validateSdfDraftCore({ ...doc as object, schemaVersion: '0.1.0' });")],
+    ['unsafe Ajv mutation option', readable, text => text.replace('new Ajv({ allErrors: true })', 'new Ajv({ allErrors: true, removeAdditional: true })')],
+    ['extra eager initialization', readable, text => `${text}\nconst eager = Date.now();\n`],
+    ['unsupported format accepted', readable, text => text.replace("enum: ['plain', 'markdown']", "enum: ['plain', 'markdown', 'html']")],
+    ['fresh createRO version reopened', 'packages/domain/src/research-object/research-objects.ts', text => text.replace('core.schemaVersion !== undefined && core.schemaVersion !== SDF_CORE_VERSION', 'false')],
+    ['journal version reopened', 'packages/domain/src/journal/publishing.ts', text => text.replace('explicitCoreVersion !== undefined && explicitCoreVersion !== SDF_CORE_VERSION', 'false')],
+    ['journal strips opaque history', 'packages/domain/src/journal/publishing.ts', text => text.replace('const core = { ...draft.core, schemaVersion:', 'const core = { schemaVersion:')],
+    ['unchanged digest exposes spread order', 'packages/domain/src/journal/content.ts', text => text.replace('JSON.stringify(canonical(value))', 'JSON.stringify(value)'), true],
+    ['restore caller source substitution', 'packages/domain/src/commit/restore-draft.ts', text => text.replace("source: { kind: 'version', versionId: source.id }", "source: { kind: 'version', versionId: input.versionId + '-other' }")],
+    ['extra stored source caller', commits, text => `${text}\nexport const unsafeStoredAlias = createStoredSnapshotCommit;\n`],
+    ['internal source escape', commits, text => `${text}\nexport const unsafeInternalAlias = createCommitInternal;\n`],
+    ['unchanged namespace acquires new helper', 'packages/domain/src/commit/research-record.ts', text => `import * as snapshots from './commits';\n${text}\nexport const escape = () => snapshots;\n`, true],
+    ['unchanged dynamic import acquires new helper', 'packages/domain/src/commit/research-record.ts', text => `${text}\nexport async function escape() { return import('./commits'); }\n`, true],
+    ['changed old opaque domain', 'packages/sdf-schema/src/core.ts', text => text.replace("title: 'OpenScience SDF Draft Core',", "title: 'OpenScience SDF Draft Core', additionalProperties: false,")],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const previous = both ? await videoIngressProgram(new Map([[path, mutate]]), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' }) : old;
+    assert.throws(() => methods.model(current.ts, videoPairContext(current), videoPairContext(previous)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('SDF_R_'), name);
+  });
+});
+
 function voicePairSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
@@ -1014,25 +1082,17 @@ function voicePairSourceComponents() {
 // the current writer phase. These historical source Programs grant no authority.
 const releasedVoiceReaderSource = { sourceRef: '70e81398903db9cfd6f46cbab51db18ba5f7cb05' };
 
-// Retain the previous pure-selector fixture after the format reader evolves.
-// The two MP3 runtime modules were unchanged by the released selector writer.
-// Reuse the already retained reader oracle; no additional CI ref is needed.
-// This remains an explicit source overlay, never a release or collector grant.
+// Pin each complete historical transition independently of later candidate work.
+// Inventories, manifests and runtime bytes must belong to the same source ref.
+const releasedVoiceFormatReaderSource = { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a', trackedSourceOnly: true };
+const releasedVoiceWriterSource = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
 async function retainedVoiceWriterProgram(changes = new Map(), options = {}) {
-  const root = fileURLToPath(new URL('../../', import.meta.url));
-  const historical = historicalVideoSource(root, releasedVoiceReaderSource.sourceRef);
-  const overlays = new Map(['packages/ai-gateway/src/synclip-audio-api.ts', 'packages/domain/src/agent/voice.ts']
-    .map(path => [path, historical.sources.get(resolve(root, path).replaceAll('\\', '/').toLowerCase())]));
-  for (const [path, change] of changes) {
-    const original = overlays.get(path) ?? (existsSync(resolve(root, path)) ? readFileSync(resolve(root, path), 'utf8') : '');
-    overlays.set(path, typeof change === 'function' ? change(original) : change);
-  }
-  return videoIngressProgram(overlays, options);
+  return videoIngressProgram(changes, { ...options, ...releasedVoiceWriterSource });
 }
 
 test('voice format reader source reconstructs the actual previous MP3 runtime without granting collector authority', async () => {
   const methods = voicePairSourceComponents();
-  const current = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const current = await videoIngressProgram(new Map(), releasedVoiceFormatReaderSource);
   const previous = await videoIngressProgram(new Map(), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
   let model;
   const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
@@ -1074,13 +1134,13 @@ test('voice format reader source rejects changed producers, late receipts, secur
     ['dynamic capability escape', gateway, text => `${text}\nexport async function escapedOutput() { return import('@openscience/ai-gateway'); }\n`],
   ];
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const candidate = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const candidate = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
     const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
     const context = { ...videoPairContext(candidate), canonical: node => videoPairRuntime(candidate.ts, node.getText()) };
     assert.throws(() => methods.formatReader(candidate.ts, context, videoPairContext(old), voiceSourceEntries(candidate), voiceSourceEntries(old)),
       error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
   });
-  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const actual = await videoIngressProgram(new Map(), releasedVoiceFormatReaderSource);
   const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
   assert.throws(() => methods.formatReader(actual.ts, context, videoPairContext(previous),
     [...voiceSourceEntries(actual), ['module:packages/new/src/unclassified.ts', []]], voiceSourceEntries(previous)),
@@ -1099,7 +1159,7 @@ test('voice format reader rejects both actual High P1 counterexamples', async t 
       .replace('const result = ', "String.prototype.split = function () { throw new Error('second normalization'); }; const result = ")],
   ];
   for (const [name, path, mutate] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
     const old = await videoIngressProgram(new Map([[path, mutate]]), rollback);
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
@@ -1118,7 +1178,7 @@ test('voice format reader guards signatures and new output recovery references',
   ];
   const previous = await videoIngressProgram(new Map(), rollback);
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
     const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
@@ -1135,7 +1195,7 @@ test('voice format reader binds immutable saved audio and the unique storage wri
     ['unclassified computed storage write', text => text.replace('          try {', "          await workerDeps.storage!['putObject']('unclassified.wav', Buffer.alloc(2), { contentType: 'audio/wav' });\n          try {")],
   ];
   for (const [name, mutate] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
     const old = await videoIngressProgram(new Map([[path, mutate]]), rollback);
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
@@ -1148,7 +1208,7 @@ test('voice format reader rejects shadowed save and late-discard receipt symbols
   const shadow = text => text.replace('          try {', '          await (async (storedAudio) => {\n          try {')
     .replace(/            throw error;\r?\n          \}/u,
       "$&\n          })({ objectKey: `derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${'b'.repeat(64)}.wav`, sha256: 'b'.repeat(64), bytes: 48, contentType: 'audio/wav' as const });");
-  const current = await videoIngressProgram(new Map([[path, shadow]]), { trackedSourceOnly: true });
+  const current = await videoIngressProgram(new Map([[path, shadow]]), releasedVoiceFormatReaderSource);
   const previous = await videoIngressProgram(new Map([[path, shadow]]), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
   const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
   assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)),
@@ -1164,7 +1224,7 @@ test('voice format reader closes module factory escapes without erasing decoder 
     ['decoder extra evaluation', 'packages/ai-gateway/src/synclip-audio-api.ts', text => text.replace('format.decode(Buffer.concat(chunks, size), contentType)', 'format.decode(Buffer.concat(chunks, size), (Date.now(), contentType))')],
   ];
   for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
-    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const current = await videoIngressProgram(new Map([[path, mutate]]), releasedVoiceFormatReaderSource);
     const old = both ? await videoIngressProgram(new Map([[path, mutate]]), rollback) : previous;
     const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
     assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
@@ -1295,7 +1355,7 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
   const text = 'export const sourceBoundarySentinel = 1;\n';
   const changes = new Map([[client, value => `import '../generated/voice-source-boundary.js';\n${value}`]]);
   const ambientSources = new Map([[extra, text]]);
-  const reader = await videoIngressProgram(changes, { ...releasedVoiceReaderSource, ambientSources });
+  const reader = await videoIngressProgram(changes, { ...releasedVoiceReaderSource, ambientSources, trackedSourceOnly: true });
   const raw = await retainedVoiceWriterProgram(changes, { ambientSources });
   const get = value => value.program.getSourceFile(resolve(value.projectRoot, extra));
   assert.equal(get(raw)?.text, text, 'the default filesystem view must resolve the ambient module');
@@ -1312,14 +1372,21 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
   assert.equal(methods.writer(scoped.ts, videoPairContext(scoped), videoPairContext(reader), voiceSourceEntries(scoped), voiceSourceEntries(reader)).phase, 'writer');
   const explicit = await retainedVoiceWriterProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
   assert.equal(get(explicit)?.text, text, 'an explicit source mutation must remain visible even outside the tracked inventory');
+  const explicitClient = explicit.program.getSourceFile(resolve(explicit.projectRoot, client));
+  const explicitImport = explicitClient.statements.find(node => explicit.ts.isImportDeclaration(node)
+    && node.moduleSpecifier.text === '../generated/voice-source-boundary.js');
+  assert.ok(explicit.program.getTypeChecker().getSymbolAtLocation(explicitImport.moduleSpecifier)?.declarations
+    ?.some(node => node.getSourceFile() === get(explicit)), 'the explicit new JS must bind the real import even in a scoped historical Program');
   assert.throws(() => methods.writer(explicit.ts, videoPairContext(explicit), videoPairContext(reader), voiceSourceEntries(explicit), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+  await assert.rejects(retainedVoiceWriterProgram(new Map([[extra, value => value + text]])),
+    /mutation must target historical source/u, 'function mutations cannot invent missing historical bytes');
 });
 
 test('voice writer tracked runtime mutations retain exact current bytes and strict residual rejection', async () => {
   const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const path = 'packages/ai-gateway/src/synclip-audio-api.ts';
-  const text = readFileSync(resolve(reader.projectRoot, path), 'utf8') + '\nexport const voiceSourceMutationSentinel = true;\n';
+  const text = reader.program.getSourceFile(resolve(reader.projectRoot, path)).text + '\nexport const voiceSourceMutationSentinel = true;\n';
   const writer = await retainedVoiceWriterProgram(new Map([[path, text]]), { trackedSourceOnly: true });
   assert.equal(writer.program.getSourceFile(resolve(writer.projectRoot, path)).text, text,
     'tracked-source inventory must preserve the exact current mutation, not read a HEAD blob');

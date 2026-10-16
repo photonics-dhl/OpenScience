@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ScientificText } from '@/components/content/ScientificText';
+import { SdfFieldContent } from '@/components/content/SdfFieldContent';
 import { apiRequest } from '@/lib/api';
 import { WorkbenchClaimReader, type ReadingRecord } from './WorkbenchClaimReader';
 
@@ -30,7 +31,7 @@ export function VersionRecord({ researchObjectId, versionId, title, onReadyChang
     <ScientificText hideSourceMarkers as="h2" className="mb-3 text-2xl">{title}</ScientificText>
     {record.recordState === 'not_recorded' && <p className="text-sm text-os-muted-paper">{t('legacy')}</p>}
     <p><a className="text-os-vermilion-ink underline" href={`${scope}/record/export`}>{t('export')}</a></p>
-    {fields.map((field) => <section key={field} className="mt-6"><h2 className="text-xl">{fieldT(field)}</h2><ScientificText hideSourceMarkers as="p" className="mt-2 whitespace-pre-wrap">{record.sdf[field] || t('missing')}</ScientificText>
+    {fields.map((field) => <section key={field} className="mt-6"><h2 className="text-xl">{fieldT(field)}</h2><SdfFieldContent core={record.sdf} field={field} fallback={t('missing')} className="mt-2 text-base leading-relaxed [&_p]:my-2 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_a]:underline" />
     </section>)}
     <h2 className="mt-6">{t('materials')}</h2>{record.manifest.map((item) => <p key={item.logicalPath}><a className="text-os-vermilion-ink underline" href={`/api/artifacts/${encodeURIComponent(item.artifactId)}/download`}>{item.logicalPath}</a></p>)}
     <WorkbenchClaimReader key={`${record.objectId}:${record.versionId}`} record={record} />

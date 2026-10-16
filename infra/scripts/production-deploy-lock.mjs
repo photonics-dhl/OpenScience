@@ -6709,6 +6709,334 @@ function finiteVoicePairCompatibility(ts, current, previous, candidateRoot, roll
   } catch { return false; }
 }
 
+// Directional reader introduction. Fresh admission can contract, but the old
+// object domain is never inferred from a database scan or from a version tag.
+// Stored readable objects may only be copied from the locked same-RO source;
+// ordinary commits retain the old validator and every persistence operation.
+function finiteSdfReadableSourceModel(ts, context, rollbackContext) {
+  const fail = (reason, node) => { throw { reason: `SDF_R_${reason}`, node }; };
+  const need = (condition, reason, node) => { if (!condition) fail(reason, node); };
+  const nodes = (scope, predicate) => { const values = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return values; };
+  const one = (values, reason) => { need(values.length === 1, reason); return values[0]; };
+  const file = (owner, path) => { const value = owner.program.getSourceFile(resolve(owner.root, path)); need(value, 'SOURCE_MISSING'); return value; };
+  const symbol = node => { let value = ts.isShorthandPropertyAssignment(node.parent)
+    ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const tokens = text => {
+    const ast = ts.createSourceFile('sdf-term.ts', text, ts.ScriptTarget.ES2022, true);
+    const visit = node => { const children = []; ts.forEachChild(node, child => { children.push(visit(child)); });
+      return [node.kind, ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node) ? node.operator
+        : ts.isIdentifier(node) || ts.isLiteralExpression(node) || ts.isTemplateLiteralToken(node) ? node.text : null, children]; };
+    return JSON.stringify(visit(ast));
+  };
+  const same = (node, text) => !!node && tokens(node.getText()) === tokens(text);
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), 'FUNCTION_MISSING');
+  const variable = (source, name) => one(nodes(source, node => ts.isVariableDeclaration(node) && node.name.getText() === name), 'VARIABLE_MISSING');
+  const term = (scope, text, reason) => { const matches = nodes(scope, node => same(node, text));
+    const outer = matches.filter(node => !matches.some(other => other !== node && other.pos <= node.pos && other.end >= node.end));
+    need(outer.length === 1, reason, scope); return outer[0]; };
+  const schemaPath = 'packages/sdf-schema/src/', domainPath = 'packages/domain/src/';
+  const core = file(context, `${schemaPath}core.ts`), validate = file(context, `${schemaPath}validate.ts`);
+  // These are real source objects, not invented old schemas. Full residual
+  // equality below also retains their installed imports, options and vendors.
+  for (const path of [`${schemaPath}core.ts`, `${schemaPath}validate.ts`])
+    need(tokens(file(context, path).text) === tokens(file(rollbackContext, path).text), 'LEGACY_SCHEMA_CHANGED');
+  need(same(variable(core, 'SDF_CORE_VERSION').initializer, "'0.1.0'"), 'LEGACY_IDENTITY_CHANGED');
+  need(same(variable(core, 'SDF_CORE_FIELDS').initializer,
+    "['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',] as const"), 'LEGACY_FIELDS_CHANGED');
+  for (const [name, title, full] of [['coreSchema', 'OpenScience SDF Core', true], ['draftCoreSchema', 'OpenScience SDF Draft Core', false]]) {
+    const fields = ['problem', 'insight', 'method', 'results', 'limitations', 'reproducibility']
+      .map(key => `${key}: { type: 'string'${full ? ', minLength: 1' : ''} }`).join(',');
+    need(same(variable(core, name).initializer, `{ $schema: 'http://json-schema.org/draft-07/schema#', title: '${title}',
+      type: 'object', required: ['schemaVersion', ...SDF_CORE_FIELDS], properties: {
+        schemaVersion: { const: SDF_CORE_VERSION }, ${fields}, }, } as const`), 'LEGACY_OPAQUE_DOMAIN_CHANGED');
+  }
+  for (const [name, compiled, schema] of [['validateSdfCore', 'coreValidate', 'coreSchema'], ['validateSdfDraftCore', 'draftCoreValidate', 'draftCoreSchema']]) {
+    const validator = fn(validate, name);
+    need(same(variable(validate, compiled).initializer, `ajv.compile(${schema})`)
+      && validator.parameters.length === 1 && same(validator.parameters[0].name, 'doc')
+      && !validator.parameters[0].initializer && !validator.parameters[0].dotDotDotToken
+      && same(validator.body, `{ const ok = ${compiled}(doc); return { ok, errors: ${compiled}.errors ?? [] }; }`), 'LEGACY_VALIDATOR_CHANGED');
+  }
+  need(same(variable(validate, 'ajv').initializer, 'new Ajv({ allErrors: true })'), 'LEGACY_VALIDATOR_OPTIONS_CHANGED');
+  const readablePath = `${schemaPath}readable-core.ts`, readable = file(context, readablePath);
+  need(!rollbackContext.program.getSourceFile(resolve(rollbackContext.root, readablePath)), 'READABLE_ALREADY_PRESENT');
+  const full = fn(readable, 'validateReadableSdfCore'), draft = fn(readable, 'validateReadableSdfDraftCore');
+  const formatted = fn(readable, 'formattedCoreSchema'), identity = fn(readable, 'isFormattedIdentity'), parse = fn(readable, 'parseReadableSdfCore');
+  need(same(variable(readable, 'SDF_READABLE_CORE_VERSION').initializer, "'0.2.0'"), 'READABLE_IDENTITY_CHANGED');
+  need(same(formatted.body, `{
+    return { type: 'object', required: ['schemaVersion', ...SDF_CORE_FIELDS], properties: {
+      schemaVersion: { const: SDF_READABLE_CORE_VERSION },
+      ...Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, { type: 'string', ...(full ? { minLength: 1 } : {}) }])),
+      fieldFormats: { type: 'object', properties: Object.fromEntries(SDF_CORE_FIELDS.map((field) => [field, { enum: ['plain', 'markdown'] }])), additionalProperties: false, },
+    }, };
+  }`), 'READABLE_SCHEMA_CHANGED');
+  need(same(identity.body, `{ return !!doc && typeof doc === 'object' && !Array.isArray(doc)
+    && (doc as { schemaVersion?: unknown }).schemaVersion === SDF_READABLE_CORE_VERSION; }`), 'OPAQUE_REINTERPRETED');
+  for (const [node, old, compiled] of [[full, 'validateSdfCore', 'fullValidate'], [draft, 'validateSdfDraftCore', 'draftValidate']])
+    need(same(node.body, `{ if (!isFormattedIdentity(doc)) return ${old}(doc); const ok = ${compiled}(doc); return { ok, errors: ${compiled}.errors ?? [] }; }`), 'READABLE_FALLBACK_CHANGED');
+  need(same(parse.body, '{ return validateReadableSdfDraftCore(doc).ok ? doc as ReadableSdfCore : null; }'), 'READABLE_NORMALIZATION');
+  // Bound all eager work: a private Ajv with the existing installed package,
+  // two finite schemas, no defaults/coercion/removal or arbitrary initializers.
+  const declarations = new Map([
+    ['SDF_READABLE_CORE_VERSION', "'0.2.0'"], ['ajv', 'new Ajv({ allErrors: true })'],
+    ['fullValidate', 'ajv.compile(formattedCoreSchema(true))'], ['draftValidate', 'ajv.compile(formattedCoreSchema(false))'],
+  ]);
+  const functions = new Set([formatted, identity, full, draft, parse]);
+  const imports = ["import Ajv from 'ajv';", "import { SDF_CORE_FIELDS, type SdfCore } from './core';",
+    "import { validateSdfCore, validateSdfDraftCore, type ValidationResult } from './validate';"];
+  let importCount = 0;
+  for (const statement of readable.statements) {
+    if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) continue;
+    if (ts.isImportDeclaration(statement)) { need(imports.some(text => same(statement, text)), 'INITIALIZATION_IMPORT_CHANGED', statement); importCount++; continue; }
+    if (functions.has(statement)) {
+      need(!statement.asteriskToken && !statement.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+        && (statement.modifiers?.map(node => node.kind).join(',') ?? '') === ([full, draft, parse].includes(statement) ? String(ts.SyntaxKind.ExportKeyword) : '')
+        && statement.parameters.length === 1 && !statement.parameters[0].initializer
+        && !statement.parameters[0].dotDotDotToken
+        && same(statement.parameters[0].name, statement === formatted ? 'full' : 'doc'), 'READABLE_FUNCTION_EFFECT_CHANGED', statement);
+      continue;
+    }
+    need(ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const
+      && statement.declarationList.declarations.length === 1, 'INITIALIZATION_EFFECT_CHANGED', statement);
+    const value = statement.declarationList.declarations[0], name = value.name.getText();
+    need(declarations.has(name) && same(value.initializer, declarations.get(name)), 'INITIALIZATION_EFFECT_CHANGED', value);
+    need((statement.modifiers?.map(node => node.kind).join(',') ?? '')
+      === (name === 'SDF_READABLE_CORE_VERSION' ? String(ts.SyntaxKind.ExportKeyword) : ''), 'INITIALIZATION_EXPORT_CHANGED', statement);
+    declarations.delete(name);
+  }
+  need(importCount === 3 && declarations.size === 0, 'INITIALIZATION_INCOMPLETE');
+  for (const [name, declaration] of [['SDF_CORE_FIELDS', variable(core, 'SDF_CORE_FIELDS')],
+    ['validateSdfCore', fn(validate, 'validateSdfCore')], ['validateSdfDraftCore', fn(validate, 'validateSdfDraftCore')],
+    ['formattedCoreSchema', formatted], ['isFormattedIdentity', identity], ['validateReadableSdfDraftCore', draft]]) {
+    for (const use of nodes(readable, node => ts.isIdentifier(node) && node.text === name))
+      need(symbol(use) === symbol(declaration.name), 'READABLE_BINDING_CHANGED', use);
+  }
+  const projected = new Map();
+  const edit = (path, edits) => {
+    const source = file(context, path), rollback = file(rollbackContext, path);
+    let text = source.text;
+    for (const { node, text: value } of edits.sort((a, b) => b.node.getStart() - a.node.getStart()))
+      text = text.slice(0, node.getStart()) + value + text.slice(node.end);
+    projected.set(path, { source, rollback, text });
+  };
+  const commitPath = `${domainPath}commit/commits.ts`, commits = file(context, commitPath), oldCommits = file(rollbackContext, commitPath);
+  const wrapper = fn(commits, 'createCommit'), internal = fn(commits, 'createCommitInternal'), stored = fn(commits, 'createStoredSnapshotCommit');
+  const oldCommit = fn(oldCommits, 'createCommit');
+  need(same(wrapper.body, '{ return createCommitInternal(deps, input, ctx, transaction, systemExecution); }')
+    && symbol(wrapper.body.statements[0].expression.expression) === symbol(internal.name), 'FRESH_FORWARD_CHANGED');
+  const parameterRuntime = parameters => parameters.map(node => `${node.dotDotDotToken ? '...' : ''}${node.name.getText()}${node.initializer ? `=${node.initializer.getText()}` : ''}`).join(',');
+  need(parameterRuntime(wrapper.parameters) === parameterRuntime(oldCommit.parameters)
+    && parameterRuntime(internal.parameters) === 'deps,input,ctx,transaction,systemExecution,storedCore'
+    && !internal.asteriskToken && internal.modifiers?.length === 1 && internal.modifiers[0].kind === ts.SyntaxKind.AsyncKeyword,
+  'COMMIT_SIGNATURE_CHANGED');
+  const check = term(internal, 'storedCore === undefined ? validateSdfDraftCore(finalCore) : validateReadableSdfDraftCore(storedCore)', 'COMMIT_VALIDATOR_CHANGED');
+  need(symbol(check.whenTrue.expression) === symbol(fn(validate, 'validateSdfDraftCore').name)
+    && symbol(check.whenFalse.expression) === symbol(draft.name), 'COMMIT_VALIDATOR_BINDING_CHANGED');
+  // Every statement of the only new persistent supplier is accounted for.
+  // Its object aliases are never spread, normalized or obtained from caller core.
+  const storedStatements = [
+    'await transaction.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;',
+    'const ro = await transaction.researchObject.findUnique({ where: { id: input.researchObjectId }, include: { sdfDocument: true } });',
+    "if (!ro || ro.deletedAt) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');",
+    "await requireCommitAuthority({ ...deps, prisma: transaction as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, true);",
+    "if (ro.version !== input.version) throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');",
+    'let core: Record<string, unknown>;', 'let artifacts: ArtifactReference[] | undefined;',
+    `if (input.source.kind === 'version') {
+      const source = await transaction.version.findFirst({ where: { id: input.source.versionId, researchObjectId: ro.id }, include: { manifest: { include: { entries: true } } }, });
+      if (!source?.manifest) throw new CommitError('VALIDATION_ERROR', '所选历史稿不存在');
+      const artifactIds = source.manifest.entries.map(entry => entry.artifactId);
+      if (await transaction.artifact.count({ where: { id: { in: artifactIds }, workspaceId: ro.workspaceId, deletedAt: null } }) !== new Set(artifactIds).size) {
+        throw new CommitError('VALIDATION_ERROR', '历史材料已移入回收站，请先恢复相关材料');
+      }
+      core = source.manifest.coreJson as Record<string, unknown>;
+      artifacts = source.manifest.entries.map(entry => ({ artifactId: entry.artifactId, logicalPath: entry.logicalPath }));
+    } else {
+      if (!ro.sdfDocument) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不存在');
+      core = ro.sdfDocument.coreJson as Record<string, unknown>;
+    }`,
+    `return createCommitInternal(deps, {
+      researchObjectId: ro.id, userId: input.userId, version: input.version, message: input.message,
+      sdfCore: core, ...(artifacts ? { artifacts } : {}),
+    }, ctx, transaction, undefined, core);`,
+  ];
+  need(stored.body.statements.length === storedStatements.length && stored.body.statements.every((node, index) => same(node, storedStatements[index])), 'STORED_SOURCE_CHANGED', stored);
+  need(parameterRuntime(stored.parameters) === 'deps,input,ctx,transaction' && !stored.asteriskToken
+    && stored.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword), 'STORED_SIGNATURE_CHANGED');
+  const authority = fn(commits, 'requireCommitAuthority');
+  const authorityCall = term(stored, "requireCommitAuthority({ ...deps, prisma: transaction as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, true)", 'STORED_AUTHORITY_CHANGED');
+  need(symbol(authorityCall.expression) === symbol(authority.name), 'STORED_AUTHORITY_BINDING_CHANGED');
+  const internalCall = stored.body.statements.at(-1).expression;
+  need(symbol(internalCall.expression) === symbol(internal.name), 'STORED_INTERNAL_BINDING_CHANGED');
+  const restorePath = `${domainPath}commit/restore-draft.ts`, restore = file(context, restorePath);
+  const oldRestore = file(rollbackContext, restorePath);
+  const restoreEdits = [];
+  const newRestoreCalls = [
+    `createStoredSnapshotCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, source: { kind: 'current-draft' }, message: 'Save draft before restoring history' }, ctx, tx)`,
+    `createStoredSnapshotCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, source: { kind: 'version', versionId: source.id }, message: \`Restore draft from \${source.createdAt.toISOString()}\`, }, ctx, tx)`,
+  ];
+  const oldRestoreCalls = [
+    `createCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, sdfCore: ro.sdfDocument.coreJson as Record<string, unknown>, message: 'Save draft before restoring history' }, ctx, tx)`,
+    `createCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, sdfCore: source.manifest.coreJson as Record<string, unknown>, artifacts: source.manifest.entries.map(entry => ({ artifactId: entry.artifactId, logicalPath: entry.logicalPath })), message: \`Restore draft from \${source.createdAt.toISOString()}\`, }, ctx, tx)`,
+  ];
+  const allowedStoredCalls = new Set();
+  for (let index = 0; index < 2; index++) {
+    const call = term(restore, newRestoreCalls[index], `RESTORE_SOURCE_${index}_CHANGED`);
+    need(symbol(call.expression) === symbol(stored.name), 'RESTORE_SOURCE_BINDING_CHANGED');
+    term(oldRestore, oldRestoreCalls[index], 'OLD_RESTORE_SOURCE_CHANGED');
+    allowedStoredCalls.add(call.expression); restoreEdits.push({ node: call, text: oldRestoreCalls[index] });
+  }
+  const newImport = term(restore, "import { createStoredSnapshotCommit } from './commits';", 'RESTORE_IMPORT_CHANGED');
+  restoreEdits.push({ node: newImport, text: "import { createCommit } from './commits';" });
+  // No extra caller, export, namespace or value escape can borrow this proof.
+  const helperSymbol = symbol(stored.name), internalSymbol = symbol(internal.name);
+  need(helperSymbol && internalSymbol, 'STORED_SYMBOL_MISSING');
+  for (const source of context.program.getSourceFiles()) {
+    if (source.isDeclarationFile) continue;
+    for (const use of nodes(source, ts.isIdentifier)) {
+      const target = symbol(use);
+      if (target === internalSymbol) need(use === internal.name || use === wrapper.body.statements[0].expression.expression || use === internalCall.expression, 'INTERNAL_ESCAPE', use);
+      if (target === helperSymbol) need(use === stored.name || allowedStoredCalls.has(use)
+        || ts.isImportSpecifier(use.parent) && use.parent.name === use && use.getSourceFile() === restore, 'STORED_ESCAPE', use);
+    }
+    for (const statement of source.statements) if (ts.isImportDeclaration(statement) && statement.importClause?.namedBindings
+      && ts.isNamespaceImport(statement.importClause.namedBindings)) {
+      const module = context.checker.getSymbolAtLocation(statement.moduleSpecifier);
+      need(!module || !context.checker.getExportsOfModule(module).some(value => {
+        if (value.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value === helperSymbol;
+      }), 'STORED_NAMESPACE_ESCAPE', statement);
+    }
+    // Unchanged namespace/dynamic consumers can acquire a newly exported
+    // capability without changing their own bytes. They cannot borrow the
+    // two explicit restore call sites' authority.
+    const exposesStored = specifier => {
+      const module = context.checker.getSymbolAtLocation(specifier);
+      return module && context.checker.getExportsOfModule(module).some(value => {
+        if (value.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value === helperSymbol;
+      });
+    };
+    for (const statement of source.statements) if (ts.isExportDeclaration(statement) && statement.moduleSpecifier
+      && (!statement.exportClause || !ts.isNamedExports(statement.exportClause)))
+      need(!exposesStored(statement.moduleSpecifier), 'STORED_NAMESPACE_EXPORT', statement);
+    for (const call of nodes(source, ts.isCallExpression)) if ((call.expression.kind === ts.SyntaxKind.ImportKeyword
+      || ts.isIdentifier(call.expression) && call.expression.text === 'require') && call.arguments.length === 1 && ts.isStringLiteral(call.arguments[0])) {
+      const specifier = call.arguments[0];
+      need(!exposesStored(specifier) && !(specifier.text.startsWith('.')
+        && resolve(source.fileName, '..', specifier.text.replace(/\.[cm]?js$/u, '')) === resolve(context.root, commitPath.replace(/\.ts$/u, ''))),
+      'STORED_DYNAMIC_ESCAPE', call);
+    }
+  }
+  edit(restorePath, restoreEdits);
+  const commitImport = term(commits, "import { validateReadableSdfDraftCore, validateSdfDraftCore } from '@openscience/sdf-schema';", 'COMMIT_IMPORT_CHANGED');
+  let body = internal.body.getText();
+  const position = check.getStart() - internal.body.getStart();
+  body = body.slice(0, position) + 'validateSdfDraftCore(finalCore)' + body.slice(check.end - internal.body.getStart());
+  const normalized = commits.text.slice(wrapper.getStart(), wrapper.body.getStart()) + body;
+  edit(commitPath, [{ node: wrapper, text: '' }, { node: stored, text: '' },
+    { node: internal, text: normalized },
+    { node: commitImport, text: "import { validateSdfDraftCore } from '@openscience/sdf-schema';" }]);
+  const exportPath = `${domainPath}export/validate.ts`, exported = file(context, exportPath);
+  const exportImport = term(exported, "import { validateManifest, validateReadableSdfCore } from '@openscience/sdf-schema';", 'EXPORT_IMPORT_CHANGED');
+  const exportCall = term(exported, 'validateReadableSdfCore(core)', 'EXPORT_FULL_READER_CHANGED');
+  need(symbol(exportCall.expression) === symbol(full.name), 'EXPORT_FULL_BINDING_CHANGED');
+  edit(exportPath, [{ node: exportImport, text: "import { validateManifest, validateSdfCore } from '@openscience/sdf-schema';" },
+    { node: exportCall, text: 'validateSdfCore(core as never)' }]);
+  const roPath = `${domainPath}research-object/research-objects.ts`, roSource = file(context, roPath);
+  const roGuard = term(roSource, `if (core.schemaVersion !== undefined && core.schemaVersion !== SDF_CORE_VERSION) {
+    throw new ResearchObjectError('VALIDATION_ERROR', '新建研究暂不支持此正文版本'); }`, 'FRESH_RO_ADMISSION_CHANGED');
+  const createRO = fn(roSource, 'createResearchObject');
+  need(createRO.body.statements.indexOf(roGuard) === createRO.body.statements.findIndex(node => same(node, 'const core = input.sdf?.core ?? emptyCore();')) + 1,
+    'FRESH_RO_GUARD_POSITION_CHANGED');
+  const roImport = term(roSource, "import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';", 'FRESH_RO_IMPORT_CHANGED');
+  edit(roPath, [{ node: roGuard, text: '' }, { node: roImport, text: "import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';" }]);
+  const journalPath = `${domainPath}journal/publishing.ts`, journal = file(context, journalPath);
+  const journalContentPath = `${domainPath}journal/content.ts`, journalContent = file(context, journalContentPath);
+  const digest = fn(journalContent, 'journalDigest');
+  need(tokens(journalContent.text) === tokens(file(rollbackContext, journalContentPath).text)
+    && same(digest.body, `{
+      const canonical = (v: unknown): unknown => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
+        ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([k, item]) => [k, canonical(item)])) : v;
+      return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+    }`), 'JOURNAL_DIGEST_ORDER_UNPROVEN');
+  for (const use of nodes(journal, node => ts.isIdentifier(node) && node.text === 'journalDigest'))
+    need(symbol(use) === symbol(digest.name), 'JOURNAL_DIGEST_BINDING_CHANGED', use);
+  const journalVersion = term(journal, 'const explicitCoreVersion = (draft.core as Record<string, unknown>).schemaVersion;', 'JOURNAL_VERSION_CHANGED');
+  const journalGuard = term(journal, `if (explicitCoreVersion !== undefined && explicitCoreVersion !== SDF_CORE_VERSION) {
+    throw new JournalError('VALIDATION_ERROR', '期刊发布暂不支持此正文版本'); }`, 'JOURNAL_ADMISSION_CHANGED');
+  const journalCore = term(journal, 'const core = { ...draft.core, schemaVersion: SDF_CORE_VERSION };', 'JOURNAL_CORE_CHANGED');
+  const block = journalVersion.parent;
+  need(ts.isBlock(block) && block.statements.indexOf(journalGuard) === block.statements.indexOf(journalVersion) + 1
+    && block.statements.indexOf(journalCore) === block.statements.indexOf(journalGuard) + 1
+    && same(block.statements[block.statements.indexOf(journalVersion) - 1], 'const draft = validateJournalDraft(article.draft, source);'), 'JOURNAL_GUARD_POSITION_CHANGED');
+  const coreSymbol = symbol(journalCore.declarationList.declarations[0].name), journalEdits = [journalVersion, journalGuard, journalCore].map(node => ({ node, text: '' }));
+  let coreCopies = 0;
+  for (const use of nodes(journal, ts.isIdentifier)) if (symbol(use) === coreSymbol && use !== journalCore.declarationList.declarations[0].name) {
+    need(ts.isPropertyAssignment(use.parent) && use.parent.initializer === use && use.parent.name.getText() === 'coreJson'
+      || ts.isShorthandPropertyAssignment(use.parent) && use.parent.name === use, 'JOURNAL_CORE_ESCAPE', use);
+    journalEdits.push({ node: use.parent, text: `${ts.isShorthandPropertyAssignment(use.parent) ? 'core' : 'coreJson'}: { schemaVersion: SDF_CORE_VERSION, ...draft.core }` }); coreCopies++;
+  }
+  need(coreCopies === 3, 'JOURNAL_COPY_COUNT_CHANGED');
+  edit(journalPath, journalEdits);
+  // On absent/old identity the guard is a no-op; the spread reordering changes
+  // no value, including opaque extra keys; the real digest sorts object keys.
+  // Non-old explicit inputs are rejected
+  // before mutation, rather than assumed absent from pre-existing history.
+  for (const source of [roSource, journal]) for (const use of nodes(source, node => ts.isIdentifier(node) && node.text === 'SDF_CORE_VERSION'))
+    need(symbol(use) === symbol(variable(core, 'SDF_CORE_VERSION').name), 'FRESH_IDENTITY_BINDING_CHANGED', use);
+  const indexPath = `${schemaPath}index.ts`, index = file(context, indexPath);
+  const readableExport = one(index.statements.filter(node => ts.isExportDeclaration(node) && node.moduleSpecifier?.text === './readable-core'), 'READABLE_EXPORT_CHANGED');
+  need(same(readableExport, `export { SDF_READABLE_CORE_VERSION, parseReadableSdfCore, validateReadableSdfCore, validateReadableSdfDraftCore,
+    type SdfField, type SdfFieldFormat, type FormattedSdfCore, type ReadableSdfCore, } from './readable-core';`), 'READABLE_EXPORT_CHANGED');
+  edit(indexPath, [{ node: readableExport, text: '' }]);
+  // Source controls use the actual retained old modules as their oracle. This
+  // does not grant collector authority: installed configuration, imports and
+  // every unprojected module still have to pass the private pair below.
+  const runtime = source => {
+    const result = ts.transpileModule(source, { reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!result.diagnostics?.some(value => value.category === ts.DiagnosticCategory.Error), 'PROJECTED_RUNTIME_INVALID');
+    const ast = ts.createSourceFile('sdf-runtime.js', result.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!ast.parseDiagnostics.length, 'PROJECTED_RUNTIME_INVALID');
+    return tokens(result.outputText);
+  };
+  for (const value of projected.values()) need(runtime(value.text) === runtime(value.rollback.text), 'MODULE_RESIDUAL_CHANGED', value.source);
+  return { domain: 'stored-snapshot-copy-and-legacy-fresh', projected, capsules: new Map([[readablePath, readable]]),
+    external: { source: readable, specifier: 'ajv', previousSource: file(rollbackContext, `${schemaPath}validate.ts`) } };
+}
+
+function finiteSdfReadablePairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
+  try {
+    const captured = finiteImageCollectedContexts(ts, current, previous, candidateRoot, rollbackRoot, roots);
+    if (!captured) return false;
+    const { left, right } = captured, model = finiteSdfReadableSourceModel(ts, left, right);
+    const a = new Map(current), b = new Map(previous), affected = new Set();
+    for (const [path, value] of model.projected) {
+      const key = `module:${path}`;
+      if (!a.has(key) || !b.has(key) || right.modules.get(resolve(right.root, path)) !== value.rollback
+        || JSON.stringify(finiteImageProjectedRuntime(ts, left, path, value).canonical) !== JSON.stringify(b.get(key))) return false;
+      affected.add(key);
+    }
+    for (const [path, source] of model.capsules) {
+      if (left.modules.get(resolve(left.root, path)) !== source || !a.has(`module:${path}`) || b.has(`module:${path}`)) return false;
+      affected.add(`module:${path}`);
+    }
+    const externalPath = relative(left.root, model.external.source.fileName).replaceAll('\\', '/');
+    const oldExternalPath = relative(right.root, model.external.previousSource.fileName).replaceAll('\\', '/');
+    const extra = `${externalPath}:external:${model.external.specifier}`, old = `${oldExternalPath}:external:${model.external.specifier}`;
+    // The existing collector fingerprints the actual installed package. This
+    // additional import must bind that very implementation, never an alias or
+    // an ignored dependency/configuration/module initialization difference.
+    if (!a.has(extra) || b.has(extra) || !b.has(old) || JSON.stringify(a.get(extra)) !== JSON.stringify(b.get(old))) return false;
+    affected.add(extra);
+    for (const key of new Set([...a.keys(), ...b.keys()])) if (!affected.has(key)
+      && (!a.has(key) || !b.has(key) || JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key)))) return false;
+    return true;
+  } catch { return false; }
+}
+
 function rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot) {
   const left = new Map(current), right = new Map(previous);
   const keys = [...new Set([...left.keys(), ...right.keys()])].sort();
@@ -6780,7 +7108,8 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
         && (finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots, diagnostics === true)
           || finiteImageCapablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteImageFirstPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
-          || finiteVoicePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
+          || finiteVoicePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+          || finiteSdfReadablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
       if (diagnostics === true) {
         try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }
         catch { /* Diagnostic failure cannot permit rollback or replace the rejection. */ }

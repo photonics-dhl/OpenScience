@@ -80,6 +80,37 @@ describe('validateExportPackage（§5.3 MUST 脱库校验）', () => {
     expect(r.valid).toBe(true);
   });
 
+  it('accepts a complete explicitly readable snapshot while retaining its format metadata', async () => {
+    const readable = { ...core, schemaVersion: '0.2.0', insight: '**Saved insight**', fieldFormats: { insight: 'markdown' }, draft_meta: { retained: true } };
+    const files = makeFiles({ 'sdf/core.json': Buffer.from(JSON.stringify(readable)) });
+    expect((await validateExportPackage(files)).valid).toBe(true);
+  });
+
+  it.each([
+    { ...core, schemaVersion: '0.2.0', insight: '' },
+    { ...core, schemaVersion: '0.2.0', method: undefined },
+    { ...core, schemaVersion: '0.2.0', fieldFormats: { insight: 'html' } },
+    { ...core, schemaVersion: '0.2.0', fieldFormats: { title: 'markdown' } },
+    { ...core, schemaVersion: '0.3.0' },
+  ])('rejects an incomplete, invalid or unknown readable export core: %j', async invalid => {
+    const r = await validateExportPackage(makeFiles({ 'sdf/core.json': Buffer.from(JSON.stringify(invalid)) }));
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(error => error.includes('sdf/core.json'))).toBe(true);
+  });
+
+  it('keeps legacy same-name unknown format data opaque and validates artifact hashes for readable snapshots', async () => {
+    const legacy = { ...core, fieldFormats: { arbitrary: ['old opaque data'] } };
+    expect((await validateExportPackage(makeFiles({ 'sdf/core.json': Buffer.from(JSON.stringify(legacy)) }))).valid).toBe(true);
+    const bytes = Buffer.from('Saved artifact');
+    const manifest = buildManifest({ objectId: 'OSR-2026-000001', versionId: 'OSR-2026-000001-v1', version: 1, title: 'T', visibility: 'private', artifacts: [{ logicalPath: 'source.txt', artifactId: 'a1', blobSha256: 'ff'.repeat(32) }] });
+    const r = await validateExportPackage(makeFiles({
+      'sdf/core.json': Buffer.from(JSON.stringify({ ...core, schemaVersion: '0.2.0', fieldFormats: { insight: 'markdown' } })),
+      'manifest.json': Buffer.from(JSON.stringify(manifest)), 'artifacts/source.txt': bytes,
+    }));
+    expect(r.valid).toBe(false);
+    expect(r.errors).toContain('附件哈希不匹配: source.txt');
+  });
+
   it('缺 manifest.json → invalid', async () => {
     const r = await validateExportPackage([]);
     expect(r.valid).toBe(false);

@@ -16,6 +16,9 @@ export interface SdfCore {
   reproducibility: string;
 }
 
+/** Stored snapshots can carry opaque metadata; fresh request shapes stay unchanged. */
+export type SdfCoreSnapshot = SdfCore & { fieldFormats?: unknown };
+
 interface ApiErrorBody {
   error: { code: string; message: string };
 }
@@ -959,7 +962,7 @@ export async function createResearchObjectWithMaterials(
 }
 
 /** 查 RO 详情（含 SDF core）。 */
-export async function getResearchObject(id: string, options: ReadOptions = {}): Promise<{ researchObject: ResearchObjectSummary & { sdf: { core: SdfCore; nodes: unknown[] } } }> {
+export async function getResearchObject(id: string, options: ReadOptions = {}): Promise<{ researchObject: ResearchObjectSummary & { sdf: { core: SdfCoreSnapshot; nodes: unknown[] } } }> {
   return readResearchData(`/api/research-objects/${encodeURIComponent(id)}`, options);
 }
 
@@ -1734,7 +1737,7 @@ export interface PublicResearchVersion {
     publishedAt: string | null;
     contentSha256: string | null;
     legalDisclaimer: string | null;
-    core: Record<string, string>;
+    core: SdfCoreSnapshot;
   };
   authors: Array<{ displayName: string; identityStatus: string; isCorresponding: boolean; affiliation: string | null; sortOrder: number }>;
   contributions: Array<{ displayName: string; creditRole: string }>;

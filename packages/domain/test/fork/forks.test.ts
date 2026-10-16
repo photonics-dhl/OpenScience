@@ -60,6 +60,19 @@ async function makePublicRoWithCommit() {
 }
 
 describe('Fork（§8.1 + §4.2 + §6.3 + §7.1）', () => {
+  it.each(['0.1.0', '0.2.0'])('copies the issued %s snapshot with its format metadata, without using the later live draft', async schemaVersion => {
+    const f = await makePublicRoWithCommit();
+    const stored = { ...CORE, schemaVersion, insight: '**Saved insight**', fieldFormats: { insight: 'markdown' }, opaque: { retained: ['source'] } };
+    f.db.versionManifests.find(row => row.versionId === f.commit.versionId)!.coreJson = structuredClone(stored);
+    f.db.sdfDocuments[0].coreJson = { ...CORE, insight: 'Later live draft' };
+    const result = await forkResearchObject(f.deps, { sourceResearchObjectId: f.ro.id, userId: f.forker.id, workspaceId: 'ws-2', publicIdPrefix: 'OSR' });
+    const version = f.db.versions.find(row => row.researchObjectId === result.researchObject.id)!;
+    expect(f.db.versionManifests.find(row => row.versionId === version.id)!.coreJson).toEqual(stored);
+    expect(f.db.sdfDocuments.find(row => row.researchObjectId === result.researchObject.id)!.coreJson).toEqual(stored);
+    expect(result.forkRelation.sourceVersionId).toBe(f.commit.versionId);
+    expect(f.db.blobs).toHaveLength(1);
+  });
+
   it.each(['viewer', 'reviewer', 'contributor'])('%s cannot create main content through Fork', async role => {
     const { deps, db, forker, ro } = await makePublicRoWithCommit();
     db.memberships.find(row => row.userId === forker.id)!.role = role;

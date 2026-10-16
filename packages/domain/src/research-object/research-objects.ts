@@ -1,5 +1,5 @@
 import type { AuditContext } from '@openscience/observability';
-import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
+import { SDF_CORE_FIELDS, SDF_CORE_VERSION } from '@openscience/sdf-schema';
 import { recordAudit } from '../workspace/audit';
 import type { Prisma, ResearchObject } from '@prisma/client';
 import { requireActiveMembership, requireMembership } from '../workspace/helpers';
@@ -177,6 +177,9 @@ export async function createResearchObject(
   if (!['owner', 'maintainer', 'author'].includes(membership.role)) throw new ResearchObjectError('FORBIDDEN', '无权创建研究正文');
   const title = validateTitle(input.title);
   const core = input.sdf?.core ?? emptyCore();
+  if (core.schemaVersion !== undefined && core.schemaVersion !== SDF_CORE_VERSION) {
+    throw new ResearchObjectError('VALIDATION_ERROR', '新建研究暂不支持此正文版本');
+  }
 
   const replayExisting = async () => {
     if (!input.idempotencyKey) return null;

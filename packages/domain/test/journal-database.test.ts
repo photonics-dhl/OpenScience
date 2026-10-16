@@ -5,7 +5,7 @@ import { activateJournalHomepage, addJournalMember, createJournalServiceRequest,
 import { assignJournalReviewer, getManagedJournalArticle, importJournalArticle, reviewJournalArticle, updateJournalArticle } from '../src/journal/articles';
 import { cancelJournalJob, claimJournalJob, finishJournalJob, recoverJournalJobs, submitJournalJob } from '../src/journal/processing';
 import { publishJournalArticle, restrictJournalArticle } from '../src/journal/publishing';
-import type { JournalDraft, JournalMetadata } from '../src/journal/content';
+import { journalDigest, type JournalDraft, type JournalMetadata } from '../src/journal/content';
 import { uploadJournalSource } from '../src/journal/source-upload';
 import { updateJournalArticleSourceRights } from '../src/journal/enhancements';
 import { stageJournalSharedSource, startJournalSharedProcessing, repairJournalSharedRunBindings } from '../src/journal/shared-workspace';
@@ -123,6 +123,34 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
     expect(a.article.id).toBe(b.article.id);
     expect(await prisma.journalWork.count({ where: { doi } })).toBe(1);
     await expect(importJournalArticle(deps, ctx.owner.id, ctx.journal.id, { ...metadata, doi: undefined, issns: [validIssn()] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+  it('rejects new fresh core identity and preserves legacy opaque metadata across publication stores and digest', async () => {
+    const ctx = await journal(); const item = await article(ctx);
+    const opaque = { insight: 'markdown' };
+    const generated = { ...draft, core: { ...draft.core, schemaVersion: '0.2.0', fieldFormats: opaque } };
+    const job = await submitJournalJob(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: item.revision, language: 'en', requestKey: randomUUID() }, true);
+    const claimed = await claimJournalJob(deps, { runtimeId: 'test-native', skillCatalogueId: 'test-catalogue', model: 'MiniMax-M3' });
+    expect(claimed?.id).toBe(job.id);
+    await finishJournalJob(deps, job.id, claimed!.leaseToken!, generated);
+    const current = await getManagedJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id);
+    await reviewJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, decision: 'confirm', humanConfirmed: true, note: 'Checked synthetic source.' });
+    const before = await prisma.sdfDocument.findUniqueOrThrow({ where: { researchObjectId: item.researchObjectId } });
+    await expect(publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, requestKey: randomUUID(), humanConfirmed: true })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(await prisma.journalRelease.count({ where: { articleId: item.id } })).toBe(0);
+    expect(await prisma.version.count({ where: { researchObjectId: item.researchObjectId } })).toBe(0);
+    expect((await prisma.sdfDocument.findUniqueOrThrow({ where: { researchObjectId: item.researchObjectId } })).coreJson).toEqual(before.coreJson);
+    // Missing identity remains admitted legacy input; the existing opaque key is retained.
+    const legacyDraft = { ...draft, core: { ...draft.core, fieldFormats: opaque } };
+    const edited = await updateJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: current.revision, draft: legacyDraft });
+    await reviewJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: edited.revision, decision: 'confirm', humanConfirmed: true, note: 'Checked legacy synthetic source.' });
+    const released = await publishJournalArticle(deps, ctx.owner.id, ctx.journal.id, item.id, { revision: edited.revision, requestKey: randomUUID(), humanConfirmed: true });
+    const release = await prisma.journalRelease.findUniqueOrThrow({ where: { id: released.id } });
+    const version = await prisma.version.findUniqueOrThrow({ where: { id: release.versionId }, include: { manifest: true } });
+    const expectedCore = { ...legacyDraft.core, schemaVersion: '0.1.0' };
+    expect(version.manifest!.coreJson).toEqual(expectedCore);
+    expect((await prisma.sdfDocument.findUniqueOrThrow({ where: { researchObjectId: item.researchObjectId } })).coreJson).toEqual(expectedCore);
+    const recorded = version.researchRecord as { publicationMetadata: unknown };
+    expect(release.digest).toBe(journalDigest({ core: expectedCore, journalPackage: release.snapshot, publicationMetadata: recorded.publicationMetadata }));
   });
   it('reserves, delivers, reviews and publishes atomically; edits invalidate review and v1 remains immutable', async () => {
     const ctx = await journal(); const item = await article(ctx);

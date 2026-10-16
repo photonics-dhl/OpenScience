@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SDF_CORE_FIELDS, validateSdfCore, validateSdfDraftCore } from '../src';
+import { SDF_CORE_FIELDS, parseReadableSdfCore, validateReadableSdfCore, validateReadableSdfDraftCore, validateSdfCore, validateSdfDraftCore } from '../src';
 
 /** 合法六字段文档（§5.1）。 */
 function validCore() {
@@ -68,5 +68,43 @@ describe('validateSdfDraftCore（草稿允许显式未解决字段）', () => {
 
     expect(validateSdfDraftCore(missing).ok).toBe(false);
     expect(validateSdfDraftCore({ ...validCore(), schemaVersion: '0.2.0' }).ok).toBe(false);
+  });
+});
+
+describe('versioned readable snapshots', () => {
+  it('preserves legacy opaque format metadata without giving it new semantics', () => {
+    for (const fieldFormats of [{ insight: 'markdown' }, 'opaque legacy value', null]) {
+      const legacy = { ...validCore(), insight: '**literal legacy text**', fieldFormats };
+      expect(parseReadableSdfCore(legacy)).toBe(legacy);
+      expect(validateReadableSdfCore(legacy).ok).toBe(true);
+      expect(validateSdfCore(legacy).ok).toBe(true);
+    }
+  });
+
+  it('recognizes only explicit new identity with a typed per-field map and keeps the original object', () => {
+    const snapshot = { ...validCore(), schemaVersion: '0.2.0', insight: '**formatted**', fieldFormats: { insight: 'markdown', method: 'plain' }, provenance: { source: 'frozen' } };
+    expect(parseReadableSdfCore(snapshot)).toBe(snapshot);
+    expect(validateReadableSdfCore(snapshot).ok).toBe(true);
+    expect(validateSdfCore(snapshot).ok).toBe(false);
+    expect(validateSdfDraftCore(snapshot).ok).toBe(false);
+    expect(parseReadableSdfCore({ ...validCore(), schemaVersion: '0.2.0' })).not.toBeNull();
+  });
+
+  it.each([null, [], 'markdown', { insight: 'html' }, { insight: true }, { title: 'markdown' }])('rejects an invalid new format map: %j', (fieldFormats) => {
+    const snapshot = { ...validCore(), schemaVersion: '0.2.0', fieldFormats };
+    expect(parseReadableSdfCore(snapshot)).toBeNull();
+    expect(validateReadableSdfCore(snapshot).ok).toBe(false);
+  });
+
+  it('keeps full-core export requirements distinct from readable draft requirements', () => {
+    const draft = { ...validCore(), schemaVersion: '0.2.0', results: '', fieldFormats: { insight: 'markdown' } };
+    expect(parseReadableSdfCore(draft)).toBe(draft);
+    expect(validateReadableSdfDraftCore(draft).ok).toBe(true);
+    expect(validateReadableSdfCore(draft).ok).toBe(false);
+    const missing = { ...draft } as Record<string, unknown>;
+    delete missing.results;
+    expect(parseReadableSdfCore(missing)).toBeNull();
+    expect(validateReadableSdfDraftCore(missing).ok).toBe(false);
+    expect(parseReadableSdfCore({ ...draft, schemaVersion: '0.3.0' })).toBeNull();
   });
 });

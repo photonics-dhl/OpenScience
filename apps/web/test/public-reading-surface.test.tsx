@@ -141,6 +141,22 @@ describe('Optical Editorial public reading surface', () => {
     expect(markup).toContain('class="copy-btn"');
   });
 
+  it('uses explicit stored formatting in both public reading surfaces and keeps old same-map text literal', async () => {
+    const { PublicReadingSurface, LegacyOverviewTab } = await import('../components/public/PublicVersionPage');
+    const storedCore = { ...research.version.core, schemaVersion: '0.2.0', insight: '**Stored finding**\n\n- Evidence\n- Limit', fieldFormats: { insight: 'markdown' }, method: '**Literal method**' };
+    for (const Component of [PublicReadingSurface, LegacyOverviewTab]) {
+      const value = { ...research, version: { ...research.version, core: storedCore } };
+      const markup = renderToStaticMarkup(<Component research={value as never} />);
+      const semantic = markup.replace(/<\/?span\b[^>]*>/g, '');
+      expect(semantic).toContain('<strong>Stored finding</strong>');
+      expect(semantic).toContain('<li>Evidence</li>');
+      expect(markup).toContain('**Literal method**');
+      const legacy = renderToStaticMarkup(<Component research={{ ...value, version: { ...value.version, core: { ...storedCore, schemaVersion: '0.1.0' } } } as never} />);
+      expect(legacy).toContain('**Stored finding**');
+      expect(legacy).not.toContain('<strong>Stored finding</strong>');
+    }
+  });
+
   it('puts identity, contribution and the figure before detailed reading and resources', async () => {
     const { PublicReadingSurface } = await import('../components/public/PublicVersionPage');
     const markup = renderToStaticMarkup(<PublicReadingSurface research={research as never} />);

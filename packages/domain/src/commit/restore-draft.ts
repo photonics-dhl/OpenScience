@@ -3,7 +3,7 @@ import type { ArtifactDeps } from '../artifact/artifacts';
 import { requireActiveMembership } from '../workspace/helpers';
 import { recordAudit } from '../workspace/audit';
 import { carryVersionEvidence } from '../ingestion/ingestion-evidence';
-import { createCommit } from './commits';
+import { createStoredSnapshotCommit } from './commits';
 import { carryVersionMedia } from './carry-media';
 import { freezeResearchRecord } from './research-record-snapshot';
 import { CommitError } from './errors';
@@ -92,7 +92,7 @@ export async function restoreVersionDraft(deps: ArtifactDeps, input: {
     const latest = await tx.version.findFirst({ where: { researchObjectId: ro.id, commit: { branch: { isDefault: true } } }, orderBy: { versionNo: 'desc' }, include: { manifest: true } });
     let currentRevision = ro.version;
     if (ro.sdfDocument && JSON.stringify(latest?.manifest?.coreJson) !== JSON.stringify(ro.sdfDocument.coreJson)) {
-      const saved = await createCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, sdfCore: ro.sdfDocument.coreJson as Record<string, unknown>, message: 'Save draft before restoring history' }, ctx, tx);
+      const saved = await createStoredSnapshotCommit(deps, { researchObjectId: ro.id, userId: input.userId, version: currentRevision, source: { kind: 'current-draft' }, message: 'Save draft before restoring history' }, ctx, tx);
       if (latest) {
         await carryVersionEvidence(tx, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: saved.versionId });
         await carryVersionMedia(tx, { researchObjectId: ro.id, previousVersionId: latest.id, versionId: saved.versionId });
@@ -100,10 +100,9 @@ export async function restoreVersionDraft(deps: ArtifactDeps, input: {
       await freezeResearchRecord(tx, { researchObjectId: ro.id, versionId: saved.versionId });
       currentRevision += 1;
     }
-    const restored = await createCommit(deps, {
+    const restored = await createStoredSnapshotCommit(deps, {
       researchObjectId: ro.id, userId: input.userId, version: currentRevision,
-      sdfCore: source.manifest.coreJson as Record<string, unknown>,
-      artifacts: source.manifest.entries.map(entry => ({ artifactId: entry.artifactId, logicalPath: entry.logicalPath })),
+      source: { kind: 'version', versionId: source.id },
       message: `Restore draft from ${source.createdAt.toISOString()}`,
     }, ctx, tx);
     await restoreFrozenGraph(tx, { researchObjectId: ro.id, sourceVersionId: source.id, versionId: restored.versionId, workspaceId: ro.workspaceId, researchRecord: source.researchRecord });

@@ -657,6 +657,7 @@
     }
   },
   "editor": {
+    "snapshotReadOnly": "此版本暂为只读，尚未开放文字格式编辑。",
     "reading": {
       "title": "研究内容",
       "navigation": "研究章节",

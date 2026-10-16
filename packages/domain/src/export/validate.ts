@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { validateManifest, validateSdfCore } from '@openscience/sdf-schema';
+import { validateManifest, validateReadableSdfCore } from '@openscience/sdf-schema';
 import type { ExportFile } from './packager';
 
 export interface ExportValidationResult {
@@ -10,7 +10,7 @@ export interface ExportValidationResult {
 /**
  * §5.3 MUST 脱库校验：纯文件输入（不依赖平台私有 DB）。
  * 1. manifest.json 存在 + validateManifest（P1B-1 ajv）
- * 2. sdf/core.json 存在 + validateSdfCore（P1B-1）
+ * 2. sdf/core.json 存在 + 完整可读快照校验（保留原 0.1 完整校验）
  * 3. contentHash 重算 == manifest.contentHash
  * 4. 版本文件存在
  */
@@ -43,7 +43,7 @@ export async function validateExportPackage(files: ExportFile[]): Promise<Export
   } else {
     try {
       const core = JSON.parse(coreFile.content.toString('utf8')) as Record<string, unknown>;
-      const coreCheck = validateSdfCore(core as never);
+      const coreCheck = validateReadableSdfCore(core);
       if (!coreCheck.ok) {
         errors.push(`sdf/core.json Schema 不通过: ${coreCheck.errors.map((e) => e.message).join('; ')}`);
       }
