@@ -1670,10 +1670,48 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     while (completeStatement && !ts.isVariableStatement(completeStatement)) completeStatement = completeStatement.parent;
     need(completeStatement, 'HOST_SESSION_STATEMENT_UNKNOWN', completeCall);
     const completeBlock = completeStatement.parent;
-    need(ts.isVariableStatement(completeStatement) && ts.isBlock(completeBlock) && completeBlock.statements.length === 4
+    const boundHostMessageAlias = () => {
+      const singleConst = statement => {
+        if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)
+          || statement.declarationList.declarations.length !== 1) return undefined;
+        const declaration = statement.declarationList.declarations[0];
+        return ts.isIdentifier(declaration.name) ? declaration : undefined;
+      };
+      const response = singleConst(completeStatement), message = singleConst(completeBlock.statements[2]);
+      if (!response?.initializer || !ts.isAwaitExpression(response.initializer)
+        || response.initializer.expression !== completeCall || !message?.initializer
+        || !match(message.initializer, 'response.choices[0]!.message', { response: response.name })) return false;
+      const assignment = completeBlock.statements[3], returned = completeBlock.statements[4];
+      if (!ts.isExpressionStatement(assignment) || !ts.isBinaryExpression(assignment.expression)
+        || assignment.expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+        || !same(assignment.expression.left, slots) || !ts.isReturnStatement(returned) || !returned.expression) return false;
+      const mapping = unwrap(assignment.expression.right);
+      if (!ts.isCallExpression(mapping) || mapping.arguments.length !== 1 || !ts.isArrowFunction(mapping.arguments[0])
+        || mapping.arguments[0].parameters.length !== 1 || !ts.isIdentifier(mapping.arguments[0].parameters[0].name)) return false;
+      const call = mapping.arguments[0].parameters[0].name;
+      if (!match(mapping,
+        "('tool_calls' in message ? message.tool_calls ?? [] : []).map(call => ({ id: call.id, name: call.function.name, sequence: toolSequence++, args: JSON.parse(call.function.arguments), authorized: false, called: false }))",
+        { message: message.name, call, toolSequence: variable(hostFactory, 'toolSequence').name })) return false;
+      const callback = enclosing(completeCall), responder = fn(host, 'respond');
+      if (!callback || callback.parameters.length !== 2 || !ts.isIdentifier(callback.parameters[1].name)
+        || !match(returned.expression, 'respond(res, 200, response)',
+          { respond: responder.name, res: callback.parameters[1].name, response: response.name })) return false;
+      // The exact five statements may only read these two const values at
+      // their matched suppliers. Shadowed/captured/written/escaped uses fail.
+      for (const declaration of [response, message]) {
+        const references = (identifiers.get(declaration.name.text) ?? []).filter(node => same(node, declaration.name));
+        if (references.length !== 3) return false;
+      }
+      const parsed = walk(mapping, node => ts.isIdentifier(node) && node.text === 'JSON');
+      const originalJson = walk(loop.statement.statements[2], node => ts.isIdentifier(node) && node.text === 'JSON');
+      return parsed.length === 1 && originalJson.length === 1 && symbol(parsed[0]) === symbol(originalJson[0]);
+    };
+    need(ts.isVariableStatement(completeStatement) && ts.isBlock(completeBlock)
+      && [4, 5].includes(completeBlock.statements.length)
       && ts.isExpressionStatement(completeBlock.statements[0]) && ts.isAwaitExpression(completeBlock.statements[0].expression)
       && callOf(completeBlock.statements[0].expression, history)
-      && completeBlock.statements[1] === completeStatement, 'HOST_HISTORY_CHECK_BYPASS');
+      && completeBlock.statements[1] === completeStatement
+      && (completeBlock.statements.length === 4 || boundHostMessageAlias()), 'HOST_HISTORY_CHECK_BYPASS');
     const checkedHistory = unwrap(completeBlock.statements[0].expression);
     need(checkedHistory.arguments.length === 1 && completeCall.arguments.length === 1
       && same(checkedHistory.arguments[0], completeCall.arguments[0]), 'HOST_HISTORY_ARGUMENT_UNBOUND');
@@ -1715,27 +1753,242 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     const responseRoles = { ...prefixRoles, turn: turn?.name, message: message?.name, semanticCalls: semantic.name };
     need(guard(responseLoop.statement.statements[2], "!turn || turn.state !== 'completed' || !message", responseRoles, sessionStop)
       && guard(responseLoop.statement.statements[3], 'message.content !== turn.response.text || !isDeepStrictEqual(semanticCalls(message.toolCalls), semanticCalls(turn.response.toolCalls)) || !isDeepStrictEqual(message.providerContent, turn.response.providerContent)', responseRoles, sessionStop), 'ASSISTANT_RESPONSE_UNBOUND');
+    const identityObjects = new Map(), identityCopies = new Set(), identityPasses = new Set();
+    // Only actual immutable local objects and literal conditional spreads are
+    // supported. Unknown late members cannot silently replace a capability.
+    const member = (expression, key, seen = new Set()) => {
+      expression = unwrap(expression);
+      need(expression && !seen.has(expression), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+      seen = new Set(seen).add(expression);
+      if (ts.isIdentifier(expression)) {
+        const declarations = symbol(expression)?.declarations ?? [];
+        const declaration = declarations.length === 1 && declarations[0];
+        need(declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+          && declaration.parent.flags & ts.NodeFlags.Const, 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+        const initial = unwrap(declaration.initializer);
+        need(ts.isObjectLiteralExpression(initial) || ts.isConditionalExpression(initial), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', expression);
+        identityObjects.set(symbol(declaration.name), declaration);
+        return member(declaration.initializer, key, seen);
+      }
+      if (ts.isConditionalExpression(expression)) {
+        const left = member(expression.whenTrue, key, seen), right = member(expression.whenFalse, key, seen);
+        need(!left && !right, 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+        return undefined;
+      }
+      need(ts.isObjectLiteralExpression(expression), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
+      for (const property of [...expression.properties].reverse()) {
+        if (ts.isSpreadAssignment(property)) {
+          identityCopies.add(unwrap(property.expression));
+          const value = member(property.expression, key, seen);
+          if (value) return value;
+        } else {
+          need(property.name && !ts.isComputedPropertyName(property.name)
+            && (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', property);
+          if (property.name.text === key) return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
+        }
+      }
+      return undefined;
+    };
+    const valueReferences = name => (identifiers.get(name.text) ?? []).filter(node => node !== name && same(node, name));
+    // Const protects the local binding, not its object. These are finite actual
+    // receiver/value uses, deliberately refusing aliases and opaque mutators.
+    const identityUse = (use, allowCopy = false) => {
+      const transparent = value => {
+        while (value.parent && (ts.isParenthesizedExpression(value.parent) || ts.isAsExpression(value.parent)
+          || ts.isNonNullExpression(value.parent)) && value.parent.expression === value) value = value.parent;
+        return value;
+      };
+      let value = transparent(use), propertyRead = false;
+      while ((ts.isPropertyAccessExpression(value.parent) || ts.isElementAccessExpression(value.parent)) && value.parent.expression === value) {
+        propertyRead = true; value = transparent(value.parent);
+      }
+      const contains = (outer, inner) => outer.pos <= inner.pos && outer.end >= inner.end;
+      for (let node = value; node.parent; node = node.parent) {
+        const parent = node.parent;
+        const writes = ts.isBinaryExpression(parent) && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+          && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment && contains(parent.left, value)
+          || ts.isDeleteExpression(parent)
+          || (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+            && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
+          || (ts.isForOfStatement(parent) || ts.isForInStatement(parent)) && contains(parent.initializer, value);
+        need(!writes, 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', parent);
+        if (ts.isStatement(parent) || ts.isFunctionLike(parent)) break;
+      }
+      // A property being read is not permission to invoke it as a mutating method.
+      need(!(ts.isCallExpression(value.parent) && value.parent.expression === value), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', value);
+      if (propertyRead) return;
+      if (identityPasses.has(use) || identityCopies.has(use) || allowCopy && ts.isSpreadAssignment(value.parent)) return;
+      const call = value.parent;
+      if (ts.isCallExpression(call) && call.arguments.includes(value)) {
+        const source = use.getSourceFile();
+        const imports = source.statements.filter(ts.isImportDeclaration).filter(node => node.moduleSpecifier.text === 'node:util'
+          && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings))
+          .flatMap(node => node.importClause.namedBindings.elements.filter(item => (item.propertyName ?? item.name).text === 'isDeepStrictEqual'));
+        if (imports.length === 1 && same(call.expression, imports[0].name)) return;
+      }
+      fail('STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', use);
+    };
+    const readonlyCopyReferences = (capabilities, readonlyUses, copiedUses, writes) => {
+      const booleanUse = expression => {
+        let value = expression;
+        while (value.parent) {
+          const parent = value.parent;
+          if ((ts.isParenthesizedExpression(parent) || ts.isAsExpression(parent) || ts.isNonNullExpression(parent)) && parent.expression === value) value = parent;
+          else if (ts.isBinaryExpression(parent) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(parent.operatorToken.kind)) value = parent;
+          else return ts.isIfStatement(parent) && parent.expression === value
+            || ts.isConditionalExpression(parent) && parent.condition === value
+            || ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken && parent.operand === value;
+        }
+        return false;
+      };
+      // Finite copies already bound by the original retry/checkpoint proof.
+      // Check whole containers AND each path that can still contain the clone;
+      // a property read is not permission to pass that value to an opaque call.
+      for (const [declaration, path] of capabilities) {
+        for (const use of valueReferences(declaration.name)) {
+          if (readonlyUses.has(use) || copiedUses.has(use) || writes.has(use) || booleanUse(use)) continue;
+          identityUse(use);
+          let value = use, depth = 0;
+          while (value.parent && (ts.isPropertyAccessExpression(value.parent) || ts.isElementAccessExpression(value.parent))
+            && value.parent.expression === value) {
+            const parent = value.parent;
+            const key = ts.isPropertyAccessExpression(parent) ? parent.name.text
+              : ts.isStringLiteral(parent.argumentExpression) ? parent.argumentExpression.text : undefined;
+            need(key !== undefined, 'SESSION_REQUEST_NOT_DECODED');
+            if (key !== path[depth]) { depth = path.length + 1; break; }
+            depth++; value = parent;
+          }
+          if (depth <= path.length && value !== use && !readonlyUses.has(value) && !copiedUses.has(value) && !booleanUse(value)) identityUse(value);
+        }
+      }
+    };
+    const verifySessionSnapshotInput = () => {
+      const sessionParameter = sessionFactory.parameters[0].name;
+      const inputs = walk(sessionFactory, node => ts.isPropertyAccessExpression(node)
+        && same(node.expression, sessionParameter) && node.name.text === 'binding');
+      const clone = unwrap(variable(sessionFactory, 'binding').initializer);
+      need(inputs.length === 1 && match(clone, 'structuredClone(input.binding)', { input: sessionParameter })
+        && clone.arguments[0] === inputs[0]
+        && !symbol(clone.expression)?.declarations?.some(node => !node.getSourceFile().isDeclarationFile), 'SESSION_REQUEST_NOT_DECODED');
+      for (const use of valueReferences(sessionParameter)) need(ts.isPropertyAccessExpression(use.parent)
+        && use.parent.expression === use, 'SESSION_REQUEST_NOT_DECODED');
+      const construction = node => {
+        if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+        if (node !== sessionFactory && ts.isFunctionLike(node)) {
+          if (node.name && ts.isComputedPropertyName(node.name)) construction(node.name.expression);
+          return;
+        }
+        need(node.kind !== ts.SyntaxKind.ThisKeyword && !(ts.isIdentifier(node) && node.text === 'arguments')
+          && !ts.isNewExpression(node) && !ts.isClassDeclaration(node) && !ts.isClassExpression(node)
+          && !(ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
+          && !ts.isDeleteExpression(node) && !((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+            && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)), 'SESSION_REQUEST_NOT_DECODED');
+        if (ts.isCallExpression(node)) need(node === clone || callOf(node, sessionStop), 'SESSION_REQUEST_NOT_DECODED');
+        ts.forEachChild(node, child => { construction(child); });
+      };
+      construction(sessionFactory);
+    };
     const completeOnce = fn(sessionFactory, 'completeOnce');
     const parser = fn(file('packages/ai-gateway/src/native-agent-bridge.ts'), 'nativeAgentSdkRequest');
-    const parsedRequest = completeOnce.body.statements[1]?.declarationList?.declarations[0];
+    const readState = fn(sessionFactory, 'read'), binding = variable(sessionFactory, 'binding').name;
+    let imagePartition, cloneCopies, sessionStatements = completeOnce.body.statements;
+    if (ts.isIfStatement(sessionStatements[1])) {
+      imagePartition = finiteImageProtocolPartition(ts, { program, checker, root: resolve(sourceRoot) });
+      need(imagePartition.status === 'conditional' && imagePartition.session === sessionFactory
+        && same(imagePartition.binding.name, binding)
+        && imagePartition.terminalGuard === sessionStatements[1]
+        && imagePartition.rawGuard.parent === completeOnce.body, 'SESSION_REQUEST_NOT_DECODED');
+      verifySessionSnapshotInput();
+      const sessionArguments = unwrap(session.initializer).arguments[0];
+      const origin = member(sessionArguments, 'binding');
+      need(origin && ts.isIdentifier(unwrap(origin)) && member(origin, 'sourceKind') === undefined,
+        'SESSION_REQUEST_NOT_DECODED');
+      const declaration = symbol(unwrap(origin))?.declarations?.find(ts.isVariableDeclaration);
+      need(declaration && ts.isIdentifier(declaration.name), 'SESSION_REQUEST_NOT_DECODED');
+      const config = member(unwrap(native.initializer).arguments[0], 'config');
+      need(config && member(config, 'sourceKind') === undefined, 'SESSION_REQUEST_NOT_DECODED');
+      identityPasses.add(unwrap(origin));
+      for (const use of valueReferences(declaration.name)) identityUse(use);
+      need(match(imagePartition.terminalGuard.expression,
+        "binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'",
+        { binding }), 'SESSION_REQUEST_NOT_DECODED');
+      // These are candidates for the two real checkpoint copies, not a tag or
+      // shorthand permission. The text copy's constructor/consumers are checked
+      // below before any current Session proof edge is reported.
+      cloneCopies = walk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'started').map(declaration => {
+        const initial = unwrap(declaration.initializer);
+        const object = ts.isObjectLiteralExpression(initial) ? initial
+          : ts.isBinaryExpression(initial) && initial.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ? unwrap(initial.right) : undefined;
+        need(object && ts.isObjectLiteralExpression(object) && declaration.parent.flags & ts.NodeFlags.Const
+          && object.properties.length === 4 && object.properties.every(property =>
+            (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && property.name && !ts.isComputedPropertyName(property.name)),
+        'SESSION_REQUEST_NOT_DECODED');
+        const field = name => one(object.properties.filter(property => property.name.text === name), 'SESSION_REQUEST_NOT_DECODED');
+        for (const name of ['kind', 'initialMessages', 'turns']) field(name);
+        const kind = field('kind'), copy = field('binding');
+        const use = ts.isShorthandPropertyAssignment(copy) ? copy.name : copy.initializer;
+        need(ts.isPropertyAssignment(kind) && match(kind.initializer, "'hermes-native-agent'") && same(use, binding), 'SESSION_REQUEST_NOT_DECODED');
+        return { declaration, object, use };
+      });
+      need(cloneCopies.length === 2 && cloneCopies.filter(copy => {
+        for (let node = copy.declaration; node; node = node.parent) if (node === imagePartition.rawGuard) return true;
+        return false;
+      }).length === 1, 'SESSION_REQUEST_NOT_DECODED');
+      for (const use of valueReferences(binding)) {
+        if (cloneCopies.some(copy => copy.use === use)) continue;
+        identityUse(use);
+      }
+      // The existing partition proves the real clone/guard/read suppliers.
+      // Only this actual immutable paper binding makes both image branches false.
+      sessionStatements = sessionStatements.filter(statement => statement !== imagePartition.terminalGuard);
+      const authorization = sessionStatements[0];
+      need(ts.isExpressionStatement(authorization) && ts.isAwaitExpression(authorization.expression)
+        && callOf(authorization.expression, fn(sessionFactory, 'authorize'))
+        && unwrap(authorization.expression).arguments.length === 0, 'SESSION_REQUEST_NOT_DECODED');
+    }
+    const sessionWalk = (scope, predicate) => walk(scope, node => {
+      if (imagePartition) for (let at = node; at; at = at.parent)
+        if (at === imagePartition.terminalGuard || at === imagePartition.rawGuard) return false;
+      return predicate(node);
+    });
+    const parsedRequest = sessionStatements[1]?.declarationList?.declarations[0];
     need(parsedRequest && callOf(parsedRequest.initializer, parser) && ts.isObjectBindingPattern(parsedRequest.name), 'SESSION_REQUEST_NOT_DECODED');
     const parsedMessages = one(parsedRequest.name.elements.filter(node => node.name.text === 'messages'), 'SESSION_MESSAGES_BINDING_UNKNOWN').name;
     const parsedOptions = one(parsedRequest.name.elements.filter(node => node.name.text === 'options'), 'SESSION_OPTIONS_BINDING_UNKNOWN').name;
-    const readState = fn(sessionFactory, 'read'), binding = variable(sessionFactory, 'binding').name;
     need(match(parsedRequest.initializer, 'nativeAgentSdkRequest(raw, binding.model)',
       { nativeAgentSdkRequest: parser.name, raw: completeOnce.parameters[0].name, binding }), 'SESSION_REQUEST_NOT_DECODED');
+    if (imagePartition) {
+      const condition = unwrap(imagePartition.rawGuard.expression), filter = unwrap(condition.right);
+      need(ts.isBinaryExpression(condition) && ts.isCallExpression(filter) && filter.arguments.length === 1
+        && ts.isArrowFunction(filter.arguments[0]) && filter.arguments[0].parameters.length === 1
+        && ts.isIdentifier(filter.arguments[0].parameters[0].name)
+        && match(condition,
+          "binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1' && messages.some(message => message.images?.length)",
+          { binding, messages: parsedMessages, message: filter.arguments[0].parameters[0].name }), 'SESSION_REQUEST_NOT_DECODED');
+    }
     const stateDeclaration = variable(completeOnce, 'state'), currentState = stateDeclaration.name;
-    need(callOf(stateDeclaration.initializer, readState) && completeOnce.body.statements[2]?.declarationList?.declarations[0] === stateDeclaration,
+    need(callOf(stateDeclaration.initializer, readState) && sessionStatements[2]?.declarationList?.declarations[0] === stateDeclaration,
       'SESSION_STATE_ORIGIN_UNKNOWN');
-    const historyCalls = walk(completeOnce, node => ts.isCallExpression(node) && same(node.expression, prefix.name));
-    need(historyCalls.length === 2 && completeOnce.body.statements[3]?.expression === historyCalls[0]
+    const historyCalls = sessionWalk(completeOnce, node => ts.isCallExpression(node) && same(node.expression, prefix.name));
+    need(historyCalls.length === 2 && sessionStatements[3]?.expression === historyCalls[0]
       && historyCalls.every(call => same(call.arguments[0], parsedMessages) && same(call.arguments[1], currentState)), 'SESSION_PREFIX_CALL_BYPASS');
     const submitHistory = historyCalls[1].parent?.parent;
     need(ts.isBlock(submitHistory) && submitHistory.statements[2]?.expression === historyCalls[1]
       && match(submitHistory.statements[1]?.expression, 'state = read()', { state: currentState, read: readState.name }), 'SESSION_STATE_ORIGIN_UNKNOWN');
-    proven.push('session-prefix');
-    const started = one(walk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'started'), 'STARTED_CHECKPOINT_UNKNOWN');
-    const completed = one(walk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'completed'), 'COMPLETED_CHECKPOINT_UNKNOWN');
+    if (imagePartition) {
+      const authorization = submitHistory.statements[0];
+      const supplier = one(sessionWalk(completeOnce, node => ts.isCallExpression(node)
+        && match(node.expression, 'input.gateway.nativeAgentComplete', { input: sessionFactory.parameters[0].name })), 'SESSION_PREFIX_CALL_BYPASS');
+      need(ts.isExpressionStatement(authorization) && ts.isAwaitExpression(authorization.expression)
+        && callOf(authorization.expression, fn(sessionFactory, 'authorize'))
+        && unwrap(authorization.expression).arguments.length === 0
+        && supplier.arguments.length === 3 && same(supplier.arguments[0], parsedMessages)
+        && same(supplier.arguments[1], variable(completeOnce, 'boundedOptions').name)
+        && member(supplier.arguments[2], 'submitProvider') === submitHistory.parent, 'SESSION_PREFIX_CALL_BYPASS');
+    }
+    if (!imagePartition) proven.push('session-prefix');
+    const started = one(sessionWalk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'started'), 'STARTED_CHECKPOINT_UNKNOWN');
+    const completed = one(sessionWalk(completeOnce, node => ts.isVariableDeclaration(node) && node.name.text === 'completed'), 'COMPLETED_CHECKPOINT_UNKNOWN');
     // Inspect the effective last turn, never a matching descendant in a decoy.
     // Unknown computed keys/spreads after a selected property may override it.
     const cannotOverride = (expression, name) => {
@@ -1769,7 +2022,7 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       while (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) expression = unwrap(expression.expression);
       return expression;
     };
-    const assignments = target => walk(completeOnce, node => ts.isBinaryExpression(node)
+    const assignments = target => sessionWalk(completeOnce, node => ts.isBinaryExpression(node)
       && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
       && same(assignmentRoot(node.left), target));
     const retryWrites = assignments(retry.name), attemptWrites = assignments(attempt.name);
@@ -1783,7 +2036,7 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     while (rejectionCatch && !ts.isCatchClause(rejectionCatch)) rejectionCatch = rejectionCatch.parent;
     need(rejectionCatch?.variableDeclaration
       && match(rejectionWrite.right, '{ started, error }', { started: started.name, error: rejectionCatch.variableDeclaration.name }), 'RETRY_STARTED_ORIGIN_UNKNOWN');
-    const publishCalls = walk(completeOnce, node => ts.isCallExpression(node)
+    const publishCalls = sessionWalk(completeOnce, node => ts.isCallExpression(node)
       && match(node.expression, 'input.store.publish', { input: sessionFactory.parameters[0].name }));
     need(publishCalls.length === 1 && same(publishCalls[0].arguments[0], started.name)
       && enclosing(rejectionWrite) === publishCalls[0].arguments[1], 'RETRY_STARTED_ORIGIN_UNKNOWN');
@@ -1796,8 +2049,43 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       const request = latestRequest(object);
       need(same(checkpointProperty(request, 'messages'), parsedMessages) && same(checkpointProperty(request, 'options'), parsedOptions), 'LATEST_PREFIX_NOT_RETAINED', request);
     }
-    const finalCalls = walk(completeOnce, node => ts.isCallExpression(node) && match(node.expression, 'input.store.complete'));
+    const finalCalls = sessionWalk(completeOnce, node => ts.isCallExpression(node) && match(node.expression, 'input.store.complete'));
     need(finalCalls.length === 1 && same(finalCalls[0].arguments[0], started.name) && same(finalCalls[0].arguments[1], completed.name), 'PAID_CHECKPOINT_ORIGIN_UNKNOWN');
+    if (imagePartition) {
+      const copy = cloneCopies.find(value => value.declaration === started);
+      need(copy && copy.object === startedInitializer.right, 'SESSION_REQUEST_NOT_DECODED');
+      const compareAndSet = one(sessionWalk(completeOnce, node => ts.isCallExpression(node)
+        && match(node.expression, 'input.store.compareAndSet', { input: sessionFactory.parameters[0].name })), 'SESSION_REQUEST_NOT_DECODED');
+      need(compareAndSet.arguments.length === 2 && same(compareAndSet.arguments[0], currentState)
+        && same(compareAndSet.arguments[1], started.name), 'SESSION_REQUEST_NOT_DECODED');
+      const parameter = sessionFactory.parameters[0].name;
+      const storeRead = one(sessionWalk(readState, node => ts.isCallExpression(node)
+        && match(node.expression, 'input.store.read', { input: parameter })), 'SESSION_REQUEST_NOT_DECODED');
+      need(storeRead.arguments.length === 0, 'SESSION_REQUEST_NOT_DECODED');
+      const storeConsumers = new Set([storeRead, compareAndSet, publishCalls[0], finalCalls[0]]);
+      for (const use of sessionWalk(sessionFactory, node => ts.isIdentifier(node) && node !== parameter && same(node, parameter))) {
+        const access = use.parent;
+        need(ts.isPropertyAccessExpression(access) && access.expression === use, 'SESSION_REQUEST_NOT_DECODED');
+        if (access.name.text !== 'store') continue;
+        const method = access.parent, call = method?.parent;
+        need(ts.isPropertyAccessExpression(method) && method.expression === access
+          && ts.isCallExpression(call) && call.expression === method && storeConsumers.has(call), 'SESSION_REQUEST_NOT_DECODED');
+      }
+      const completedObject = unwrap(completed.initializer);
+      need(ts.isObjectLiteralExpression(completedObject) && completedObject.properties.length === 2
+        && ts.isSpreadAssignment(completedObject.properties[0]) && same(completedObject.properties[0].expression, started.name), 'SESSION_REQUEST_NOT_DECODED');
+      const turns = unwrap(checkpointProperty(completedObject, 'turns')), slice = turns.elements[0].expression;
+      need(match(slice, 'started.turns.slice(0, -1)', { started: started.name }), 'SESSION_REQUEST_NOT_DECODED');
+      const sliceReceiver = one(walk(slice, node => ts.isIdentifier(node) && same(node, started.name)), 'SESSION_REQUEST_NOT_DECODED');
+      const readonlyUses = new Set([compareAndSet.arguments[1], publishCalls[0].arguments[0],
+        finalCalls[0].arguments[0], finalCalls[0].arguments[1], sliceReceiver]);
+      const copiedUses = new Set([startedInitializer.left, checkpointProperty(retryWrite.right, 'started'),
+        checkpointProperty(rejectionWrite.right, 'started'), completedObject.properties[0].expression]);
+      const writes = new Set([assignmentRoot(retryWrite.left), assignmentRoot(rejectionWrite.left)]);
+      readonlyCopyReferences([[started, ['binding']], [completed, ['binding']],
+        [retry, ['started', 'binding']], [attempt, ['rejection', 'started', 'binding']]], readonlyUses, copiedUses, writes);
+      proven.push('session-prefix');
+    }
     proven.push('session-checkpoint-prefix');
 
     const verifiedBase = one(walk(handler, node => ts.isVariableDeclaration(node) && node.name.text === 'readVerifiedVideoPlan'), 'BASE_READER_MISSING');
@@ -1834,7 +2122,6 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     const journalFactory = fn(file('apps/agent-worker/src/native-agent/journal-task-store.ts'), 'createJournalNativeTaskStore');
     const storeCalls = uses(storeFactory), journalCalls = uses(journalFactory);
     const sessionCalls = uses(sessionFactory), hostCalls = uses(hostFactory);
-    const identityObjects = new Map(), identityCopies = new Set(), identityPasses = new Set();
     const constResult = call => {
       let expression = call;
       while (expression.parent && (ts.isAwaitExpression(expression.parent) || ts.isParenthesizedExpression(expression.parent)
@@ -1843,41 +2130,6 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       need(ts.isVariableDeclaration(declaration) && declaration.initializer === expression && ts.isIdentifier(declaration.name)
         && declaration.parent.flags & ts.NodeFlags.Const, 'STORE_FACTORY_RESULT_UNKNOWN', call);
       return declaration;
-    };
-    // Only actual immutable local objects and literal conditional spreads are
-    // supported. Unknown late members cannot silently replace a capability.
-    const member = (expression, key, seen = new Set()) => {
-      expression = unwrap(expression);
-      need(expression && !seen.has(expression), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
-      seen = new Set(seen).add(expression);
-      if (ts.isIdentifier(expression)) {
-        const declarations = symbol(expression)?.declarations ?? [];
-        const declaration = declarations.length === 1 && declarations[0];
-        need(declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
-          && declaration.parent.flags & ts.NodeFlags.Const, 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
-        const initial = unwrap(declaration.initializer);
-        need(ts.isObjectLiteralExpression(initial) || ts.isConditionalExpression(initial), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', expression);
-        identityObjects.set(symbol(declaration.name), declaration);
-        return member(declaration.initializer, key, seen);
-      }
-      if (ts.isConditionalExpression(expression)) {
-        const left = member(expression.whenTrue, key, seen), right = member(expression.whenFalse, key, seen);
-        need(!left && !right, 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
-        return undefined;
-      }
-      need(ts.isObjectLiteralExpression(expression), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', expression);
-      for (const property of [...expression.properties].reverse()) {
-        if (ts.isSpreadAssignment(property)) {
-          identityCopies.add(unwrap(property.expression));
-          const value = member(property.expression, key, seen);
-          if (value) return value;
-        } else {
-          need(property.name && !ts.isComputedPropertyName(property.name)
-            && (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)), 'STORE_EFFECTIVE_MEMBER_UNKNOWN', property);
-          if (property.name.text === key) return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer;
-        }
-      }
-      return undefined;
     };
     const resolvedValue = expression => {
       expression = unwrap(expression);
@@ -1945,6 +2197,74 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
         storeGraph.pending.push({ reason: 'BINDING_EXECUTION_EQUIVALENCE_UNPROVEN', field: key, at: location(member(binding, key)), store: instance.graph.id });
       }
     }
+    const guardedImageAttempt = (call, instance, linked, attempt) => {
+      try {
+        const flow = finiteImageStoreFlowTerms(ts, { program, checker, root: resolve(sourceRoot) });
+        const owner = enclosing(call), body = owner?.body;
+        need(flow.status === 'conditional' && owner === flow.route && flow.factory === instance.factory
+          && flow.create === instance.call && flow.session === linked.declaration && body && ts.isBlock(body), 'STORE_HOST_IDENTITY_UNKNOWN');
+        const statement = node => { while (node?.parent && node.parent !== body) node = node.parent; return node; };
+        const storeStatement = statement(instance.declaration), sessionStatement = statement(linked.declaration), hostStatement = statement(call);
+        const order = [storeStatement, flow.guard, sessionStatement, hostStatement].map(node => body.statements.indexOf(node));
+        need(order.every((value, index) => value >= 0 && (!index || order[index - 1] < value))
+          && flow.guard.parent === body && !flow.guard.elseStatement, 'STORE_HOST_IDENTITY_UNKNOWN');
+        const stop = fn(owner.getSourceFile(), 'stopped'), action = flow.guard.thenStatement;
+        need(!stop.asteriskToken && !stop.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+          && stop.body?.statements.length === 1 && ts.isThrowStatement(stop.body.statements[0])
+          && ts.isExpressionStatement(action) && callOf(action.expression, stop)
+          && unwrap(action.expression).arguments.length === 0, 'STORE_HOST_IDENTITY_UNKNOWN');
+        const disjuncts = node => { node = unwrap(node); return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.BarBarToken
+          ? [...disjuncts(node.left), ...disjuncts(node.right)] : [node]; };
+        need(disjuncts(flow.guard.expression).filter(node => ts.isBinaryExpression(node)
+          && node.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+          && (sameValue(node.left, instance.attemptId) && sameValue(node.right, attempt)
+            || sameValue(node.right, instance.attemptId) && sameValue(node.left, attempt))).length === 1, 'STORE_HOST_IDENTITY_UNKNOWN');
+        const envelope = variable(owner, 'envelope'), snapshot = unwrap(envelope.initializer), parameter = owner.parameters[0].name;
+        need(ts.isIdentifier(parameter) && envelope.parent.flags & ts.NodeFlags.Const
+          && body.statements.indexOf(statement(envelope)) < order[0]
+          && match(snapshot, 'structuredClone(input.envelope)', { input: parameter })
+          && !symbol(snapshot.expression)?.declarations?.some(node => !node.getSourceFile().isDeclarationFile)
+          && match(attempt, 'envelope.executionAttempt', { envelope: envelope.name }), 'STORE_HOST_IDENTITY_UNKNOWN');
+        const entry = flow.entry.arguments[0];
+        need(entry.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+          && property.name && !ts.isComputedPropertyName(property.name)), 'STORE_HOST_IDENTITY_UNKNOWN');
+        const authorizer = definition(member(entry, 'authorize'));
+        need(ts.isArrowFunction(authorizer), 'STORE_HOST_IDENTITY_UNKNOWN');
+        // Reflection could reach the fresh private receivers without a symbol
+        // reference; it is outside this finite owned-snapshot witness.
+        need(!walk(owner, node => node.kind === ts.SyntaxKind.ThisKeyword
+          || ts.isIdentifier(node) && node.text === 'arguments'
+          || ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'eval').length, 'STORE_HOST_IDENTITY_UNKNOWN');
+        for (const use of valueReferences(parameter)) {
+          const access = use.parent;
+          need(ts.isPropertyAccessExpression(access) && access.expression === use, 'STORE_HOST_IDENTITY_UNKNOWN');
+          if (access.name.text === 'task') identityUse(access);
+          const invocation = access.parent;
+          if (ts.isCallExpression(invocation) && invocation.expression === access)
+            need(access.name.text === 'authorize', 'STORE_HOST_IDENTITY_UNKNOWN');
+        }
+        const sessionInput = unwrap(linked.declaration.initializer).arguments[0], bindingValue = member(sessionInput, 'binding');
+        const declaration = symbol(unwrap(bindingValue))?.declarations?.find(ts.isVariableDeclaration);
+        need(declaration && ts.isIdentifier(declaration.name) && declaration.parent.flags & ts.NodeFlags.Const
+          && ts.isObjectLiteralExpression(unwrap(declaration.initializer))
+          && same(member(bindingValue, 'imageReview'), envelope.name), 'STORE_HOST_IDENTITY_UNKNOWN');
+        for (const property of unwrap(declaration.initializer).properties) {
+          if (ts.isSpreadAssignment(property)) need(member(property.expression, 'imageReview') === undefined, 'STORE_HOST_IDENTITY_UNKNOWN');
+          else need((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+            && property.name && !ts.isComputedPropertyName(property.name), 'STORE_HOST_IDENTITY_UNKNOWN');
+        }
+        const hostConfig = member(unwrap(call.arguments[0]), 'config');
+        need(ts.isObjectLiteralExpression(hostConfig), 'STORE_HOST_IDENTITY_UNKNOWN');
+        const configCopies = hostConfig.properties.filter(ts.isSpreadAssignment);
+        need(configCopies.length === 1 && same(configCopies[0].expression, declaration.name)
+          && hostConfig.properties.every(property => ts.isSpreadAssignment(property)
+            || ts.isPropertyAssignment(property) && property.name && !ts.isComputedPropertyName(property.name)), 'STORE_HOST_IDENTITY_UNKNOWN');
+        verifySessionSnapshotInput();
+        readonlyCopyReferences([[envelope, []], [declaration, ['imageReview']]],
+          new Set([unwrap(bindingValue)]), new Set([member(bindingValue, 'imageReview'), configCopies[0].expression]), new Set());
+        return true;
+      } catch { return false; }
+    };
     for (const call of hostCalls) {
       const input = call.arguments[0], store = member(input, 'store'), sessionValue = member(input, 'session');
       const instance = store && ts.isIdentifier(unwrap(store)) && byStore.get(symbol(unwrap(store)));
@@ -1952,51 +2272,13 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       need(instance && linked?.instance === instance, 'STORE_SUBSTITUTE_INSTANCE_UNKNOWN', store ?? call);
       const config = member(input, 'config');
       identityPasses.add(unwrap(config));
-      need(sameValue(member(input, 'executionAttempt'), instance.attemptId)
+      const hostAttempt = member(input, 'executionAttempt');
+      need((sameValue(hostAttempt, instance.attemptId) || guardedImageAttempt(call, instance, linked, hostAttempt))
         && sameValue(member(config, 'taskId'), instance.taskId), 'STORE_HOST_IDENTITY_UNKNOWN', call);
       for (const key of ['runtimeId', 'skillCatalogueId', 'model']) need(sameValue(member(config, key), member(linked.binding, key)), 'STORE_HOST_IDENTITY_UNKNOWN', call);
       const row = { instance: instance.graph.id, at: location(call), session: location(linked.declaration) };
       instance.graph.hosts.push(row.at); storeGraph.hosts.push(row); allowedValues.add(store); linked.passed.add(sessionValue);
     }
-    const valueReferences = name => (identifiers.get(name.text) ?? []).filter(node => node !== name && same(node, name));
-    // Const protects the local binding, not its object. These are finite actual
-    // receiver/value uses, deliberately refusing aliases and opaque mutators.
-    const identityUse = (use, allowCopy = false) => {
-      const transparent = value => {
-        while (value.parent && (ts.isParenthesizedExpression(value.parent) || ts.isAsExpression(value.parent)
-          || ts.isNonNullExpression(value.parent)) && value.parent.expression === value) value = value.parent;
-        return value;
-      };
-      let value = transparent(use), propertyRead = false;
-      while ((ts.isPropertyAccessExpression(value.parent) || ts.isElementAccessExpression(value.parent)) && value.parent.expression === value) {
-        propertyRead = true; value = transparent(value.parent);
-      }
-      const contains = (outer, inner) => outer.pos <= inner.pos && outer.end >= inner.end;
-      for (let node = value; node.parent; node = node.parent) {
-        const parent = node.parent;
-        const writes = ts.isBinaryExpression(parent) && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
-          && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment && contains(parent.left, value)
-          || ts.isDeleteExpression(parent)
-          || (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
-            && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
-          || (ts.isForOfStatement(parent) || ts.isForInStatement(parent)) && contains(parent.initializer, value);
-        need(!writes, 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', parent);
-        if (ts.isStatement(parent) || ts.isFunctionLike(parent)) break;
-      }
-      // A property being read is not permission to invoke it as a mutating method.
-      need(!(ts.isCallExpression(value.parent) && value.parent.expression === value), 'STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', value);
-      if (propertyRead) return;
-      if (identityPasses.has(use) || identityCopies.has(use) || allowCopy && ts.isSpreadAssignment(value.parent)) return;
-      const call = value.parent;
-      if (ts.isCallExpression(call) && call.arguments.includes(value)) {
-        const source = use.getSourceFile();
-        const imports = source.statements.filter(ts.isImportDeclaration).filter(node => node.moduleSpecifier.text === 'node:util'
-          && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings))
-          .flatMap(node => node.importClause.namedBindings.elements.filter(item => (item.propertyName ?? item.name).text === 'isDeepStrictEqual'));
-        if (imports.length === 1 && same(call.expression, imports[0].name)) return;
-      }
-      fail('STORE_EFFECTIVE_MEMBER_MUTATION_UNKNOWN', use);
-    };
     const sessionInput = sessionFactory.parameters[0].name;
     const clonedBinding = unwrap(variable(sessionFactory, 'binding').initializer);
     const bindingInputs = walk(sessionFactory, node => ts.isPropertyAccessExpression(node) && node.name.text === 'binding' && same(node.expression, sessionInput));
@@ -2010,9 +2292,150 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       for (const use of uses) identityUse(use);
       storeGraph.identityObjects.push({ at: location(declaration), uses: uses.map(location), status: 'readonly-local-uses' });
     }
+    let imageStoreFlow;
+    const imageFinalizerStoreArguments = new Set();
+    if (imagePartition) {
+      const reason = 'STORE_FINALIZER_CONSUMER_UNKNOWN';
+      // Same-symbol argument positions imply the same received value only for
+      // these plain, required parameters. Rest/default/optional signatures are
+      // outside this bounded consumer summary.
+      const parameters = (callee, count) => callee.parameters.length === count
+        && callee.parameters.every(parameter => ts.isIdentifier(parameter.name)
+          && !parameter.dotDotDotToken && !parameter.initializer && !parameter.questionToken);
+      imageStoreFlow = finiteImageStoreFlowTerms(ts, { program, checker, root: resolve(sourceRoot) });
+      need(imageStoreFlow.status === 'conditional' && imageStoreFlow.factory === storeFactory
+        && imageStoreFlow.partition.session === sessionFactory, reason);
+      need(parameters(imageStoreFlow.update, 3)
+        && [...imageStoreFlow.modes.values()].every(mode => parameters(mode.node, 2)), reason, imageStoreFlow.update);
+      const finalizer = fn(sessionFile, 'finalizeNativeImageReviewState'), validate = fn(sessionFile, 'nativeImageReviewFinal');
+      const derive = fn(sessionFile, 'deriveNativeImageReviewFinal'), stop = fn(sessionFile, 'blocked');
+      const store = finalizer.parameters[0]?.name, state = finalizer.parameters[1]?.name;
+      need(parameters(finalizer, 2) && ts.isIdentifier(store) && ts.isIdentifier(state)
+        && finalizer.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword) && !finalizer.asteriskToken, reason, finalizer);
+      const statements = finalizer.body.statements, final = variable(finalizer, 'final'), next = variable(finalizer, 'next');
+      need(statements.length === 6 && statements[0] === final.parent.parent && final.parent.flags & ts.NodeFlags.Const
+        && final.parent.declarations.length === 1
+        && !stop.asteriskToken && !stop.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+        && ts.isCallExpression(final.initializer) && callOf(final.initializer, validate) && unwrap(final.initializer).arguments.length === 1
+        && same(unwrap(final.initializer).arguments[0], state)
+        && ts.isIfStatement(statements[1]) && !statements[1].elseStatement
+        && match(statements[1].expression, 'state.validatedFinal', { state })
+        && ts.isReturnStatement(statements[1].thenStatement) && same(statements[1].thenStatement.expression, state)
+        && guard(statements[2], '!store.finalize', { store }, stop)
+        && statements[3] === next.parent.parent && next.parent.flags & ts.NodeFlags.Const && next.parent.declarations.length === 1
+        && ts.isObjectLiteralExpression(next.initializer)
+        && match(next.initializer, '{ ...state, validatedFinal: final }', { state, final: final.name })
+        && ts.isExpressionStatement(statements[4]) && ts.isAwaitExpression(statements[4].expression) && ts.isCallExpression(statements[4].expression.expression)
+        && match(statements[4].expression, 'store.finalize(state, next)', { store, state, next: next.name })
+        && ts.isReturnStatement(statements[5]) && same(statements[5].expression, next.name), reason, finalizer);
+      // The actual validator/derivation remains in the original complete-module
+      // equality premise. Bind its real chain, not another same-named callee.
+      const validationTry = validate.body.statements[0];
+      need(validate.body.statements.length === 1 && ts.isTryStatement(validationTry)
+        && parameters(validate, 1) && !validate.asteriskToken && !validate.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+        && validationTry.tryBlock.statements.length === 1 && ts.isReturnStatement(validationTry.tryBlock.statements[0])
+        && ts.isCallExpression(validationTry.tryBlock.statements[0].expression) && callOf(validationTry.tryBlock.statements[0].expression, derive)
+        && unwrap(validationTry.tryBlock.statements[0].expression).arguments.length === 1
+        && same(unwrap(validationTry.tryBlock.statements[0].expression).arguments[0], validate.parameters[0].name)
+        && validationTry.catchClause && !validationTry.finallyBlock, reason, validate);
+      const caught = validationTry.catchClause.variableDeclaration?.name, catchBody = validationTry.catchClause.block.statements;
+      const errorClass = one(walk(sessionFile, node => ts.isClassDeclaration(node) && node.name?.text === 'NativeAgentSessionError'), reason);
+      need(caught && catchBody.length === 2 && ts.isIfStatement(catchBody[0]) && !catchBody[0].elseStatement
+        && match(catchBody[0].expression, 'error instanceof ErrorClass', { error: caught, ErrorClass: errorClass.name })
+        && ts.isThrowStatement(catchBody[0].thenStatement) && same(catchBody[0].thenStatement.expression, caught)
+        && ts.isExpressionStatement(catchBody[1]) && callOf(catchBody[1].expression, stop), reason, validate);
+      const derived = variable(derive, 'result'), validateFinal = importOf(sessionFile, '@openscience/ai-gateway', 'validateNativeImageReviewFinal');
+      need(parameters(derive, 1) && !derive.asteriskToken && !derive.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+        && ts.isCallExpression(derived.initializer) && same(unwrap(derived.initializer).expression, validateFinal)
+        && ts.isReturnStatement(derive.body.statements.at(-1)) && same(derive.body.statements.at(-1).expression, derived.name), reason, derive);
+      const calls = uses(finalizer);
+      need(calls.length === 2 && calls.every(call => call.arguments.length === 2 && ts.isAwaitExpression(call.parent)), reason, finalizer);
+      const routeCall = one(calls.filter(call => enclosing(call) === imageStoreFlow.route), reason);
+      const sessionCall = one(calls.filter(call => enclosing(call) === completeOnce), reason);
+      const route = imageStoreFlow.route, saved = variable(route, 'saved'), prior = variable(route, 'prior');
+      const routeStore = symbol(unwrap(routeCall.arguments[0]))?.declarations?.find(ts.isVariableDeclaration);
+      need(routeStore && routeStore.initializer === imageStoreFlow.create && routeStore.parent.flags & ts.NodeFlags.Const
+        && saved.parent.flags & ts.NodeFlags.Const && ts.isAwaitExpression(saved.initializer)
+        && match(saved.initializer, 'store.read()', { store: routeStore.name })
+        && same(routeCall.arguments[1], saved.name)
+        && prior.parent.flags & ts.NodeFlags.Const && match(prior.initializer, 'saved?.turns.at(-1)', { saved: saved.name }), reason, routeCall);
+      const materialize = variable(route, 'materialize'), materialized = routeCall.parent.parent, recovered = materialized?.parent;
+      need(ts.isArrowFunction(materialize.initializer) && ts.isCallExpression(materialized)
+        && same(materialized.expression, materialize.name) && materialized.arguments.length === 1
+        && materialized.arguments[0] === routeCall.parent && ts.isReturnStatement(recovered), reason, routeCall);
+      const early = recovered.parent, envelope = variable(route, 'envelope');
+      need(ts.isIfStatement(early) && early.parent === route.body && early.thenStatement === recovered && !early.elseStatement
+        && match(early.expression, "saved && envelope.imageResultPolicy === 'image-review-tool-final-v1' && (saved.validatedFinal || prior?.state === 'received' || (prior?.state === 'completed' && prior.received))",
+          { saved: saved.name, envelope: envelope.name, prior: prior.name }), reason, early);
+      const legacy = one(route.body.statements.filter(node => ts.isIfStatement(node)
+        && match(node.expression, "saved && prior?.state === 'completed' && prior.response.finishReason === 'stop' && !prior.response.toolCalls?.length",
+          { saved: saved.name, prior: prior.name })), reason);
+      need(ts.isReturnStatement(legacy.thenStatement) && match(legacy.thenStatement.expression, 'materialize(saved)',
+        { materialize: materialize.name, saved: saved.name }), reason, legacy);
+      const startedGuard = one(route.body.statements.filter(node => ts.isIfStatement(node)
+        && match(node.expression, "saved?.turns.at(-1)?.state === 'started'", { saved: saved.name })), reason);
+      const inside = (node, scope) => node.getSourceFile() === scope.getSourceFile() && node.pos >= scope.pos && node.end <= scope.end;
+      const savedReads = new Set([routeCall.arguments[1], legacy.thenStatement.expression.arguments[0]]);
+      for (const use of valueReferences(saved.name)) need(savedReads.has(use) || inside(use, prior.initializer)
+        || inside(use, early.expression) || inside(use, legacy.expression) || inside(use, startedGuard.expression), reason, use);
+      for (const use of valueReferences(prior.name)) need(inside(use, early.expression) || inside(use, legacy.expression), reason, use);
+      need(saved.end < early.pos && early.end < imageStoreFlow.guard.pos, reason, early);
+
+      const parameter = sessionFactory.parameters[0].name, raw = imagePartition.rawGuard;
+      const receivedState = variable(completeOnce, 'receivedState');
+      need(!receivedState.initializer && inside(receivedState, raw) && inside(sessionCall, raw)
+        && match(sessionCall.arguments[0], 'input.store', { input: parameter }) && same(sessionCall.arguments[1], receivedState.name), reason, sessionCall);
+      const writes = walk(raw, node => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+        && same(node.left, receivedState.name));
+      const write = one(writes, reason), submit = enclosing(write), rawStarted = cloneCopies.find(copy => copy.declaration !== started)?.declaration;
+      need(rawStarted && enclosing(rawStarted) === submit && ts.isArrowFunction(submit) && parameters(submit, 2), reason, write);
+      const received = variable(submit, 'received'), common = variable(submit, 'common'), target = submit.parameters[0].name;
+      need(ts.isIdentifier(target) && received.parent.flags & ts.NodeFlags.Const && ts.isAwaitExpression(received.initializer)
+        && match(received.initializer.expression.expression, 'input.store.publish', { input: parameter })
+        && unwrap(received.initializer).arguments.length === 2 && same(unwrap(received.initializer).arguments[0], rawStarted.name)
+        && match(write.right, "{ ...started, turns: [...started.turns.slice(0, -1), received.decoded ? { ...common, state: 'completed', received, response: { ...received.decoded, provider: target.provider, promptHash: target.promptHash } } : { ...common, state: 'received', received }] }",
+          { started: rawStarted.name, common: common.name, received: received.name, target }), reason, write);
+      const rawComplete = one(walk(submit, node => ts.isCallExpression(node)
+        && match(node.expression, 'input.store.complete', { input: parameter })), reason);
+      const suffix = submit.body.statements.slice(submit.body.statements.indexOf(write.parent));
+      need(suffix.length === 3 && suffix[1].expression === rawComplete.parent && ts.isAwaitExpression(rawComplete.parent)
+        && rawComplete.arguments.length === 2 && same(rawComplete.arguments[0], rawStarted.name) && same(rawComplete.arguments[1], receivedState.name)
+        && ts.isReturnStatement(suffix[2]) && same(suffix[2].expression, received.name), reason, rawComplete);
+      const missing = one(raw.thenStatement.statements.filter(node => guard(node, '!receivedState', { receivedState: receivedState.name }, stop)), reason);
+      need(write.end < rawComplete.pos && missing.end < sessionCall.pos, reason, sessionCall);
+      const allowedState = new Set([write.left, rawComplete.arguments[1], missing.expression.operand, sessionCall.arguments[1]]);
+      for (const use of valueReferences(receivedState.name)) need(allowedState.has(use), reason, use);
+      const cas = one(walk(submit, node => ts.isCallExpression(node)
+        && match(node.expression, 'input.store.compareAndSet', { input: parameter })), reason);
+      need(cas.arguments.length === 2 && same(cas.arguments[0], currentState) && same(cas.arguments[1], rawStarted.name) && cas.end < received.pos, reason, cas);
+      const execute = one(walk(raw, node => ts.isCallExpression(node)
+        && match(node.expression, 'input.gateway.executeNativeImageReviewTurn', { input: parameter })), reason);
+      need(ts.isAwaitExpression(execute.parent) && execute.arguments.length === 2
+        && member(execute.arguments[1], 'submitProvider') === submit
+        && execute.end < missing.pos && raw.thenStatement.statements.indexOf(missing)
+          === raw.thenStatement.statements.indexOf(execute.parent.parent) + 1, reason, execute);
+      const rawStores = new Set([cas.expression.expression, unwrap(received.initializer).expression.expression,
+        rawComplete.expression.expression, sessionCall.arguments[0]]);
+      for (const value of walk(raw, node => ts.isPropertyAccessExpression(node) && match(node, 'input.store', { input: parameter })))
+        need(rawStores.has(value), reason, value);
+      need(!walk(raw, node => node.kind === ts.SyntaxKind.ThisKeyword || ts.isIdentifier(node) && node.text === 'arguments'
+        || ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'eval').length, reason, raw);
+      const copy = unwrap(write.right).properties[0].expression, slice = unwrap(member(write.right, 'turns')).elements[0].expression;
+      const sliceUse = one(walk(slice, node => ts.isIdentifier(node) && same(node, rawStarted.name)), reason);
+      readonlyCopyReferences([[rawStarted, ['binding']]], new Set([cas.arguments[1], unwrap(received.initializer).arguments[0], rawComplete.arguments[0], sliceUse]),
+        new Set([copy]), new Set());
+      const allowedCommon = new Set(walk(rawStarted.initializer, node => ts.isIdentifier(node) && same(node, common.name))
+        .concat(walk(write.right, node => ts.isIdentifier(node) && same(node, common.name))));
+      for (const use of valueReferences(common.name)) need(allowedCommon.has(use), reason, use);
+      const receivedReads = new Set(walk(write.right, node => ts.isIdentifier(node) && same(node, received.name)));
+      receivedReads.add(suffix[2].expression);
+      for (const use of valueReferences(received.name)) need(receivedReads.has(use), reason, use);
+      imageFinalizerStoreArguments.add(routeCall.arguments[0]); imageFinalizerStoreArguments.add(sessionCall.arguments[0]);
+      storeGraph.finalizations = calls.map(location);
+    }
     for (const instance of instances) {
       for (const use of valueReferences(instance.declaration.name)) {
-        if (allowedValues.has(use)) continue;
+        if (allowedValues.has(use) || imageFinalizerStoreArguments.has(use)) continue;
         const access = use.parent;
         need(ts.isPropertyAccessExpression(access) && access.expression === use && !access.questionDotToken, 'STORE_INSTANCE_ESCAPE_UNKNOWN', use);
         const call = access.parent;
@@ -2034,7 +2457,8 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       const input = factory.parameters[0].name;
       for (const use of valueReferences(input)) need(ts.isPropertyAccessExpression(use.parent) && use.parent.expression === use,
         'STORE_CAPABILITY_INPUT_ESCAPE_UNKNOWN', use);
-      const values = walk(factory, node => ts.isPropertyAccessExpression(node) && node.name.text === 'store' && same(node.expression, input));
+      const values = (consumer === 'session' ? sessionWalk : walk)(factory,
+        node => ts.isPropertyAccessExpression(node) && node.name.text === 'store' && same(node.expression, input));
       const methods = [];
       for (const value of values) {
         const access = value.parent, call = access?.parent;
@@ -2057,19 +2481,56 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     for (const factory of [storeFactory, journalFactory]) {
       const returned = one(walk(factory, node => ts.isReturnStatement(node) && enclosing(node) === factory), 'STORE_RETURN_UNKNOWN');
       const object = unwrap(returned.expression), input = factory.parameters[0].name;
-      need(ts.isObjectLiteralExpression(object) && object.properties.length === 4, 'STORE_RETURN_UNKNOWN', returned);
+      const finalModes = factory === storeFactory && imageStoreFlow?.factory === factory;
+      const methodNames = finalModes ? ['read', 'compareAndSet', 'complete', 'finalize', 'publish'] : ['read', 'compareAndSet', 'complete', 'publish'];
+      need(ts.isObjectLiteralExpression(object) && object.properties.length === methodNames.length
+        && object.properties.every(property => (ts.isPropertyAssignment(property) || ts.isMethodDeclaration(property))
+          && property.name && !ts.isComputedPropertyName(property.name)), 'STORE_RETURN_UNKNOWN', returned);
       const methods = new Map(object.properties.map(property => [property.name?.text, property]));
-      need(methods.size === 4 && ['read', 'compareAndSet', 'complete', 'publish'].every(key => methods.has(key)), 'STORE_RETURN_UNKNOWN', returned);
+      need(methods.size === methodNames.length && methodNames.every(key => methods.has(key)), 'STORE_RETURN_UNKNOWN', returned);
       const update = fn(factory, factory === storeFactory ? 'update' : 'save'), wrappers = [];
-      for (const [key, paid] of [['compareAndSet', false], ['complete', true]]) {
+      if (finalModes) need(imageStoreFlow.update === update && imageStoreFlow.cas
+        && imageStoreFlow.modes.size === 3, 'STORE_UPDATE_SUPPLIER_UNKNOWN', update);
+      for (const [key, paid] of finalModes ? [['compareAndSet', 'start'], ['complete', 'paid'], ['finalize', 'final']]
+        : [['compareAndSet', false], ['complete', true]]) {
         const arrow = unwrap(methods.get(key).initializer);
         need(ts.isArrowFunction(arrow) && arrow.parameters.length === 2
-          && match(arrow.body, `update(previous, state, ${paid})`, { update: update.name, previous: arrow.parameters[0].name, state: arrow.parameters[1].name }),
+          && (!finalModes || imageStoreFlow.modes.get(key)?.node === arrow)
+          && match(arrow.body, `update(previous, state, ${finalModes ? JSON.stringify(paid) : paid})`,
+            { update: update.name, previous: arrow.parameters[0].name, state: arrow.parameters[1].name }),
         'STORE_UPDATE_SUPPLIER_UNKNOWN', methods.get(key));
         wrappers.push(unwrap(arrow.body));
       }
       const updateCalls = uses(update);
-      need(updateCalls.length === 2 && updateCalls.every(call => wrappers.includes(call)), 'STORE_UPDATE_SUPPLIER_UNKNOWN', update);
+      need(updateCalls.length === wrappers.length && updateCalls.every(call => wrappers.includes(call)), 'STORE_UPDATE_SUPPLIER_UNKNOWN', update);
+      if (finalModes) {
+        const previous = update.parameters[0].name, state = update.parameters[1].name, mode = update.parameters[2].name;
+        const modeStop = fn(storeFile, 'blocked');
+        need(!modeStop.asteriskToken && !modeStop.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+          && modeStop.body.statements.length === 1 && ts.isThrowStatement(modeStop.body.statements[0]), 'STORE_UPDATE_SUPPLIER_UNKNOWN', modeStop);
+        need(guard(update.body.statements[0], "mode === 'final' && (!previous || previous.validatedFinal || !input.authorizeFinal || !equal(state, { ...previous, validatedFinal: validate(previous) }))",
+          { mode, previous, state, input, equal: importOf(storeFile, 'node:util', 'isDeepStrictEqual'),
+            validate: fn(sessionFile, 'nativeImageReviewFinal').name }, modeStop), 'STORE_UPDATE_SUPPLIER_UNKNOWN', update);
+        const cas = imageStoreFlow.cas, transaction = enclosing(cas), tx = transaction?.parameters[0]?.name;
+        need(same(cas.expression, fn(file('packages/domain/src/agent/native-agent-execution.ts'), 'compareNativeAgentCheckpoint').name)
+          && ts.isArrowFunction(transaction) && transaction.parameters.length === 1 && ts.isIdentifier(tx)
+          && transaction.body.statements.length === 3 && ts.isAwaitExpression(transaction.body.statements[0]?.expression)
+          && match(transaction.body.statements[0].expression, 'lockTrashReferences(tx)',
+            { lockTrashReferences: importOf(storeFile, '@openscience/domain', 'lockTrashReferences'), tx }), 'STORE_UPDATE_SUPPLIER_UNKNOWN', cas);
+        const authority = transaction.body.statements[1];
+        need(ts.isIfStatement(authority) && match(authority.expression, "mode === 'final'", { mode })
+          && ts.isAwaitExpression(authority.thenStatement?.expression)
+          && match(authority.thenStatement.expression, 'input.authorizeFinal!(tx)', { input, tx })
+          && ts.isIfStatement(authority.elseStatement) && !authority.elseStatement.elseStatement
+          && match(authority.elseStatement.expression, "mode === 'start'", { mode })
+          && ts.isAwaitExpression(authority.elseStatement.thenStatement?.expression)
+          && match(authority.elseStatement.thenStatement.expression, 'input.authorize(tx)', { input, tx })
+          && transaction.body.statements[2]?.expression === cas.parent && ts.isAwaitExpression(cas.parent), 'STORE_UPDATE_SUPPLIER_UNKNOWN', authority);
+        const authorityInput = member(imageStoreFlow.create.arguments[0], 'authorizeFinal'), authorize = variable(imageStoreFlow.route, 'authorize');
+        need(ts.isArrowFunction(authorize.initializer) && ts.isArrowFunction(authorityInput) && authorityInput.parameters.length === 1
+          && match(authorityInput.body, 'authorize(tx)', { authorize: authorize.name, tx: authorityInput.parameters[0].name }),
+        'STORE_UPDATE_SUPPLIER_UNKNOWN', authorityInput);
+      }
       const marker = fn(factory, factory === storeFactory ? 'marker' : 'current'), task = variable(marker, 'task');
       const taskLookup = unwrap(task.initializer);
       need(ts.isAwaitExpression(task.initializer) && ts.isCallExpression(taskLookup) && match(taskLookup.expression, 'db.agentTask.findUnique', { db: marker.parameters[0].name })
@@ -2150,13 +2611,92 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
           && match(turn.initializer, 'state.turns.at(-1)', { state: persistState })
           && match(binding.initializer, 'state.binding', { state: persistState }), 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', persist);
         const referenceRoles = { input, objectKey: key.name, hash: hash.name, bytes: bytes.name, state: persistState, turn: turn.name };
+        let normalization;
+        if (finalModes) {
+          const reason = 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN';
+          const rawOnly = directVariable(persist.body, 'rawOnly'), source = directVariable(persist.body, 'source');
+          const roles = { ...referenceRoles, binding: binding.name, rawOnly: rawOnly.name, sha: hashFunction.name };
+          need(imageStoreFlow.persist === persist && imageStoreFlow.reference === reference
+            && rawOnly.parent.flags & ts.NodeFlags.Const && source.parent.flags & ts.NodeFlags.Const
+            && match(rawOnly.initializer, "turn.state === 'received'", roles), reason, reference);
+          // This is the existing constructor's finite metadata tuple. A raw
+          // receipt is represented as completed CP metadata, never as a final
+          // response; its distinct policy/discriminator must survive the read.
+          need(match(source.initializer, `binding.sourceKind === 'illustration-image' ? {
+            sourceKind: 'illustration-image', imageIdentity: {
+              requestId: binding.imageReview.requestId, contentHash: binding.imageReview.contentHash,
+              sourceEvidenceIdentity: binding.imageReview.sourceEvidenceIdentity, parentIdentity: binding.imageReview.parentIdentity
+            }, ...(binding.imageReview.imageResultPolicy ? {
+              imageResultPolicy: binding.imageReview.imageResultPolicy,
+              ...((turn.state === 'completed' && turn.received) || rawOnly ? { received: rawOnly ? 'raw-only' : 'decoded' } : {}),
+              ...(state.validatedFinal ? { validatedFinal: { policy: state.validatedFinal.policy,
+                rawCheckpoint: state.validatedFinal.rawCheckpoint, turnOrdinal: state.validatedFinal.turnOrdinal,
+                resultToolCallId: state.validatedFinal.resultToolCallId, responseHash: state.validatedFinal.responseHash } } : {})
+            } : {})
+          } : { artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash }`, roles), reason, source);
+          const sourceUses = valueReferences(source.name), spreads = reference.initializer.properties.filter(ts.isSpreadAssignment);
+          need(sourceUses.length === 1 && ts.isSpreadAssignment(sourceUses[0].parent)
+            && sourceUses[0].parent.parent === reference.initializer && spreads.length === 2
+            && spreads.includes(sourceUses[0].parent), reason, reference);
+          const responseSpread = spreads.find(node => node !== sourceUses[0].parent);
+          need(match(responseSpread.expression, "turn.state === 'completed' ? { responseHash: sha(turn.response.text), finishReason: turn.response.finishReason, hasToolCalls: Boolean(turn.response.toolCalls?.length) } : {}", roles), reason, responseSpread);
+          const decoded = directVariable(readMethod.body, 'state'), decodedBinding = directVariable(readMethod.body, 'binding');
+          const decodedTurn = directVariable(readMethod.body, 'turn'), sameSource = directVariable(readMethod.body, 'sameSource');
+          const readRoles = { input, cp: firstRead.name, state: decoded.name, binding: decodedBinding.name, turn: decodedTurn.name,
+            equal: importOf(storeFile, 'node:util', 'isDeepStrictEqual'), sha: hashFunction.name };
+          need(match(decodedBinding.initializer, 'state.binding', readRoles) && match(decodedTurn.initializer, 'state.turns?.at(-1)', readRoles)
+            && match(sameSource.initializer, `binding?.sourceKind === 'illustration-image' ? cp.sourceKind === 'illustration-image'
+              && equal(cp.imageIdentity, { requestId: binding.imageReview.requestId, contentHash: binding.imageReview.contentHash,
+                sourceEvidenceIdentity: binding.imageReview.sourceEvidenceIdentity, parentIdentity: binding.imageReview.parentIdentity })
+              : cp.sourceKind === undefined && binding.artifactId === cp.artifactId
+                && binding.documentSha256 === cp.documentSha256 && binding.sourceMapHash === cp.sourceMapHash`, readRoles), reason, sameSource);
+          const identityGuard = one(readMethod.body.statements.filter(node => guard(node,
+            `state.kind !== 'hermes-native-agent' || state.binding?.taskId !== cp.taskId || !sameSource
+              || state.binding.runtimeId !== input.execution.runtimeId || state.binding.skillCatalogueId !== input.execution.skillCatalogueId
+              || state.binding.model !== input.execution.model || state.turns.length !== cp.turnCount || !turn
+              || (turn.state === 'received' ? 'completed' : turn.state) !== cp.state || !equal(turn.target, cp.target)
+              || (turn.state === 'completed' && (sha(turn.response.text) !== cp.responseHash || turn.response.finishReason !== cp.finishReason
+                || Boolean(turn.response.toolCalls?.length) !== cp.hasToolCalls))`, { ...readRoles, sameSource: sameSource.name }, stop)), reason);
+          const imageRead = one(readMethod.body.statements.filter(node => ts.isIfStatement(node)
+            && match(node.expression, "binding.sourceKind === 'illustration-image'", readRoles)), reason);
+          need(ts.isBlock(imageRead.thenStatement) && imageRead.thenStatement.statements.length === 5
+            && decoded.end < sameSource.pos && sameSource.end < identityGuard.pos && identityGuard.end <= imageRead.pos, reason, imageRead);
+          const checks = imageRead.thenStatement.statements, final = directVariable(imageRead.thenStatement, 'final');
+          need(guard(checks[0], `cp.sourceKind !== 'illustration-image' || cp.imageResultPolicy !== binding.imageReview.imageResultPolicy
+              || cp.imageResultPolicy !== input.execution.imageResultPolicy
+              || cp.received !== (turn.state === 'received' ? 'raw-only' : turn.state === 'completed' && turn.received ? 'decoded' : undefined)
+              || (turn.state === 'received' && (cp.responseHash !== undefined || cp.finishReason !== undefined || cp.hasToolCalls !== undefined
+                || Object.hasOwn(turn, 'response')))`, readRoles, stop)
+            && guard(checks[1], `cp.received !== undefined && (cp.imageResultPolicy !== 'image-review-tool-final-v1'
+              || turn.imageResultPolicy !== cp.imageResultPolicy || !turn.effectiveRequest
+              || turn.request.messages.flatMap(message => message.images ?? []).length !== 1
+              || turn.state === 'started' || !turn.received || turn.received.policy !== cp.imageResultPolicy
+              || turn.received.provider !== cp.target.provider
+              || (turn.state === 'received' ? turn.received.decoded !== undefined : !turn.received.decoded))`, readRoles, stop)
+            && checks[2] === final.parent.parent && final.parent.flags & ts.NodeFlags.Const && final.parent.declarations.length === 1
+            && match(final.initializer, 'state.validatedFinal', readRoles)
+            && guard(checks[3], `!equal(cp.validatedFinal, final ? { policy: final.policy, rawCheckpoint: final.rawCheckpoint,
+              turnOrdinal: final.turnOrdinal, resultToolCallId: final.resultToolCallId, responseHash: final.responseHash } : undefined)`,
+              { ...readRoles, final: final.name }, stop)
+            && ts.isIfStatement(checks[4]) && !checks[4].elseStatement && same(checks[4].expression, final.name)
+            && match(checks[4].thenStatement?.expression, 'validate(state)', { ...readRoles, validate: fn(sessionFile, 'nativeImageReviewFinal').name })
+            && guard(imageRead.elseStatement, "state.validatedFinal || turn.imageResultPolicy || turn.effectiveRequest || turn.state === 'received' || (turn.state === 'completed' && turn.received)", readRoles, stop), reason, imageRead);
+          normalization = { reference: location(reference), rawOnly: location(rawOnly), source: location(source), inverseRead: location(imageRead) };
+        }
         for (const [name, shape] of [['taskId', 'input.taskId'], ['objectKey', 'objectKey'], ['serializedSha256', 'hash'], ['size', 'bytes.length'],
           ['executionAttempt', 'input.executionAttempt'], ['turnCount', 'state.turns.length'], ['state', 'turn.state'], ['target', 'turn.target']])
-          need(match(member(reference.initializer, name), shape, referenceRoles), 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', reference);
+          need(match(member(reference.initializer, name), finalModes && name === 'executionAttempt'
+            ? "binding.sourceKind === 'illustration-image' ? binding.imageReview.executionAttempt : input.executionAttempt"
+            : finalModes && name === 'state' ? "rawOnly ? 'completed' : turn.state" : shape,
+          { ...referenceRoles, binding: binding.name, rawOnly: finalModes ? directVariable(persist.body, 'rawOnly').name : undefined }), 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', reference);
+        if (normalization) privateStoreChain.normalization = normalization;
         const persistReturn = one(walk(persist, node => ts.isReturnStatement(node) && enclosing(node) === persist), 'PRIVATE_SERIALIZER_RETURN_UNKNOWN');
         need(same(member(persistReturn.expression, 'reference'), reference.name) && same(member(persistReturn.expression, 'bytes'), bytes.name), 'PRIVATE_SERIALIZER_RETURN_UNKNOWN', persistReturn);
 
-        const updateBody = update.body.statements, attempt = updateBody[2];
+        // The actual final-only guard and its authority/CAS mode were bound
+        // above. Retain it there while checking the same remaining transaction
+        // and known-reference order used by the ordinary boolean route.
+        const updateBody = finalModes ? update.body.statements.slice(1) : update.body.statements, attempt = updateBody[2];
         const old = directVariable(update.body, 'old'), next = directVariable(update.body, 'next');
         const updateSet = one(sets.filter(call => enclosing(call) === update), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN');
         const readSet = one(sets.filter(call => enclosing(call) === readMethod), 'PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN');
@@ -2185,20 +2725,26 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
           && callback.body.statements.length === 3 && ts.isAwaitExpression(callback.body.statements[0]?.expression)
           && match(callback.body.statements[0].expression, 'lockTrashReferences(tx)',
             { lockTrashReferences: importOf(storeFile, '@openscience/domain', 'lockTrashReferences'), tx: callback.parameters[0].name })
-          && ts.isIfStatement(callback.body.statements[1]) && !callback.body.statements[1].elseStatement
-          && match(callback.body.statements[1].expression, '!paidCompletion', { paidCompletion: update.parameters[2].name })
-          && ts.isAwaitExpression(callback.body.statements[1].thenStatement?.expression)
-          && match(callback.body.statements[1].thenStatement.expression, 'input.authorize(tx)', { input, tx: callback.parameters[0].name })
+          && (finalModes ? callback === enclosing(imageStoreFlow.cas)
+            : ts.isIfStatement(callback.body.statements[1]) && !callback.body.statements[1].elseStatement
+              && match(callback.body.statements[1].expression, '!paidCompletion', { paidCompletion: update.parameters[2].name })
+              && ts.isAwaitExpression(callback.body.statements[1].thenStatement?.expression)
+              && match(callback.body.statements[1].thenStatement.expression, 'input.authorize(tx)', { input, tx: callback.parameters[0].name }))
           && callback.body.statements[2]?.expression?.expression === calls[0]
           && ts.isAwaitExpression(callback.body.statements[2].expression), 'PRIVATE_UPDATE_TRANSACTION_UNKNOWN', txCall);
         const casObject = unwrap(calls[0].arguments[1]);
+        const finalFlag = finalModes && imageStoreFlow.cas.arguments[1].properties.find(ts.isSpreadAssignment);
         need(same(calls[0].arguments[0], callback.parameters[0].name) && ts.isObjectLiteralExpression(casObject)
-          && casObject.properties.length === 6 && casObject.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
-            && !ts.isComputedPropertyName(property.name)), 'PRIVATE_CAS_REFERENCE_UNKNOWN', calls[0]);
+          && (!finalModes || calls[0] === imageStoreFlow.cas && finalFlag)
+          && casObject.properties.length === (finalModes ? 7 : 6)
+          && casObject.properties.every(property => finalModes && property === finalFlag
+            || (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+              && !ts.isComputedPropertyName(property.name)), 'PRIVATE_CAS_REFERENCE_UNKNOWN', calls[0]);
         for (const [name, shape] of [['taskId', 'input.taskId'], ['executionAttempt', 'input.executionAttempt'], ['expected', 'old'],
           ['next', 'preparedReference'], ['paidCompletion', 'paidCompletion'], ['expectedExecution', 'input.execution']])
-          need(match(member(casObject, name), shape, { input, old: old.name, preparedReference: preparedReference.name,
-            paidCompletion: update.parameters[2].name }), 'PRIVATE_CAS_REFERENCE_UNKNOWN', calls[0]);
+          need(match(member(casObject, name), finalModes && name === 'paidCompletion' ? "mode === 'paid'" : shape,
+            { input, old: old.name, preparedReference: preparedReference.name,
+              paidCompletion: update.parameters[2].name, mode: update.parameters[2].name }), 'PRIVATE_CAS_REFERENCE_UNKNOWN', calls[0]);
         const failedTask = directVariable(attempt.catchClause.block, 'task'), catchError = attempt.catchClause.variableDeclaration?.name;
         const cleanup = catchBody[1], cleanupCall = cleanup?.thenStatement?.expression;
         need(catchBody.length === 3 && catchError && ts.isAwaitExpression(failedTask.initializer)

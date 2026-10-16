@@ -1767,15 +1767,413 @@ test('image capable source pair retains raw/final readers despite an absent fres
     assert.equal(proof(writer.ts,...arrays,writer.projectRoot,current.projectRoot,roots),false,'source-only/copied arrays have no successful collector provenance');
 });
 
-test('current candidate source keeps the legacy video helper conservative', async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram();
-  const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
-  assert.equal(host.text, readFileSync(host.fileName, 'utf8'));
-  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
-  assert.equal(result.status, 'unknown');
-  assert.equal(result.reason, 'HOST_HISTORY_CHECK_BYPASS');
-  assert.ok(!result.proven.includes('host-before-session'));
-  assert.equal(result.releaseCompatible, false);
+test('actual current host message alias preserves the video history-before-session boundary', async () => {
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const { ts, program, projectRoot } = await videoIngressProgram(new Map(), { sourceRef });
+    const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
+    assert.equal(host.text, execFileSync('git', ['show', `${sourceRef}:apps/agent-worker/src/native-agent/host-task.ts`],
+      { cwd: projectRoot, encoding: 'utf8' }));
+    const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+    assert.equal(result.status, 'unknown');
+    assert.ok(result.proven.includes('host-before-session'), `${sourceRef}: ${result.reason}`);
+    assert.equal(result.releaseCompatible, false);
+  }
+});
+
+test('actual current video session preserves decoded history and checkpoints across disjoint image branches', async t => {
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, boundary: 'source-only', reason: result.reason, proven: result.proven,
+      storeGraph: result.storeGraph.status, privateStoreChain: result.privateStoreChain.status }));
+    assert.ok(result.proven.includes('session-prefix'), result.reason);
+    assert.ok(result.proven.includes('session-checkpoint-prefix'), result.reason);
+    assert.equal(result.releaseCompatible, false);
+  }
+});
+
+test('current video Session clone rejects opaque mutations and unproved containing copies before history proof', async t => {
+  const policy = "{ sourceKind: 'illustration-image', imageReview: { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' } }";
+  const cases = [
+    ['exact-High-Object-assign', `Object.assign(binding, ${policy});`],
+    ['computed-direct-clone-write', "binding['sourceKind'] = 'illustration-image'; binding['imageReview'] = { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' };"],
+    ['opaque-containing-copy', `const opaque = value => Object.assign(value.holder, ${policy}); opaque({ holder: binding });`],
+    ['checkpoint-binding-mutation', `Object.assign(started.binding, ${policy});`, 'if (!retry) await input.store.compareAndSet(state, started);'],
+    ['checkpoint-containing-copy', `const opaque = value => Object.assign(value.checkpoint.binding, ${policy}); opaque({ checkpoint: started });`,
+      'if (!retry) await input.store.compareAndSet(state, started);'],
+    ['retry-binding-mutation', `if (retry) Object.assign(retry.started.binding, ${policy});`, 'const started: NativeAgentSessionState = retry?.started ??'],
+    ['rejection-containing-copy', `const opaque = value => Object.assign(value.started.binding, ${policy}); if (attempt.rejection) opaque(attempt.rejection);`,
+      'attempt.rejection = { started, error };', true],
+  ];
+  for (const [name, inserted, point, append] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/session.ts', value => {
+      const before = point ?? 'const binding = structuredClone(input.binding);';
+      assert.equal(value.split(before).length, 2);
+      return value.replace(before, !point || append ? before + '\n  ' + inserted : inserted + '\n  ' + before);
+    }]]),
+    { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), result.reason);
+    assert.ok(!result.proven.includes('session-prefix'), `${name}: ${result.reason}`);
+    assert.ok(!result.proven.includes('session-checkpoint-prefix'), `${name}: ${result.reason}`);
+  });
+});
+
+test('current video Session snapshot input refuses mutations before the intrinsic clone', async t => {
+  const policy = "{ sourceKind: 'illustration-image', imageReview: { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' } }";
+  for (const [name, receiver] of [['original-input', 'input.binding'], ['implicit-argument-input', 'arguments[0].binding']]) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/session.ts', value =>
+      value.replace('const binding = structuredClone(input.binding);', `Object.assign(${receiver}, ${policy});\n  const binding = structuredClone(input.binding);`)]]),
+    { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), result.reason);
+    assert.ok(!result.proven.includes('session-prefix'), `${name}: ${result.reason}`);
+  });
+});
+
+test('current video Session clone refuses replacement of a checkpoint store consumer before history proof', async () => {
+  const input = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/session.ts', value =>
+    value.replace('const binding = structuredClone(input.binding);', "const binding = structuredClone(input.binding);\n  input.store.compareAndSet = async (_state, checkpoint) => { Object.assign(checkpoint.binding, { sourceKind: 'illustration-image', imageReview: { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' } }); };")]]),
+  { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+  const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+  assert.ok(result.proven.includes('host-before-session'), result.reason);
+  assert.ok(!result.proven.includes('session-prefix'), result.reason);
+});
+
+test('current video session rejects unproven profile guards and changed decoder submission suppliers', async t => {
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts', session = 'apps/agent-worker/src/native-agent/session.ts';
+  const binding = 'const binding = { taskId: input.task.id, artifactId:';
+  const sessionCall = 'const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });';
+  const terminal = "if (binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1') {";
+  const rawPrefix = "if (binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'\n        && messages.some";
+  const last = (value, before, after) => {
+    const index = value.lastIndexOf(before); assert.ok(index >= 0);
+    return value.slice(0, index) + after + value.slice(index + before.length);
+  };
+  const cases = [
+    ['direct-image-kind', illustration, value => value.replace(binding, "const binding = { sourceKind: 'illustration-image', taskId: input.task.id, artifactId:")],
+    ['computed-kind', illustration, value => value.replace(binding, "const binding = { ['source' + 'Kind']: 'illustration-image', taskId: input.task.id, artifactId:")],
+    ['literal-kind-spread', illustration, value => value.replace(binding, "const binding = { ...{ sourceKind: 'illustration-image' }, taskId: input.task.id, artifactId:")],
+    ['conditional-kind-spread', illustration, value => value.replace(binding, "const binding = { ...(nativeVideo ? { sourceKind: 'illustration-image' } : {}), taskId: input.task.id, artifactId:")],
+    ['opaque-binding-spread', illustration, value => value.replace(binding, 'const binding = { ...input.opaqueBinding, taskId: input.task.id, artifactId:')],
+    ['mutable-binding', illustration, value => value.replace(binding, 'let binding = { taskId: input.task.id, artifactId:')],
+    ['mutated-kind', illustration, value => value.replace(sessionCall, "binding['sourceKind'] = 'illustration-image';\n  " + sessionCall)],
+    ['escaped-binding', illustration, value => value.replace(sessionCall, "Object.assign(binding, { sourceKind: 'illustration-image' });\n  " + sessionCall)],
+    ['binding-alias', illustration, value => value.replace(sessionCall, 'const escapedBinding = binding;\n  ' + sessionCall)],
+    ['unawaited-entry-authorization', session, value => value.replace('async function completeOnce(raw: unknown) {\n      await authorize();',
+      'async function completeOnce(raw: unknown) {\n      authorize();')],
+    ['unknown-entry-effect', session, value => value.replace('async function completeOnce(raw: unknown) {\n      await authorize();',
+      'async function completeOnce(raw: unknown) {\n      await authorize(); opaque();')],
+    ['terminal-profile-guard', session, value => value.replace(terminal, terminal.replace("'illustration-image'", "'paper'"))],
+    ['terminal-effect-before-guard', session, value => value.replace(terminal, terminal.replace('if (', 'if (opaque() && '))],
+    ['raw-effect-before-guard', session, value => value.replace(rawPrefix, rawPrefix.replace('if (', 'if (opaque() && '))],
+    ['wrong-parser', session, value => value.replace('nativeAgentSdkRequest(raw, binding.model)', 'otherSdkRequest(raw, binding.model)')],
+    ['wrong-raw-request', session, value => value.replace('nativeAgentSdkRequest(raw, binding.model)', 'nativeAgentSdkRequest({}, binding.model)')],
+    ['wrong-decoder-model', session, value => value.replace('nativeAgentSdkRequest(raw, binding.model)', 'nativeAgentSdkRequest(raw, input.otherModel)')],
+    ['state-before-decoder', session, value => value.replace('const { messages, options } = nativeAgentSdkRequest(raw, binding.model);\n      let state = await read();',
+      'let state = await read();\n      const { messages, options } = nativeAgentSdkRequest(raw, binding.model);')],
+    ['wrong-state-supplier', session, value => value.replace('let state = await read();', 'let state = await input.store.read();')],
+    ['different-common-history', session, value => value.replace('checkHistory(messages, state);', 'checkHistory([], state);')],
+    ['unawaited-text-submit-authorization', session, value => last(value,
+      'await authorize(); state = await read(); checkHistory(messages, state);', 'authorize(); state = await read(); checkHistory(messages, state);')],
+    ['different-text-submit-history', session, value => last(value, 'checkHistory(messages, state);', 'checkHistory([], state);')],
+    ['different-text-submit-read', session, value => last(value, 'state = await read(); checkHistory(messages, state);',
+      'state = await otherRead(); checkHistory(messages, state);')],
+    ['different-text-supplier', session, value => value.replace('input.gateway.nativeAgentComplete(messages, boundedOptions,',
+      'input.gateway.otherComplete(messages, boundedOptions,')],
+    ['different-text-request', session, value => value.replace('input.gateway.nativeAgentComplete(messages, boundedOptions,',
+      'input.gateway.nativeAgentComplete([], boundedOptions,')],
+    ['unbound-text-submit-callback', session, value => last(value, 'submitProvider: async (target, submit) =>', 'unusedProvider: async (target, submit) =>')],
+    ['different-retry-checkpoint', session, value => value.replace('retry?.started ??', 'state ??'), 'session-checkpoint-prefix'],
+  ];
+  for (const [name, file, change, cutoff = 'session-prefix'] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[file, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), `${name} must reach this actual Session boundary: ${result.reason}`);
+    assert.ok(!result.proven.includes(cutoff), `${name}: ${result.reason}`);
+    assert.equal(result.releaseCompatible, false);
+  });
+});
+
+test('actual image Host attempt is bound to its guarded fresh task snapshot', async t => {
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, boundary: 'source-only', reason: result.reason, proven: result.proven, at: result.at }));
+    assert.ok(result.storeGraph.hosts.some(host => host.at.file.endsWith('/native-agent/illustration-task.ts') && host.at.line === 141), result.reason);
+    assert.equal(result.releaseCompatible, false);
+  }
+});
+
+test('actual image finalizer consumers preserve the bounded store and completed state', async t => {
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, reason: result.reason, at: result.at, proven: result.proven }));
+    assert.equal(result.storeGraph.finalizations?.length, 2, result.reason);
+    assert.ok(result.storeGraph.finalizations.some(row => row.file.endsWith('/native-agent/illustration-task.ts') && row.line === 126));
+    assert.ok(result.storeGraph.finalizations.some(row => row.file.endsWith('/native-agent/session.ts') && row.line === 215));
+    assert.ok(result.proven.includes('session-checkpoint-prefix'), result.reason);
+    assert.equal(result.privateStoreChain.status, 'conditional', 'the joined serializer retains the private-chain obligations');
+    assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', 'report the original remaining origins after the joined store proof');
+    assert.ok(result.proven.includes('store-capability-use'));
+    assert.equal(result.releaseCompatible, false);
+  }
+});
+
+test('actual image checkpoint normalization keeps captured attempt and raw receipt identity', async t => {
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, reason: result.reason, at: result.at, proven: result.proven }));
+    assert.equal(result.storeGraph.finalizations?.length, 2, result.reason);
+    assert.ok(result.privateStoreChain.normalization, result.reason);
+    assert.equal(result.privateStoreChain.normalization.reference.file, 'apps/agent-worker/src/native-agent/task-store.ts');
+    assert.ok(result.proven.includes('session-checkpoint-prefix'), result.reason);
+    assert.equal(result.privateStoreChain.status, 'conditional');
+    assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN');
+    assert.ok(result.proven.includes('generic-private-store-chain'));
+    assert.equal(result.releaseCompatible, false);
+  }
+});
+
+test('image checkpoint normalization rejects lost source policy and private reference order', async t => {
+  const store = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const replace = (from, to) => value => { assert.ok(value.includes(from), from); return value.replace(from, to); };
+  const persist = change => value => {
+    const a = value.indexOf('  async function persist('), b = value.indexOf('  async function update(', a);
+    assert.ok(a >= 0 && b > a); const before = value.slice(a, b), after = change(before); assert.notEqual(after, before);
+    return value.slice(0, a) + after + value.slice(b);
+  };
+  const serializer = ['PRIVATE_SERIALIZER_ORIGIN_UNKNOWN'];
+  const cases = [
+    ['swapped-source-attempt-arms', replace("binding.sourceKind === 'illustration-image' ? binding.imageReview.executionAttempt : input.executionAttempt",
+      "binding.sourceKind === 'illustration-image' ? input.executionAttempt : binding.imageReview.executionAttempt"), ['STORE_HOST_IDENTITY_UNKNOWN']],
+    ['wrong-image-attempt-receiver', replace("binding.sourceKind === 'illustration-image' ? binding.imageReview.executionAttempt : input.executionAttempt",
+      "binding.sourceKind === 'illustration-image' ? input.taskId : input.executionAttempt"), ['STORE_HOST_IDENTITY_UNKNOWN']],
+    ['wrong-raw-only-supplier', replace("const rawOnly = turn.state === 'received';", "const rawOnly = turn.state === 'started';"), serializer],
+    ['wrong-raw-reference-state', replace("state: rawOnly ? 'completed' : turn.state", "state: rawOnly ? 'received' : turn.state"), serializer],
+    ['missing-persist-policy', replace('imageResultPolicy: binding.imageReview.imageResultPolicy,', 'imageResultPolicy: undefined,'), ['IMAGE_PROTOCOL_PARTITION_UNKNOWN']],
+    ['raw-marked-decoded', replace("received: rawOnly ? 'raw-only' as const : 'decoded' as const", "received: rawOnly ? 'decoded' as const : 'decoded' as const"), serializer],
+    ['missing-read-policy', replace('|| cp.imageResultPolicy !== input.execution.imageResultPolicy', '|| false'), serializer],
+    ['missing-response-absence', replace("Object.hasOwn(turn, 'response')", 'false'), serializer],
+    ['wrong-received-policy', replace('turn.received.policy !== cp.imageResultPolicy', 'turn.received.policy !== binding.model'), serializer],
+    ['wrong-image-source-identity', persist(replace('sourceEvidenceIdentity: binding.imageReview.sourceEvidenceIdentity', 'sourceEvidenceIdentity: binding.imageReview.parentIdentity')), serializer],
+    ['wrong-inverse-source-identity', replace('isDeepStrictEqual(cp.imageIdentity,', 'isDeepStrictEqual(cp.unprovedIdentity,'), serializer],
+    ['ordinary-source-contamination', replace(': { artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash }',
+      ": { artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash, received: 'decoded' }"), serializer],
+    ['wrong-serialized-bytes', persist(replace('Buffer.from(JSON.stringify(state))', 'Buffer.from(JSON.stringify({}))')), serializer],
+    ['wrong-serialized-hash', persist(replace('const hash = sha(bytes);', "const hash = sha(Buffer.from('wrong'));")), serializer],
+    ['late-source-override', replace('...source, executionAttempt:', "...source, serializedSha256: 'wrong', executionAttempt:"), serializer],
+    ['wrong-private-cas-expected', replace('expected: old,', 'expected: input.execution.checkpoint,'), ['PRIVATE_CAS_REFERENCE_UNKNOWN']],
+    ['premature-known-registration', value => {
+      assert.ok(value.includes('    known.set(next.serializedSha256, next);'));
+      return value.replace('    known.set(next.serializedSha256, next);', '')
+        .replace('const prepared = await persist(state); next = prepared.reference;',
+          'const prepared = await persist(state); next = prepared.reference; known.set(next.serializedSha256, next);');
+    }, ['PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN']],
+  ];
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const flow = runInNewContext(`${component}; finiteImageStoreFlowTerms`, { resolve, relative });
+  for (const [name, change, reasons] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[store, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown', name);
+    assert.ok(reasons.includes(result.reason), `${name}: ${result.reason}`);
+    assert.equal(result.proven.includes('generic-private-store-chain'), false, 'changed metadata/order cannot be hidden by the later remaining origins');
+    if (result.reason === 'STORE_HOST_IDENTITY_UNKNOWN') {
+      assert.equal(result.at.file, 'apps/agent-worker/src/native-agent/illustration-task.ts'); assert.equal(result.at.line, 141);
+      assert.throws(() => flow(input.ts, videoPairContext(input)), error => error.reason === 'IMAGE_STORE_FLOW_UNKNOWN');
+    }
+    if (result.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN') {
+      assert.equal(result.proven.includes('session-prefix'), false, 'the original protocol partition refuses before either consumer proof');
+      assert.equal(result.privateStoreChain.normalization, undefined);
+      assert.throws(() => flow(input.ts, videoPairContext(input)), error => error.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN');
+    }
+    assert.equal(result.releaseCompatible, false);
+  });
+});
+
+test('image finalizer rejects changed validation state consumers and final-mode suppliers', async t => {
+  const session = 'apps/agent-worker/src/native-agent/session.ts', route = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const store = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const finalizer = change => value => {
+    const start = value.indexOf('export async function finalizeNativeImageReviewState('), end = value.indexOf('/** Owns SDK', start);
+    assert.ok(start >= 0 && end > start); const before = value.slice(start, end), after = change(before); assert.notEqual(after, before);
+    return value.slice(0, start) + after + value.slice(end);
+  };
+  const replace = (from, to) => value => { assert.ok(from instanceof RegExp ? from.test(value) : value.includes(from), String(from)); return value.replace(from, to); };
+  const finalReason = ['STORE_FINALIZER_CONSUMER_UNKNOWN'];
+  const modeReason = ['IMAGE_STORE_FLOW_UNKNOWN', 'STORE_UPDATE_SUPPLIER_UNKNOWN', 'STORE_RETURN_UNKNOWN', 'STORE_HOST_IDENTITY_UNKNOWN'];
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const flow = runInNewContext(`${component}; finiteImageStoreFlowTerms`, { resolve, relative });
+  const cases = [
+    ['late-validator', session, finalizer(replace(/const final = nativeImageReviewFinal\(state\);\r?\n  if \(state.validatedFinal\) return state;/u,
+      'if (state.validatedFinal) return state;\n  const final = nativeImageReviewFinal(state);')), finalReason],
+    ['removed-validator', session, finalizer(replace('nativeImageReviewFinal(state)', 'state.validatedFinal')), finalReason],
+    ['awaited-validator', session, finalizer(replace('nativeImageReviewFinal(state)', 'await nativeImageReviewFinal(state)')), finalReason],
+    ['final-declaration-effect', session, finalizer(replace('const final = nativeImageReviewFinal(state);',
+      'const final = nativeImageReviewFinal(state), leaked = opaque(state);')), finalReason],
+    ['next-declaration-effect', session, finalizer(replace('const next = { ...state, validatedFinal: final };',
+      'const next = { ...state, validatedFinal: final }, leaked = opaque(state);')), finalReason],
+    ['rest-state-receiver', session, finalizer(replace('state: NativeAgentSessionState)', '...state: any)')), finalReason, true],
+    ['rest-final-wrapper-receiver', store, replace("finalize: (previous, state) => update(previous, state, 'final')",
+      "finalize: (previous, ...state) => update(previous, state, 'final')"), finalReason, true],
+    ['wrong-validator-symbol', session, finalizer(replace('nativeImageReviewFinal(state)', 'deriveNativeImageReviewFinal(state)')), finalReason],
+    ['already-final-bypass', session, finalizer(replace('if (state.validatedFinal) return state;', 'if (state.validatedFinal) return { ...state };')), finalReason],
+    ['missing-finalize-guard', session, finalizer(replace("if (!store.finalize) blocked('pure image finalization is unavailable');", '')), finalReason],
+    ['unawaited-finalize', session, finalizer(replace('await store.finalize(state, next)', 'store.finalize(state, next)')), finalReason],
+    ['different-finalize-receiver', session, finalizer(replace('await store.finalize(state, next)', 'await opaque.finalize(state, next)')), finalReason],
+    ['swapped-state', session, finalizer(replace('store.finalize(state, next)', 'store.finalize(next, state)')), finalReason],
+    ['wrong-next', session, finalizer(replace('store.finalize(state, next)', 'store.finalize(state, state)')), finalReason],
+    ['next-turn-override', session, finalizer(replace('{ ...state, validatedFinal: final }', '{ ...state, validatedFinal: final, turns: [] }')), finalReason],
+    ['next-binding-override', session, finalizer(replace('{ ...state, validatedFinal: final }', '{ ...state, validatedFinal: final, binding: opaque }')), finalReason],
+    ['wrong-return-value', session, finalizer(replace('return next;', 'return state;')), finalReason],
+    ['async-rejection', session, replace('function blocked(reason: string): never', 'async function blocked(reason: string): Promise<never>'), finalReason],
+    ['state-escape', session, finalizer(replace('const final = nativeImageReviewFinal(state);', 'opaque(state); const final = nativeImageReviewFinal(state);')), finalReason],
+    ['whole-store-escape', session, finalizer(replace('const final = nativeImageReviewFinal(state);', 'opaque(store); const final = nativeImageReviewFinal(state);')), finalReason],
+    ['route-state-mutation', route, replace('const prior = saved?.turns.at(-1);', 'opaque(saved); const prior = saved?.turns.at(-1);'), finalReason],
+    ['route-wrong-state', route, replace('finalizeNativeImageReviewState(store, saved)', 'finalizeNativeImageReviewState(store, structuredClone(saved))'), finalReason],
+    ['route-wrong-store', route, replace('finalizeNativeImageReviewState(store, saved)', 'finalizeNativeImageReviewState({ ...store }, saved)'), finalReason],
+    ['additional-helper-caller', route, value => value + '\nexport async function unprovedFinal(store: any,state: any) { return await finalizeNativeImageReviewState(store,state); }\n', finalReason],
+    ['helper-alias', route, replace('const saved = await store.read();', 'const saved = await store.read(); const hiddenFinalizer = finalizeNativeImageReviewState;'), ['FACTORY_ALIAS_OR_ESCAPE_UNKNOWN']],
+    ['received-state-mutation', session, replace('if (!receivedState) blocked', 'opaque(receivedState); if (!receivedState) blocked'), finalReason],
+    ['received-state-alias', session, replace('if (!receivedState) blocked', 'const leaked = receivedState; if (!receivedState) blocked'), finalReason],
+    ['received-wrong-completion', session, replace('await input.store.complete(started, receivedState);', 'await input.store.complete(started, started);'), finalReason],
+    ['raw-wrong-cas-previous', session, replace('await input.store.compareAndSet(state, started);', 'await input.store.compareAndSet(null, started);'), finalReason],
+    ['raw-store-escape', session, replace('if (!receivedState) blocked', 'opaque(input.store); if (!receivedState) blocked'), finalReason],
+    ['raw-store-replacement', session, replace('if (!receivedState) blocked', 'input.store.complete = opaque; if (!receivedState) blocked'), finalReason],
+    ['raw-reflection', session, replace('if (!receivedState) blocked', 'eval("receivedState.binding = opaque"); if (!receivedState) blocked'), finalReason],
+    ['unproved-live-consumer', session, replace('let retry: { started:', 'opaque(input.store); let retry: { started:'), ['SESSION_REQUEST_NOT_DECODED']],
+    ['changed-profile-partition', session, replace(/if \(binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'\r?\n        && messages.some/u, "if (binding.sourceKind === 'paper' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'\n        && messages.some"), ['IMAGE_PROTOCOL_PARTITION_UNKNOWN']],
+    ['extra-factory-method', store, replace('compareAndSet: (previous, state)', 'opaqueWriter() {}, compareAndSet: (previous, state)'), modeReason],
+    ['duplicate-factory-member', store, replace('compareAndSet: (previous, state)', 'read: () => null, compareAndSet: (previous, state)'), modeReason],
+    ['computed-factory-member', store, replace('compareAndSet: (previous, state)', "['compareAndSet']: (previous, state)"), modeReason],
+    ['getter-factory-member', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "get finalize() { return (previous, state) => update(previous, state, 'final'); }"), modeReason],
+    ['wrong-final-wrapper', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "finalize: (previous, state) => opaque(previous, state, 'final')"), modeReason],
+    ['swapped-wrapper-state', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "finalize: (previous, state) => update(state, previous, 'final')"), modeReason],
+    ['paid-substitutes-final', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "finalize: (previous, state) => update(previous, state, 'paid')"), modeReason],
+    ['start-substitutes-paid', store, replace("complete: (previous, state) => update(previous, state, 'paid')", "complete: (previous, state) => update(previous, state, 'start')"), modeReason],
+    ['missing-final-cas-flag', store, replace('validatedFinalization: true', 'validatedFinalization: false'), modeReason],
+    ['paid-final-cas-flag', store, replace("...(mode === 'final' ? { validatedFinalization: true }", "...(mode === 'paid' ? { validatedFinalization: true }"), modeReason],
+    ['missing-final-authority-guard', store, replace('previous.validatedFinal || !input.authorizeFinal', 'previous.validatedFinal || false'), modeReason],
+    ['missing-final-authorization', store, replace('await input.authorizeFinal!(tx)', 'await input.authorize(tx)'), modeReason],
+    ['wrong-final-authority-supplier', route, replace('authorizeFinal: tx => authorize(tx)', 'authorizeFinal: tx => authorize(tx, true)'), modeReason],
+  ];
+  for (const [name, file, change, reasons, noFinalizations] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[file, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown', name);
+    assert.ok(reasons.includes(result.reason), `${name}: ${result.reason}`);
+    if (noFinalizations) assert.equal(result.storeGraph.finalizations, undefined, 'unsupported receiver semantics cannot prove either finalizer call');
+    if (result.reason === 'STORE_HOST_IDENTITY_UNKNOWN') {
+      assert.equal(result.at.file, route); assert.equal(result.at.line, 141);
+      assert.throws(() => flow(input.ts, videoPairContext(input)), error => error.reason === 'IMAGE_STORE_FLOW_UNKNOWN',
+        'the earlier Host refusal must be caused by this original mode supplier, not another guard');
+    }
+    assert.equal(result.releaseCompatible, false, name);
+    assert.notEqual(result.reason, 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', 'the honest next refusal must not conceal this changed obligation');
+  });
+});
+
+test('image Host guarded attempt rejects unproved dominance snapshots and changed consumers', async t => {
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts', session = 'apps/agent-worker/src/native-agent/session.ts';
+  const editRoute = change => value => {
+    const start = value.indexOf('export async function runNativeImageReviewTask('), end = value.indexOf('\nfunction stopped(', start);
+    assert.ok(start >= 0 && end > start);
+    const before = value.slice(start, end), after = change(before); assert.notEqual(after, before);
+    return value.slice(0, start) + after + value.slice(end);
+  };
+  const editGuard = change => editRoute(value => {
+    const start = value.indexOf('  if (!input.gateway || !input.inboxRoot || !input.runtime');
+    const end = value.indexOf('stopped();', start) + 'stopped();'.length;
+    assert.ok(start >= 0 && end > start);
+    return value.slice(0, start) + change(value.slice(start, end)) + value.slice(end);
+  });
+  const afterRead = text => editRoute(value => value.replace('const saved = await store.read();', 'const saved = await store.read();\n  ' + text));
+  const afterGuard = text => editGuard(value => value + '\n  ' + text);
+  const cases = [
+    ['missing-guard', illustration, editGuard(value => value.replace(' || input.task.executionAttempt !== envelope.executionAttempt', ''))],
+    ['inverted-guard', illustration, editGuard(value => value.replace('input.task.executionAttempt !== envelope.executionAttempt', 'input.task.executionAttempt === envelope.executionAttempt'))],
+    ['nonterminal-stop', illustration, value => value.replace('function stopped(): never { throw', 'function stopped(): never { return; throw')],
+    ['async-stop', illustration, value => value.replace('function stopped(): never', 'async function stopped(): never')],
+    ['swallowed-stop', illustration, editGuard(value => 'try { ' + value + ' } catch {}')],
+    ['wrong-task-guard', illustration, editGuard(value => value.replace('input.task.executionAttempt', 'input.otherTask.executionAttempt'))],
+    ['wrong-envelope-field', illustration, editGuard(value => value.replace('!== envelope.executionAttempt', '!== envelope.requestId'))],
+    ['nested-guard', illustration, editGuard(value => 'if (input.gateway) { ' + value + ' }')],
+    ['capture-before-guard-mutation', illustration, afterRead('input.task.executionAttempt += 1; envelope.executionAttempt = input.task.executionAttempt;')],
+    ['after-guard-mutation', illustration, afterGuard('envelope.executionAttempt += 1;')],
+    ['task-alias', illustration, afterRead('const escaped = input.task;')],
+    ['opaque-input', illustration, afterRead('opaque(input);')],
+    ['envelope-alias', illustration, afterRead('const escaped = envelope;')],
+    ['opaque-envelope-copy', illustration, afterGuard('opaque({ envelope });')],
+    ['reflective-local-mutation', illustration, afterRead('eval("input.task.executionAttempt += 1; envelope.executionAttempt = input.task.executionAttempt");')],
+    ['arguments-task-mutation', illustration, afterRead('arguments[0].task.executionAttempt += 1;')],
+    ['wrong-store', illustration, editRoute(value => value.replace('session, store, authorize: callAuthority,', 'session, store: input.otherStore, authorize: callAuthority,'))],
+    ['wrong-session', illustration, editRoute(value => value.replace('session, store, authorize: callAuthority,', 'session: input.otherSession, store, authorize: callAuthority,'))],
+    ['wrong-Host', illustration, editRoute(value => value.replace('await runHostedNativeTask(', 'await otherHostedTask('))],
+    ...['taskId', 'runtimeId', 'model'].map(key => [`changed-${key}`, illustration,
+      editRoute(value => value.replace('config: { ...binding, goal:', `config: { ...binding, ${key}: 'wrong', goal:`))]),
+    ['Session-original-binding-mutation', session, value => value.replace('const binding = structuredClone(input.binding);',
+      "input.binding.imageReview.executionAttempt += 1;\n  const binding = structuredClone(input.binding);")],
+  ];
+  for (const [name, file, change] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[file, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const source = input.program.getSourceFiles().find(value => value.fileName.replaceAll('\\', '/').endsWith('/native-agent/illustration-task.ts'));
+    const owner = source.statements.find(node => input.ts.isFunctionDeclaration(node) && node.name?.text === 'runNativeImageReviewTask');
+    const statement = owner.body.statements.find(node => input.ts.isVariableStatement(node)
+      && node.declarationList.declarations.some(value => value.name.text === 'native'));
+    const line = source.getLineAndCharacterOfPosition(statement.declarationList.declarations[0].initializer.getStart()).line + 1;
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(!result.storeGraph.hosts.some(host => host.at.file.endsWith('/native-agent/illustration-task.ts') && host.at.line === line), `${name}: ${result.reason}`);
+    assert.equal(result.releaseCompatible, false);
+  });
+});
+
+test('current host message alias rejects changed history and suppliers using actual source symbols', async t => {
+  const sourceRef = 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e';
+  const host = 'apps/agent-worker/src/native-agent/host-task.ts';
+  const cases = [
+    ['unawaited-history', value => value.replace('await validateSourceHistory(value);', 'validateSourceHistory(value);')],
+    ['late-history', value => value.replace('await validateSourceHistory(value);\n        const response = await input.session.complete(value);',
+      'const response = await input.session.complete(value);\n        await validateSourceHistory(value);')],
+    ['different-request', value => value.replace('validateSourceHistory(value);', 'validateSourceHistory({ ...value });'), 'HOST_HISTORY_ARGUMENT_UNBOUND'],
+    ['wrong-alias-supplier', value => value.replace('const message = response.choices[0]!.message;', 'const message = value;')],
+    ['mutable-alias', value => value.replace('const message =', 'let message =')],
+    ['alias-call', value => value.replace('const message = response.choices[0]!.message;', 'const message = escape(response.choices[0]!.message);')],
+    ['alias-getter', value => value.replace('const message = response.choices[0]!.message;',
+      'const message = { get tool_calls() { return response.choices[0]!.message.tool_calls; } };')],
+    ['alias-escape', value => value.replace('sequence: toolSequence++,', 'sequence: (escape(message), toolSequence++),')],
+    ['different-slot-source', value => value.replace('message.tool_calls ?? [] : []', 'value.tool_calls ?? [] : []')],
+    ['preauthorized-slots', value => value.replace('authorized: false, called: false', 'authorized: true, called: false')],
+    ['different-response-return', value => value.replace('return respond(res, 200, response);', 'return respond(res, 200, message);')],
+    ['extra-effect', value => value.replace('const message = response.choices[0]!.message;', 'const message = response.choices[0]!.message; escape(message);')],
+  ];
+  const chatOnly = change => value => {
+    const start = value.indexOf("      if (req.url === '/v1/chat/completions') {");
+    const end = value.indexOf('      if (!record(value)) blocked();', start);
+    assert.ok(start >= 0 && end > start);
+    const before = value.slice(start, end), after = change(before);
+    assert.notEqual(after, before);
+    return value.slice(0, start) + after + value.slice(end);
+  };
+  for (const [name, change, reason = 'HOST_HISTORY_CHECK_BYPASS'] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[host, chatOnly(change)]]), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.reason, reason);
+    assert.ok(!result.proven.includes('host-before-session'));
+    assert.equal(result.releaseCompatible, false);
+  });
+  await t.test('renamed-local-response-and-message-remain-bound', async () => {
+    const input = await videoIngressProgram(new Map([[host, chatOnly(value => value.replace(/\bresponse\b/gu, 'completion')
+      .replace('const message =', 'const reply =').replace("'tool_calls' in message", "'tool_calls' in reply")
+      .replace('message.tool_calls', 'reply.tool_calls'))]]), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), result.reason);
+    assert.equal(result.releaseCompatible, false);
+  });
 });
 
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
