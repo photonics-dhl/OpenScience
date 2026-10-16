@@ -1289,6 +1289,9 @@
   "attachmentViewer": {
     "preview": "Preview",
     "download": "Download",
+    "openOriginal": "Open original",
+    "downloadOriginal": "Download original",
+    "pdfPreviewNotice": "PDF previews depend on your browser. You can also open or download the original.",
     "close": "Close",
     "loading": "Loading preview…",
     "unavailable": "This attachment could not be previewed. Download it to view the original file.",
