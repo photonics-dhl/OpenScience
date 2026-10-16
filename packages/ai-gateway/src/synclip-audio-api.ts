@@ -28,6 +28,18 @@ export type SynclipAudioPriceQuote = { characters: number; estimatedCoins: numbe
 export type SynclipAudioQuote = SynclipAudioPriceQuote & { workerCeiling: number; hostCeiling: number };
 export interface SynclipAudioRequest { text: string; voice: string; speed?: number }
 export interface SynclipAudioSubmission { task_id: string }
+/** Interactive microphone recordings use canonical mono 16 kHz PCM WAV, at most one minute. */
+export const HERMES_VOICE_MAX_SECONDS = 60;
+export const HERMES_VOICE_MAX_WAV_BYTES = 44 + HERMES_VOICE_MAX_SECONDS * 32_000;
+export interface SynclipTranscriptionRequest { audio: Buffer; language?: 'zh' | 'en' }
+export interface SynclipTranscriptionSubmission {
+  task_id: string; status: 'queued' | 'processing'; poll_url?: string;
+  credits_charged: number; duration_seconds: number;
+}
+export type SynclipTranscriptionTask = { task_id: string; coins_used?: number; progress?: number } & (
+  | { status: 'queued' | 'processing' | 'failed'; output?: never }
+  | { status: 'completed'; output: { type: 'text'; text: string; duration: number; language?: string } }
+);
 export type SynclipAudioStatus = 'queued' | 'processing' | 'completed' | 'failed';
 interface SynclipAudioTaskBase { task_id: string; progress?: number; coins_used?: number }
 export type SynclipAudioTask = SynclipAudioTaskBase & (
@@ -88,6 +100,39 @@ function publicUrl(value: unknown): string {
 export function validateSynclipAudioTaskId(value: unknown): string {
   if (!token(value)) throw new SynclipAudioError('SYNCLIP_AUDIO_TASK_ID_INVALID', 'invalid');
   return value;
+}
+
+/** Validate duration from the bytes, never from a browser-supplied duration or MIME label. */
+export function validateHermesVoiceWav(value: unknown): number {
+  if (!Buffer.isBuffer(value) || value.length < 46 || value.length > HERMES_VOICE_MAX_WAV_BYTES
+    || value.toString('ascii', 0, 4) !== 'RIFF' || value.readUInt32LE(4) !== value.length - 8
+    || value.toString('ascii', 8, 16) !== 'WAVEfmt ' || value.readUInt32LE(16) !== 16
+    || value.readUInt16LE(20) !== 1 || value.readUInt16LE(22) !== 1
+    || value.readUInt32LE(24) !== 16_000 || value.readUInt32LE(28) !== 32_000
+    || value.readUInt16LE(32) !== 2 || value.readUInt16LE(34) !== 16
+    || value.toString('ascii', 36, 40) !== 'data' || value.readUInt32LE(40) !== value.length - 44
+    || (value.length - 44) % 2 !== 0) throw new SynclipAudioError('SYNCLIP_AUDIO_REQUEST_INVALID', 'invalid');
+  return (value.length - 44) / 32_000;
+}
+
+function transcriptionTask(value: unknown, expectedId: string): SynclipTranscriptionTask {
+  const id = validateSynclipAudioTaskId(expectedId);
+  if (!record(value) || value.task_id !== id || !['queued', 'processing', 'completed', 'failed'].includes(String(value.status))
+    || (value.progress !== undefined && (!nonnegative(value.progress) || value.progress > 100))
+    || (value.coins_used !== undefined && !nonnegative(value.coins_used))) throw invalid();
+  const base = { task_id: id, ...(value.coins_used === undefined ? {} : { coins_used: value.coins_used as number }),
+    ...(value.progress === undefined ? {} : { progress: value.progress as number }) };
+  if (value.status !== 'completed') {
+    if (value.output !== undefined && value.output !== null) throw invalid();
+    return { ...base, status: value.status as 'queued' | 'processing' | 'failed' };
+  }
+  const output = value.output;
+  if (!record(output) || output.type !== 'text' || typeof output.text !== 'string'
+    || output.text.length > 2_000 || invalidCharacters(output.text, true)
+    || !nonnegative(output.duration) || output.duration > HERMES_VOICE_MAX_SECONDS
+    || (output.language !== undefined && (typeof output.language !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/u.test(output.language)))) throw invalid();
+  return { ...base, status: 'completed', output: { type: 'text', text: output.text, duration: output.duration,
+    ...(output.language === undefined ? {} : { language: output.language }) } };
 }
 
 export function validateSynclipAudioRequest(value: unknown): SynclipAudioRequest {
@@ -241,14 +286,14 @@ export class SynclipAudioClient {
     this.#timeout = config.timeoutMs ?? 15_000;
   }
 
-  async #request(method: 'GET' | 'POST', path: string, body?: string): Promise<unknown> {
+  async #request(method: 'GET' | 'POST', path: string, body?: string | FormData): Promise<unknown> {
     const url = SYNCLIP_AUDIO_ORIGIN + path;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const operation = async () => {
       const response = await this.#fetch(url, { method, redirect: 'error', signal: controller.signal,
         headers: { Authorization: 'Bearer ' + this.#key, Accept: 'application/json',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body }) });
+          ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) }, ...(body === undefined ? {} : { body }) });
       if (controller.signal.aborted) { cancel(response); throw new SynclipAudioError('SYNCLIP_AUDIO_TIMEOUT'); }
       if (response.redirected || (response.url && response.url !== url)) { cancel(response); throw invalid(); }
       if (!response.ok) { cancel(response); throw new SynclipAudioError('SYNCLIP_AUDIO_HTTP_FAILED', 'uncertain', response.status); }
@@ -265,6 +310,31 @@ export class SynclipAudioClient {
       if (error instanceof SynclipAudioError) throw error;
       throw new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED');
     } finally { if (timer !== undefined) clearTimeout(timer); }
+  }
+
+  /** Synclip runs whisper-1 asynchronously; do not send an undocumented model field. */
+  async createTranscription(input: SynclipTranscriptionRequest): Promise<SynclipTranscriptionSubmission> {
+    if (!record(input) || Object.keys(input).some(key => !['audio', 'language'].includes(key))
+      || (input.language !== undefined && input.language !== 'zh' && input.language !== 'en')) {
+      throw new SynclipAudioError('SYNCLIP_AUDIO_REQUEST_INVALID', 'invalid');
+    }
+    validateHermesVoiceWav(input.audio);
+    const form = new FormData();
+    form.append('file', new Blob([Uint8Array.from(input.audio)], { type: 'audio/wav' }), 'speech.wav');
+    if (input.language) form.append('language', input.language);
+    const data = await this.#request('POST', '/asr', form);
+    if (!record(data) || !token(data.task_id) || !['queued', 'processing'].includes(String(data.status))
+      || (data.poll_url !== undefined && data.poll_url !== '/v1/tasks/' + data.task_id)
+      || !nonnegative(data.credits_charged) || data.credits_charged > 1
+      || !nonnegative(data.duration_seconds) || data.duration_seconds > HERMES_VOICE_MAX_SECONDS) throw invalid();
+    return { task_id: data.task_id, status: data.status as 'queued' | 'processing',
+      ...(data.poll_url === undefined ? {} : { poll_url: data.poll_url as string }),
+      credits_charged: data.credits_charged, duration_seconds: data.duration_seconds };
+  }
+
+  async queryTranscription(taskId: string): Promise<SynclipTranscriptionTask> {
+    const id = validateSynclipAudioTaskId(taskId);
+    return transcriptionTask(await this.#request('GET', '/tasks/' + id), id);
   }
 
   async listVoices(): Promise<SynclipAudioVoice[]> {

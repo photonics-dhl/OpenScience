@@ -10,6 +10,9 @@ const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.ti
 test.beforeEach(async ({ page }) => {
   await page.context().route('**/api/**', (route) => {
     const url = new URL(route.request().url());
+    if (route.request().method() === 'GET' && url.pathname === '/api/agent/voice/capabilities' && url.searchParams.size === 0) {
+      return route.fulfill({ json: { available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [] } });
+    }
     throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
   });
 });

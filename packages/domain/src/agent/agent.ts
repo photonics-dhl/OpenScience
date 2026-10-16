@@ -22,6 +22,7 @@ import { ResearchIdentityProfileError, validateResearchIdentityProfileState } fr
 import { ResearchIntelligenceValidationError, validateSourceLocator } from '../research-intelligence/validation';
 import { parseDocumentSourceMapReference, type DocumentSourceMapReference } from '../research-intelligence/source-map-ref';
 import { parseWorkspaceGuidePayload } from './workspace-guide-contract';
+import { hasHermesVoiceCheckpoint, HERMES_VOICE_HOLD, isHermesVoiceTaskKind, isHermesVoiceStopped } from './voice-contract';
 import { isOwnedPrismaIdempotencyConflict, throwOwnedPrismaIdempotencyConflict } from '../prisma-idempotency-conflict';
 import { assertSearchIndexSourceLive, parseSourceMapSearchIndexPayload, SearchIndexSourceError, type SourceMapSearchIndexPayload } from './search-index-source';
 import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } from './standalone-science-recovery';
@@ -37,6 +38,7 @@ export const AGENT_TASK_QUEUE = 'agent:queue';
 export const AI_CREDIT_RESOURCE = 'ai_credit'; // §2.4-7 配额骨架（P1A-7）
 export const AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.generate', 'presentation.figure-audit', 'workspace.guide', 'search.index', 'source.retrieve',
+  'voice.transcribe', 'voice.reply',
 ] as const;
 export const PUBLIC_AGENT_TASK_KINDS = [
   'demo.echo', 'sdf.extract', 'review.analyze', 'visualization.plan', 'presentation.figure-audit',
@@ -210,6 +212,7 @@ function evaluateAgentTaskRetryEligibility(
   } else if (task.kind === 'source.retrieve') {
     return { authorityValid: false, canRetry: false };
   }
+  if (isHermesVoiceTaskKind(task.kind)) return { authorityValid: true, canRetry: false };
   // Two explicit recoveries; the storage layer independently enforces its attempt budget.
   if (task.retryCount < 2 && isRetryableSourceSearchIndex(task)) {
     return { authorityValid: true, canRetry: Boolean(researchObject) };
@@ -569,10 +572,10 @@ async function persistAgentTaskCoreInTransaction(
     throw new AgentError('VALIDATION_ERROR', '不支持的 Hermes 任务类型');
   }
   if ((session.kind === 'workspace.guide') !== (input.kind === 'workspace.guide')) {
-    // presentation.figure-audit and review.analyze are read-only derivations and may
+    // Figure audits, reviews and dedicated voice tasks are read-only derivations and may
     // run inside a workspace.guide session; they are not themselves workspace.guide
     // tasks, but the XOR above is the only session-type guard the caller relies on.
-    if (input.kind !== 'presentation.figure-audit' && input.kind !== 'review.analyze') {
+    if (input.kind !== 'presentation.figure-audit' && input.kind !== 'review.analyze' && !isHermesVoiceTaskKind(input.kind)) {
       throw new AgentError('VALIDATION_ERROR', 'Hermes 任务与会话类型不匹配');
     }
   }
@@ -724,9 +727,19 @@ export async function persistAgentTaskInTransaction(
   if (input.kind === 'source.retrieve') {
     throw new AgentError('VALIDATION_ERROR', 'Source retrieval is reserved for literature acquisition');
   }
+  if (isHermesVoiceTaskKind(input.kind)) {
+    throw new AgentError('VALIDATION_ERROR', 'Voice tasks require the dedicated Hermes voice submission');
+  }
   if (Object.hasOwn(input.payload, 'retryContractVersion')) {
     throw new AgentError('VALIDATION_ERROR', 'The retry contract marker is server-reserved');
   }
+  return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
+}
+
+/** Internal voice producer only; generic submission cannot mint private input/receipts. */
+export async function persistHermesVoiceTaskInTransaction(deps: AgentDeps, tx: Prisma.TransactionClient,
+  input: Omit<SubmitAgentTaskInput, 'dispatch'>, ctx: AuditContext = {}) {
+  if (!isHermesVoiceTaskKind(input.kind)) throw new AgentError('VALIDATION_ERROR', 'Voice task kind required');
   return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);
 }
 
@@ -869,7 +882,7 @@ export async function dispatchAgentTask(deps: AgentDeps, taskId: string): Promis
 /** DB task rows with dispatchedAt=null are the durable queue outbox. */
 export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50): Promise<number> {
   const tasks = await deps.prisma.agentTask.findMany({
-    where: { deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] }, kind: { in: ['workspace.guide', 'sdf.extract', 'presentation.generate', 'search.index', 'source.retrieve'] }, status: 'pending', dispatchedAt: null },
+    where: { deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] }, kind: { in: ['workspace.guide', 'sdf.extract', 'presentation.generate', 'search.index', 'source.retrieve', 'voice.transcribe', 'voice.reply'] }, status: 'pending', dispatchedAt: null },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });
@@ -883,6 +896,17 @@ export async function recoverUndispatchedAgentTasks(deps: AgentDeps, limit = 50)
 /** Convert only a crash-interrupted claim back to pending before its processing-list entry is requeued. */
 export async function prepareAgentTaskForCrashRecovery(deps: AgentDeps, taskId: string): Promise<boolean> {
   const task = await deps.prisma.agentTask.findUnique({ where: { id: taskId } });
+  if (task && isHermesVoiceTaskKind(task.kind)) {
+    if (task.deletedAt || isHermesVoiceStopped(task) || task.status === 'succeeded') return false;
+    const receipt = hasHermesVoiceCheckpoint(task.result);
+    if (task.status === 'failed' && !(task.error === '[retryable] worker interrupted' && !receipt)) return false;
+    if (!receipt && task.status === 'pending') return true;
+    const changed = await deps.prisma.agentTask.updateMany({ where: { id: task.id, kind: task.kind,
+      deletedAt: null, status: task.status, error: task.error, executionAttempt: task.executionAttempt,
+      result: { equals: task.result == null ? Prisma.AnyNull : task.result as Prisma.InputJsonValue } },
+      data: receipt ? { status: 'failed', error: HERMES_VOICE_HOLD } : { status: 'pending', error: null } });
+    return changed.count === 1 && !receipt;
+  }
   if (!task || task.deletedAt) return false;
   if (isNativeImagePlanningContractTask(task)) return false;
   if (task.status === 'pending') return true;
@@ -983,6 +1007,18 @@ export async function claimAgentTask(deps: AgentDeps, taskId: string, expected?:
   for (let attempt = 0; ; attempt += 1) {
     try {
       task = await deps.prisma.$transaction(async (tx) => {
+        const snapshot = await tx.agentTask.findUnique({ where: { id: taskId } });
+        if (snapshot && isHermesVoiceTaskKind(snapshot.kind) && hasHermesVoiceCheckpoint(snapshot.result)) {
+          const checkpoint = (snapshot.result as Record<string, unknown>).hermesVoice;
+          if (!checkpoint || typeof checkpoint !== 'object' || !['submitted', 'completed'].includes(String((checkpoint as Record<string, unknown>).phase))) {
+            if (!snapshot.deletedAt && !isHermesVoiceStopped(snapshot) && ['pending', 'running'].includes(snapshot.status)) {
+              await tx.agentTask.updateMany({ where: { id: taskId, deletedAt: null, status: snapshot.status,
+                executionAttempt: snapshot.executionAttempt, result: { equals: snapshot.result == null ? Prisma.AnyNull : snapshot.result as Prisma.InputJsonValue } },
+                data: { status: 'failed', error: HERMES_VOICE_HOLD } });
+            }
+            return null;
+          }
+        }
         const claimed = await tx.agentTask.updateMany({
           where: { id: taskId, status: 'pending', deletedAt: null, session: { deletedAt: null, OR: [{ researchObjectId: null }, { researchObject: { deletedAt: null } }] },
             ...(expected ? { kind: expected.kind, sessionId: expected.sessionId, progress: expected.progress, error: expected.error,
@@ -1269,6 +1305,9 @@ async function markTaskProgressOnce(
     }
     if (currentStatus === 'succeeded') return current;
     if (currentStatus === input.status) return current;
+    if (isHermesVoiceTaskKind(current.kind) && input.status === 'succeeded') {
+      throw new AgentError('ILLEGAL_TRANSITION', 'Voice completion requires live Hermes voice authority');
+    }
     if (!(ALLOWED[currentStatus] ?? []).includes(input.status)) {
       throw new AgentError('ILLEGAL_TRANSITION', `任务状态 ${currentStatus} → ${input.status} 非法`);
     }
@@ -1292,13 +1331,16 @@ async function markTaskProgressOnce(
         throw new AgentError('ILLEGAL_TRANSITION', 'Native independent reviewer author changed');
       await requireNativeIllustrationTerminalSource(tx, current);
     }
-    const result = nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
+    const result = isHermesVoiceTaskKind(current.kind) ? current.result
+      : nativeAgentTerminalResult(current, input.status, nativeSourceReviewTerminalResult(current, input.status,
       await nativeImageReviewTerminalResult(tx, current, input.status, input.result)));
     const changed = await tx.agentTask.updateMany({
       where: {
         id: current.id, deletedAt: null, session: { deletedAt: null },
         status: currentStatus,
-        ...(current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview') || Object.hasOwn(current.result, 'nativeAgentExecution'))
+        ...(isHermesVoiceTaskKind(current.kind)
+          ? { result: { equals: current.result == null ? Prisma.AnyNull : current.result as Prisma.InputJsonValue } }
+          : current.result && typeof current.result === 'object' && (Object.hasOwn(current.result, 'nativeImageReview') || Object.hasOwn(current.result, 'nativeSourceReview') || Object.hasOwn(current.result, 'nativeAgentExecution'))
           ? { result: { equals: current.result as Prisma.InputJsonValue } } : {}),
         ...(input.expectedExecutionAttempt === undefined
           ? {}
@@ -1455,6 +1497,7 @@ function hasValidEvidenceBundle(result: JsonRecord, reference: DocumentSourceMap
 
 /** Builds the public task result while keeping storage references and rejected review diagnostics private. */
 export function projectAgentTaskResult(rawResult: unknown, kind: string): Record<string, unknown> | null {
+  if (isHermesVoiceTaskKind(kind)) return null;
   if (!isJsonRecord(rawResult)) return null;
   if (kind === 'presentation.generate' && rawResult.purpose === 'audio-audition') {
     const audio = rawResult.audioAudition;
@@ -1524,7 +1567,10 @@ export function taskToView(task: {
   return {
     id: task.id, sessionId: task.sessionId, kind: task.kind, status: task.status,
     progress: task.progress, retryCount: task.retryCount, executionAttempt: task.executionAttempt,
-    canRetry, result,
-    error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt,
+    canRetry: !isHermesVoiceTaskKind(task.kind) && canRetry, result,
+    error: isHermesVoiceTaskKind(task.kind)
+      ? isHermesVoiceStopped(task) ? '语音任务已停止' : task.status === 'failed' ? '语音处理已暂停，请打开语音任务查看恢复状态' : null
+      : task.error,
+    createdAt: task.createdAt, updatedAt: task.updatedAt,
   };
 }

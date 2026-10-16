@@ -18,6 +18,28 @@
 
 新论文由原生 NousResearch Hermes Agent＋MiniMax-M3理解、核源并规划；生图沿当前已授权的Synclip通道，启用范围与质量以[CURRENT](../handoff/2026-09-10-hermes-web-image-handoff.md)为准。实际版本、回滚身份与付费任务同见CURRENT。从干净、已推送且精确CI通过的SHA正常发布应用。仅动态任务配置或工具提交变化、SDK适配与安装资源未变时，按独立审查结论复用当前不可变Native运行时，实核API/Worker的运行时、Skill目录及timer，不重复安装。适配或资源改变才用现有安装器的`--defer-timer`配对运行时与目录，重建API/Worker并核实一致后恢复原timer；配对前不创建新Native任务。发布成功不等于科学正确。
 
+### Hermes 语音候选启用（默认关闭，尚未部署验收）
+
+前置条件：沿 CURRENT 的唯一交付入口、备份、干净已推送 SHA、精确 CI 和独立审查操作；实际复制凭证、改生产配置和部署须获本轮授权。先核 API/Worker 的实际 UID（当前镜像 `node` 为1000）及原 Synclip 目录/文件属主权限，只看元数据，不输出 key。当前应用和确切回退必须都具备 `voice.*` 私有投影、专用读取权限和禁止普通重试的实现；旧通用投影不认识私有检查点，不能在已有语音数据后直接回退旧二进制。先发布默认关闭的候选，待正常回退也具备兼容读取能力后再启用。
+
+执行步骤（服务器命令仅经 `infra/scripts/ssh-run.sh`，Windows 显式使用 Git Bash）：
+
+1. 保持原 `/opt/openscience-synclip/api-key` 不变；在该 root 私有父目录下制作同一 key 的运行副本。确认实际 UID 确为1000后执行下列命令；目录不能是符号链接，若已存在异常归属先停止定位。
+
+   ```sh
+   install -d -m 0700 -o 1000 -g 1000 -- /opt/openscience-synclip/voice-secrets
+   install -m 0400 -o 1000 -g 1000 -- /opt/openscience-synclip/api-key /opt/openscience-synclip/voice-secrets/.api-key.next
+   mv -T -- /opt/openscience-synclip/voice-secrets/.api-key.next /opt/openscience-synclip/voice-secrets/api-key
+   stat -c '%u:%g %a %n' /opt/openscience-synclip/voice-secrets /opt/openscience-synclip/voice-secrets/api-key
+   ```
+
+2. 沿现有受控配置管理将非秘密路径 `SYNCLIP_VOICE_API_KEY_FILE=/run/openscience-voice/api-key` 写入生产配置；`AI_ENABLED` 沿用既有授权，不因语音强制开启其他 AI 能力。base Compose 仅 API/Worker 只读挂载此独立目录；文件路径默认为空，Web、Parser、沙箱均不接收该凭证。
+3. 沿本手册现有单 FD9 发布事务和明确 rollback ref 构建/切换 API、Web、Worker，不手动叠加 Compose override。轮换 key 时按同一受控步骤刷新副本，并排空后重建 API/Worker；目录挂载可见文件替换，但 Gateway 仅在进程启动时读取一次 key。
+
+回滚步骤：先停止新语音提交，保存并处理已知供应商 ID，未知已付费提交保持原检查点且不重 POST。清空受控配置中的 `SYNCLIP_VOICE_API_KEY_FILE` 并沿原事务排空/替换 API/Worker；确认旧进程已退出后才处置运行副本，不能靠删文件撤销进程内 key。不恢复不认识语音私有数据的旧读者；不删原 Synclip key、音频、检查点或账本。异常时保持关闭并前向修复。
+
+验证命令与产品路径：在对应容器内以实际运行用户执行 `test -r /run/openscience-voice/api-key`，只核退出状态及挂载 `RW=false`，不运行 `cat`。站内从可见 Hermes 入口检查 capabilities/真实音色；经批准仅做一次短中文提问和一次标准 TTS，确认校正后进入原文字发送/预览、回答可点播/停止、任务/扣点各一次。另用无权限会话确认不可读取原任务/音频。记录原供应商 ID、私有产物、实际延迟和听感；HTTP成功、合成 WAV/MP3 fixture 或服务健康不能代替真实麦克风和用户验收。
+
 ### Native目录与关闭中的视频执行器
 
 > 原`deploy.sh --refresh-native-resources`沿同FD9事务，安装器使用`--restore-previous <candidate_sha>`；候选身份/恢复顺序的Scoped GO不覆盖未验证的实际Compose参数与源码权限合同，已知阻点、精确CI、运行锚点和串行窗口统一见CURRENT。该flag默认关闭；正常无flag路径保持原行为，不另建写门禁、锁或状态库。
