@@ -7558,9 +7558,17 @@ function finiteSelectedGuideIngestionReaderTerms(ts, context, rollbackContext) {
       'all retained families and actual successful DEFAULT collector composition'] };
 }
 
-function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext) {
+function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, collected) {
   const fail = node => { throw { reason: 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', node }; };
   const need = (condition, node) => { if (!condition) fail(node); };
+  let currentEntries, previousEntries;
+  if (collected !== undefined) {
+    need(Array.isArray(collected.current) && Array.isArray(collected.previous)
+      && rollbackProofContexts.get(collected.current) === context && rollbackProofContexts.get(collected.previous) === rollbackContext
+      && context.ts === ts && rollbackContext.ts === ts && context.roots === rollbackContext.roots, undefined);
+    currentEntries = new Map(collected.current); previousEntries = new Map(collected.previous);
+    need(currentEntries.size === collected.current.length && previousEntries.size === collected.previous.length, undefined);
+  }
   const symbol = (node, owner = context) => { let value = owner.checker.getSymbolAtLocation(node);
     if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value; };
   const intrinsic = (node, name, owner) => {
@@ -7775,6 +7783,16 @@ function finiteSelectedGuideInitializationTerms(ts, context, rollbackContext) {
     const path = relative(context.root, current.fileName).replaceAll('\\', '/');
     const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
     need(previous && context.program.getSourceFile(current.fileName) === current, current);
+    if (currentEntries) {
+      const key = `module:${path}`;
+      need(context.modules.get(resolve(current.fileName)) === current
+        && rollbackContext.modules.get(resolve(rollbackContext.root, path)) === previous
+        && currentEntries.has(key) && previousEntries.has(key), current);
+      // Consume the original complete emitted fingerprint, including its proved
+      // relocation/consumer mapping. Raw generated metadata must not undo that
+      // equality. Import ordering and every remaining entry are still checked.
+      if (JSON.stringify(currentEntries.get(key)) === JSON.stringify(previousEntries.get(key))) continue;
+    }
     if (current.text === previous.text || JSON.stringify(context.canonical(current)) === JSON.stringify(rollbackContext.canonical(previous))) continue;
     const previousVariables = new Map(previous.statements.filter(ts.isVariableStatement).flatMap(statement =>
       statement.declarationList.declarations.map(declaration => [key(declaration.name), declaration])));
@@ -8067,7 +8085,7 @@ function finiteSelectedGuideLegacyRetryTerms(ts, context, agent, decoder, native
   return { status: 'conditional', recover, prefix: actual.slice(0, expected.length), markerReader };
 }
 
-function finiteSelectedGuideSourceResidual(ts, context, rollbackContext) {
+function finiteSelectedGuideSourceResidual(ts, context, rollbackContext, collected) {
   const fail = (reason, node) => { throw { reason, node }; };
   const left = finiteSelectedGuideSupplementaryTerms(ts, context, { ui: false });
   const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext, { ui: false });
@@ -8081,7 +8099,7 @@ function finiteSelectedGuideSourceResidual(ts, context, rollbackContext) {
     fail('SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL', oldContract);
   const fresh = finiteSelectedGuideFreshTerms(ts, left, decoder, right);
   if (fresh.fresh !== 'legacy') fail('SELECTED_GUIDE_FAMILY_NOT_CLOSED', fresh.strictCall);
-  const initialization = finiteSelectedGuideInitializationTerms(ts, context, rollbackContext);
+  const initialization = finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, collected);
   const relocation = finiteSelectedGuideRelocationTerms(ts, left, right);
   const workspace = finiteSelectedGuideWorkspaceTerms(ts, left, right, decoder);
   const relocationResidual = finiteSelectedGuideRelocationResidualTerms(ts, left, right, relocation, workspace);
@@ -8224,8 +8242,8 @@ function finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, resi
     projection: residual.publicReader.ordinaryRelation, transfers, marker, terminalGate: terminal.body.statements.slice(gate, gate + 2) };
 }
 
-function finiteSelectedGuideSourceModel(ts, context, rollbackContext) {
-  const residual = finiteSelectedGuideSourceResidual(ts, context, rollbackContext);
+function finiteSelectedGuideSourceModel(ts, context, rollbackContext, collected) {
+  const residual = finiteSelectedGuideSourceResidual(ts, context, rollbackContext, collected);
   const origin = finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, residual);
   if (origin.status !== 'conditional') throw { reason: 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', node: origin.node };
   return { ...residual, origin };
@@ -8294,7 +8312,7 @@ function finiteSelectedGuidePairCompatibility(ts, current, previous, candidateRo
         || !(owner === left ? a : b).has(`module:${relative(owner.root, path).replaceAll('\\', '/')}`)) return false;
     }
     finiteSelectedGuideApiLibraryTerms(left, right);
-    const model = finiteSelectedGuideSourceModel(ts, left, right), runtime = new Map();
+    const model = finiteSelectedGuideSourceModel(ts, left, right, { current, previous }), runtime = new Map();
     const affected = new Set([...model.projected.keys()].map(key => `module:${key}`));
     for (const [key, value] of model.projected) {
       const moduleKey = `module:${key}`, candidatePath = resolve(candidateRoot, key), previousPath = resolve(rollbackRoot, key);

@@ -1731,6 +1731,82 @@ test('selected guide current combination closes the whole source over the exact 
     assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
 });
 
+test('selected guide initialization consumes original collected module equality without reclassifying root metadata', async t => {
+  const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ts = createRequire(import.meta.url)('typescript');
+  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+  const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
+    ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
+  assert.ok(declaration && ts.isObjectLiteralExpression(declaration.initializer));
+  const original = JSON.parse(declaration.initializer.getText(parsed));
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
+  const metadata = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const consumer = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
+  assert.ok(collector && metadata && consumer && initialization);
+  const contexts = new WeakMap(), defaultRoots = [], vendorCalls = [];
+  const functions = runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization};
+    ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms })`, {
+    resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: defaultRoots,
+    // This custom-root component fixture isolates the existing vendor boundary;
+    // it is not installed DEFAULT/vendor-byte or release acceptance. Only the
+    // unmodified original collector writes its private contexts below.
+    verifyPrismaVendorRuntime(args) { vendorCalls.push(args.runtimeFile); return { controlledVendorFixture: true }; },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+  });
+  const parent = join(projectRoot, 'tmp/first-image'); await mkdir(parent, { recursive: true });
+  const fixture = await mkdtemp(join(parent, 'selected-collected-runtime-'));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const candidate = join(fixture, 'candidate'), previous = join(fixture, 'previous');
+  const modulePath = 'packages/search/generated/client/index.js', roots = [[modulePath]];
+  const input = directory => {
+    const config = structuredClone(original);
+    config.generator.output.value = join(directory, 'packages/search/generated/client');
+    config.generator.sourceFilePath = join(directory, 'infra/search/schema.prisma');
+    return genuine.slice(0, declaration.initializer.getStart(parsed)) + JSON.stringify(config) + genuine.slice(declaration.initializer.end);
+  };
+  for (const directory of [candidate, previous]) {
+    await mkdir(join(directory, 'packages/search/generated/client/runtime'), { recursive: true });
+    await writeFile(join(directory, 'tsconfig.json'), '{}');
+    await writeFile(join(directory, modulePath), input(directory));
+    await writeFile(join(directory, 'packages/search/generated/client/runtime/library.js'), 'module.exports = {};');
+  }
+  const collect = directory => functions.collect(ts, directory, roots, {});
+  const current = collect(candidate), old = collect(previous);
+  const left = contexts.get(current), right = contexts.get(old), key = `module:${modulePath}`;
+  assert.notEqual(roots, defaultRoots);
+  assert.equal(JSON.stringify(new Map(current).get(key)), JSON.stringify(new Map(old).get(key)));
+  assert.notEqual(left.modules.get(resolve(candidate, modulePath)).text, right.modules.get(resolve(previous, modulePath)).text);
+  assert.equal(functions.initialize(ts, left, right, { current, previous: old }).status, 'conditional');
+  const refuses = action => assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  refuses(() => functions.initialize(ts, left, right)); // Source-only equality cannot mint the captured proof.
+  for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }])
+    refuses(() => functions.initialize(ts, left, right, collected));
+  refuses(() => functions.initialize(ts, { ...left }, right, { current, previous: old }));
+  const capturedPath = resolve(candidate, modulePath), capturedSource = left.modules.get(capturedPath);
+  left.modules.set(capturedPath, ts.createSourceFile(capturedPath, capturedSource.text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS));
+  refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  left.modules.set(capturedPath, capturedSource);
+  const position = current.findIndex(([name]) => name === key), [missing] = current.splice(position, 1);
+  refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  current.splice(position, 0, missing);
+  const changedRuntime = input(candidate).replace(JSON.stringify(original.inlineSchemaHash), JSON.stringify(`${original.inlineSchemaHash}-changed`));
+  assert.notEqual(changedRuntime, input(candidate));
+  await writeFile(join(candidate, modulePath), changedRuntime);
+  const changed = collect(candidate);
+  assert.notEqual(JSON.stringify(new Map(changed).get(key)), JSON.stringify(new Map(old).get(key)));
+  refuses(() => functions.initialize(ts, contexts.get(changed), right, { current: changed, previous: old }));
+  for (const bad of [input(candidate).replace(JSON.stringify(join(candidate, 'infra/search/schema.prisma')), JSON.stringify(join(candidate, 'wrong/schema.prisma'))),
+    `${input(candidate)}\nexports.configObserver = config;`]) {
+    await writeFile(join(candidate, modulePath), bad);
+    assert.throws(() => collect(candidate), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+  }
+  assert.ok(vendorCalls.length >= 2);
+});
+
 test('selected guide current voice predecessor refuses eager effects keys and non-data suppliers at their actual nodes', async t => {
   const components = selectedGuideSourceComponents(), voice = 'apps/agent-worker/src/voice.ts', worker = 'apps/agent-worker/src/index.ts';
   const check = async (changes, both, evidence) => {
