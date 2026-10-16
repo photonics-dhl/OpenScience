@@ -1,0 +1,18 @@
+.controls { margin-top: 8px; color: var(--rp-ink, #182f35); font-size: 12px; line-height: 1.5; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.controls button { min-height: 44px; padding: 7px 10px; gap: 6px; font-size: 12px; }
+.controls .secondary { background: transparent; color: var(--rp-accent, #12626a); box-shadow: none; border: 1px solid var(--rp-rule, #d6e1e3); }
+.controls .recording { background: #923c3c; color: #fff; }
+.controls button:disabled { cursor: default; opacity: .5; }
+.controls button:focus-visible, .review textarea:focus-visible { outline: 2px solid var(--rp-accent, #12626a); outline-offset: 3px; }
+.hint { margin: 4px 0 0; color: var(--rp-muted, #52646b); overflow-wrap: anywhere; }
+.status { margin-top: 6px; }
+.status p { margin: 4px 0; }
+.review { display: grid; gap: 6px; margin-top: 8px; }
+.review label { font-weight: 600; }
+.review button { justify-self: start; }
+.playback { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.playback audio { width: min(100%, 300px); height: 40px; }
+@media (hover: hover) { .controls .secondary:not(:disabled):hover { background: #e8f1f0; } }
+@media (max-width: 520px) { .review textarea { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .controls button { transition: none; } }

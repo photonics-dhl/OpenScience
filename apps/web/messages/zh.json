@@ -1,4 +1,40 @@
 {
+  "hermesVoice": {
+    "label": "Hermes 语音",
+    "start": "语音输入",
+    "cancelPermission": "取消录音",
+    "stop": "停止录音 · {seconds} 秒",
+    "preparing": "正在准备录音…",
+    "preparingSession": "正在准备对话…",
+    "sessionFailed": "暂时无法准备对话，尚未提交语音转写。录音已保留，可再次点击“转为文字”。",
+    "transcribe": "转为文字 · 1 AI 点",
+    "discard": "放弃录音",
+    "cost": "最长 60 秒；转写和语音回复各 1 AI 点。文字确认后再发送。",
+    "unavailable": "语音暂不可用，可继续输入文字。",
+    "unsupported": "此浏览器不支持录音，可继续输入文字。",
+    "permissionDenied": "未获麦克风权限。可在浏览器设置中允许，或继续输入文字。",
+    "recordingFailed": "录音未完成，可重新录音或继续输入文字。",
+    "readReply": "朗读回复 · 1 AI 点",
+    "replyTooLong": "这条回复超过语音长度上限。请让 Hermes 简短回答后再朗读，完整文字已保留。",
+    "noVoice": "暂没有适合当前语言的可用音色。",
+    "recognizing": "正在识别语音…",
+    "generatingReply": "正在准备语音回复…",
+    "unknown": "提交结果尚未确认，可能已扣点。请查询原提交，不要重复提交。",
+    "readFailed": "暂时无法读取状态，可查询原任务。",
+    "failed": "语音任务未完成，可继续使用文字。",
+    "transcriptInvalid": "识别文本为空或超过 2000 字，未插入草稿。可重新录制更短内容。",
+    "query": "查询原提交",
+    "continue": "继续查询原语音任务",
+    "review": "检查并修改识别文字",
+    "append": "追加到输入框",
+    "useTranscript": "放入输入框",
+    "draftFull": "输入框最多 2000 字，请先缩短草稿或识别文字。",
+    "applied": "识别文字已放入输入框，检查后点击发送。",
+    "audioLabel": "Hermes 语音回复",
+    "playReply": "播放回复",
+    "stopPlayback": "停止播放",
+    "playbackFailed": "播放失败，完整回复仍可阅读。可使用播放器再次播放。"
+  },
   "hermesAudioAudition": {
     "title": "旁白试听",
     "scene": "第 {number} 幕 · {seconds} 秒",
@@ -636,6 +672,18 @@
     }
   },
   "editor": {
+    "reading": {
+      "title": "研究内容",
+      "navigation": "研究章节",
+      "fields": {
+        "problem": "研究问题",
+        "insight": "核心洞见",
+        "method": "研究方法",
+        "results": "主要结果",
+        "limitations": "局限与边界",
+        "reproducibility": "可复现性"
+      }
+    },
     "savedVersionSources": "核查最近保存版本的来源",
     "draftRevision": "私有草稿",
     "common": {
@@ -1256,6 +1304,9 @@
   "attachmentViewer": {
     "preview": "预览",
     "download": "下载",
+    "openOriginal": "打开原文",
+    "downloadOriginal": "下载原文",
+    "pdfPreviewNotice": "PDF 预览需浏览器支持；若未显示内容，可打开或下载原文。",
     "close": "关闭",
     "loading": "正在加载预览…",
     "unavailable": "无法预览此附件。请下载原始文件后查看。",

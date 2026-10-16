@@ -203,7 +203,8 @@ suite('journal lifecycle against isolated PostgreSQL (not production)', () => {
       activeForGeneration: true,
     });
     const queued: string[] = [];
-    const sharedDeps = { ...deps, storage, redis: { lpush: async (_key: string, value: string) => { queued.push(value); return 1; } } as never };
+    const nativeAgentRuntime = { runtimeId: 'fixture-native-runtime', skillCatalogueId: 'fixture-native-skills', model: 'MiniMax-M3' };
+    const sharedDeps = { ...deps, storage, nativeAgentRuntime, redis: { lpush: async (_key: string, value: string) => { queued.push(value); return 1; } } as never };
     const key = randomUUID();
     const started = await startJournalSharedProcessing(sharedDeps, ctx.owner.id, ctx.journal.id, item.id,
       { revision: permitted.articleRevision, requestKey: key, processingConsent: true });

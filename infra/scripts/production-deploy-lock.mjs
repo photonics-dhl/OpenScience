@@ -4992,6 +4992,1049 @@ function finiteImageFirstPairCompatibility(ts,current,previous,candidateRoot,rol
   }catch{return false;}
 }
 
+
+// This transition is intentionally directional. Reader -> old proves closure
+// over states produced by the old application. Once a writer has run, its only
+// adjacent rollback is the retained reader; the old-domain proof cannot erase
+// that history. The selector-only writer -> reader case compares every other
+// captured runtime entry exactly, including all private readers and finalizers.
+function finiteVoiceSourceModel(ts, context, rollbackContext) {
+  const { program, checker, root } = context;
+  const fail = (reason, node) => { throw { reason: `VOICE_${reason}`, node }; };
+  const need = (condition, reason, node) => { if (!condition) fail(reason, node); };
+  const nodes = (scope, predicate) => { const values = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) values.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return values; };
+  const one = (values, reason) => { need(values.length === 1, reason); return values[0]; };
+  const source = path => { const value = program.getSourceFile(resolve(root, path)); need(value, 'SOURCE_MISSING'); return value; };
+  const symbol = node => { let value = checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = checker.getAliasedSymbol(value); return value; };
+  const text = node => node.getText(node.getSourceFile());
+  const tokens = value => { const scanner = ts.createScanner(ts.ScriptTarget.ES2022, true, ts.LanguageVariant.Standard, value), result = [];
+    for (let token = scanner.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scanner.scan()) result.push([token, scanner.getTokenText()]);
+    return JSON.stringify(result);
+  };
+  const same = (node, expected) => !!node && tokens(text(node)) === tokens(expected);
+  const functionNamed = (file, name) => one(file.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), 'FUNCTION_MISSING');
+  const contains = (node, expected) => nodes(node, value => same(value, expected)).length > 0;
+  const requireNode = (node, expected, reason) => need(contains(node, expected), reason, node);
+  const contract = source('packages/domain/src/agent/voice-contract.ts');
+  const selector = functionNamed(contract, 'isHermesVoiceWriterEnabled');
+  const synchronous = fn => !fn.asteriskToken && !fn.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword);
+  need(synchronous(selector) && selector.parameters.length === 0 && selector.body?.statements.length === 1
+    && ts.isReturnStatement(selector.body.statements[0])
+    && [ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.TrueKeyword].includes(selector.body.statements[0].expression?.kind), 'PHASE_SELECTOR_CHANGED', selector);
+  const phase = selector.body.statements[0].expression.kind === ts.SyntaxKind.FalseKeyword ? 'reader' : 'writer';
+  need(phase === 'reader', 'FRESH_PHASE_NOT_READER', selector);
+  const selectorSymbol = symbol(selector.name);
+  const disabled = (fn, reason) => {
+    const first = fn.body?.statements[0];
+    need(first && ts.isIfStatement(first) && ts.isPrefixUnaryExpression(first.expression)
+      && first.expression.operator === ts.SyntaxKind.ExclamationToken && ts.isCallExpression(first.expression.operand)
+      && symbol(first.expression.operand.expression) === selectorSymbol && !first.expression.operand.arguments.length
+      && !first.elseStatement, reason, first);
+    const body = ts.isBlock(first.thenStatement) ? first.thenStatement.statements : [first.thenStatement];
+    need(body.length === 1 && (same(body[0], 'blocked(HERMES_VOICE_READER_ONLY);')
+      || same(body[0], "throw new AgentError('ILLEGAL_TRANSITION', HERMES_VOICE_READER_ONLY);")), reason, first);
+  };
+  const kind = functionNamed(contract, 'isHermesVoiceTaskKind');
+  need(synchronous(kind) && kind.parameters.length === 1 && kind.parameters[0].name.getText() === 'kind' && kind.body.statements.length === 1
+    && same(kind.body.statements[0], 'return (HERMES_VOICE_TASK_KINDS as readonly string[]).includes(kind);'), 'KIND_DISCRIMINATOR_CHANGED');
+  const kindDeclaration = one(nodes(contract, node => ts.isVariableDeclaration(node) && node.name.getText() === 'HERMES_VOICE_TASK_KINDS'), 'KIND_DOMAIN_MISSING');
+  need(same(kindDeclaration.initializer, "['voice.transcribe', 'voice.reply'] as const"), 'KIND_DOMAIN_CHANGED');
+  const kindSymbol = symbol(kind.name);
+  // These four new modules have no eager work. Imports are separately checked
+  // against captured old modules/builtin dependencies by the pair below.
+  const capsules = new Map([
+    ['packages/domain/src/agent/voice-contract.ts', contract],
+    ['packages/domain/src/agent/voice.ts', source('packages/domain/src/agent/voice.ts')],
+    ['packages/ai-gateway/src/synclip-voice.ts', source('packages/ai-gateway/src/synclip-voice.ts')],
+    ['apps/agent-worker/src/voice.ts', source('apps/agent-worker/src/voice.ts')],
+  ]);
+  const pureInitializer = value => {
+    if (!value) return true;
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value) || ts.isLiteralExpression(value)
+      || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(value.kind)) return true;
+    if (ts.isAsExpression(value) || ts.isParenthesizedExpression(value) || ts.isTypeAssertionExpression(value)) return pureInitializer(value.expression);
+    if (ts.isArrayLiteralExpression(value)) return value.elements.every(pureInitializer);
+    if (ts.isObjectLiteralExpression(value)) return value.properties.every(item => ts.isPropertyAssignment(item)
+      && !ts.isComputedPropertyName(item.name) && pureInitializer(item.initializer));
+    return false;
+  };
+  for (const [path, file] of capsules) {
+    need(!rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path)), 'CAPSULE_ALREADY_PRESENT', file);
+    for (const statement of file.statements) {
+      if (ts.isImportDeclaration(statement)) { need(!!statement.importClause, 'EAGER_IMPORT_UNKNOWN', statement); continue; }
+      if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) || ts.isFunctionDeclaration(statement)) continue;
+      need(ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const
+        && statement.declarationList.declarations.every(item => ts.isIdentifier(item.name) && pureInitializer(item.initializer)),
+      'EAGER_INITIALIZATION_OR_DECLARATION_UNKNOWN', statement);
+    }
+    for (const parameter of nodes(file, ts.isParameter)) if (parameter.initializer) need(ts.isObjectLiteralExpression(parameter.initializer)
+      && parameter.initializer.properties.length === 0 || ts.isIdentifier(parameter.initializer)
+      && parameter.initializer.text === 'HERMES_VOICE_HOLD' || ts.isLiteralExpression(parameter.initializer)
+      || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(parameter.initializer.kind), 'PARAMETER_INITIALIZER_EFFECT', parameter);
+    const declarations = new Map(file.statements.flatMap(statement => ts.isFunctionDeclaration(statement) && statement.name
+      ? [[statement.name.text, symbol(statement.name)]] : ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations.filter(item => ts.isIdentifier(item.name)).map(item => [item.name.text, symbol(item.name)]) : []));
+    for (const call of nodes(file, ts.isCallExpression)) if (ts.isIdentifier(call.expression) && declarations.has(call.expression.text))
+      need(symbol(call.expression) === declarations.get(call.expression.text), 'CAPSULE_SHADOWED_CAPABILITY', call);
+  }
+  const voice = capsules.get('packages/domain/src/agent/voice.ts');
+  const admission = functionNamed(voice, 'requireVoiceWriter');
+  need(synchronous(admission) && admission.parameters.length === 0 && admission.body.statements.length === 1, 'FRESH_DOMAIN_ADMISSION_OPEN');
+  disabled(admission, 'FRESH_DOMAIN_ADMISSION_OPEN');
+  for (const name of ['submitHermesVoiceTranscription', 'submitHermesVoiceReply', 'withHermesVoiceSubmission']) {
+    const first = functionNamed(voice, name).body.statements[0];
+    need(same(first, 'requireVoiceWriter();') && symbol(first.expression.expression) === symbol(admission.name), 'FRESH_DOMAIN_ADMISSION_OPEN');
+  }
+  const agent = source('packages/domain/src/agent/agent.ts');
+  disabled(functionNamed(agent, 'persistHermesVoiceTaskInTransaction'), 'FRESH_PERSISTENCE_OPEN');
+  requireNode(functionNamed(agent, 'persistAgentTaskInTransaction'),
+    "if (isHermesVoiceTaskKind(input.kind)) { throw new AgentError('VALIDATION_ERROR', 'Voice tasks require the dedicated Hermes voice submission'); }", 'GENERIC_VOICE_PRODUCER_OPEN');
+  const core = functionNamed(agent, 'persistAgentTaskCoreInTransaction'), coreSymbol = symbol(core.name);
+  need(!core.modifiers?.some(node => node.kind === ts.SyntaxKind.ExportKeyword), 'CORE_PRODUCER_ESCAPED');
+  const fixedCallerKinds = new Map([
+    ['persistHermesSourceReviewTechnicalTaskInTransaction', 'sdf.extract'], ['persistSourceRetrieveTaskInTransaction', 'source.retrieve'],
+    ['persistSourceMapSearchIndexInTransaction', 'search.index'],
+  ]);
+  for (const use of nodes(agent, ts.isIdentifier)) if (symbol(use) === coreSymbol && use !== core.name) {
+    const call = use.parent; need(ts.isCallExpression(call) && call.expression === use, 'CORE_PRODUCER_ESCAPED', use);
+    let scope = use.parent; while (scope && !(ts.isFunctionDeclaration(scope) && scope.name)) scope = scope.parent;
+    const name = scope?.name.text;
+    if (['persistAgentTaskInTransaction', 'persistHermesVoiceTaskInTransaction'].includes(name)) continue;
+    if (fixedCallerKinds.has(name)) {
+      const input = call.arguments[2]; need(ts.isObjectLiteralExpression(input), 'CORE_KIND_UNKNOWN', call);
+      const kind = one(input.properties.filter(node => ts.isPropertyAssignment(node) && node.name.getText() === 'kind'), 'CORE_KIND_UNKNOWN');
+      need(ts.isStringLiteral(kind.initializer) && kind.initializer.text === fixedCallerKinds.get(name)
+        && !input.properties.slice(input.properties.indexOf(kind) + 1).some(ts.isSpreadAssignment), 'CORE_KIND_UNKNOWN', input);
+      continue;
+    }
+    const expected = new Map([['persistJournalSponsoredPaperTaskInTransaction', 'sdf.extract'], ['submitDeterministicPresentationTask', 'presentation.generate']]).get(name);
+    need(expected, 'CORE_CALLER_UNKNOWN', call);
+    const guard = scope.body.statements[0];
+    const disjunct = expression => same(expression, `input.kind !== '${expected}'`)
+      || ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
+        && (disjunct(expression.left) || disjunct(expression.right));
+    need(ts.isIfStatement(guard) && disjunct(guard.expression) && (ts.isThrowStatement(guard.thenStatement)
+      || ts.isBlock(guard.thenStatement) && guard.thenStatement.statements.length === 1 && ts.isThrowStatement(guard.thenStatement.statements[0])), 'CORE_KIND_UNKNOWN', guard);
+  }
+  // The old state domain has no voice kind. Every new callable effect either
+  // fails its first admission selector, fails taskAuthority before effects, or
+  // requires an existing validated voice receipt and original identity.
+  const taskAuthority = functionNamed(voice, 'taskAuthority');
+  need(same(taskAuthority.body.statements[0], 'const task = await tx.agentTask.findUnique({ where: { id: taskId } });')
+    && same(taskAuthority.body.statements[1], 'if (!task || task.deletedAt || !isHermesVoiceTaskKind(task.kind)) unavailable();'), 'OLD_DOMAIN_AUTHORITY_ESCAPE');
+  const blocked = functionNamed(voice, 'blocked'), unavailable = functionNamed(voice, 'unavailable'), invalid = functionNamed(voice, 'invalid');
+  for (const fn of [blocked, unavailable, invalid]) need(synchronous(fn) && fn.body.statements.length === 1
+    && ts.isThrowStatement(fn.body.statements[0]), 'BLOCKER_DOES_NOT_THROW', fn);
+  need(same(blocked.body.statements[0], "throw new AgentError('ILLEGAL_TRANSITION', message);")
+    && same(unavailable.body.statements[0], "throw new AgentError('RESEARCH_OBJECT_NOT_FOUND', 'Hermes 语音任务不存在或当前不可访问');")
+    && same(invalid.body.statements[0], "throw new AgentError('VALIDATION_ERROR', message);"), 'BLOCKER_DOES_NOT_THROW');
+  const originalError = one(nodes(agent, node => ts.isImportSpecifier(node) && node.name.text === 'AgentError'), 'BLOCKER_IMPORT_CHANGED');
+  for (const use of nodes(voice, node => ts.isIdentifier(node) && node.text === 'AgentError')) need(symbol(use) === symbol(originalError.name), 'BLOCKER_IMPORT_CHANGED', use);
+  // Bind guards to their real declarations; textual lookalikes cannot supply
+  // the source-false selector or kind predicate.
+  for (const file of [...capsules.values(), agent]) for (const call of nodes(file, ts.isCallExpression)) {
+    if (ts.isIdentifier(call.expression) && call.expression.text === 'isHermesVoiceTaskKind') need(symbol(call.expression) === kindSymbol, 'KIND_BINDING_CHANGED', call);
+    if (ts.isIdentifier(call.expression) && call.expression.text === 'isHermesVoiceWriterEnabled') need(symbol(call.expression) === selectorSymbol, 'SELECTOR_BINDING_CHANGED', call);
+  }
+  const authoritySymbol = symbol(taskAuthority.name), lock = functionNamed(voice, 'lockExecutionAuthority'), lockSymbol = symbol(lock.name);
+  const readerTransactionEntry = fn => {
+    const name = fn.name.text;
+    const before = name === 'findHermesVoiceSubmission' ? ['const idempotencyKey = requestKey(input.idempotencyKey);'] : [];
+    const after = new Map([
+      ['resumeHermesVoiceTask', ['await dispatchCommitted(deps, task);', 'return getHermesVoiceTask(deps, input);']],
+      ['getHermesVoiceAudio', ['const head = await deps.storage.headObject(audio.objectKey);',
+        'if (!head || head.size !== audio.bytes || head.sha256 !== audio.sha256 || head.contentType !== audio.contentType) unavailable();', 'return audio;']],
+      ['saveHermesVoiceCheckpoint', ['if (checkpoint.audio) await rememberDiscardedTaskResult(deps.prisma, identity.taskId, { [HERMES_VOICE_RECEIPT_KEY]: checkpoint });', 'return checkpoint;']],
+    ]).get(name) ?? [];
+    const binding = new Map([['resumeHermesVoiceTask', 'task'], ['getHermesVoiceAudio', 'audio'], ['saveHermesVoiceCheckpoint', 'checkpoint']]).get(name);
+    const statements = fn.body.statements;
+    need(statements.length === before.length + 1 + after.length
+      && before.every((expected, index) => same(statements[index], expected))
+      && after.every((expected, index) => same(statements[before.length + 1 + index], expected)), 'READER_ENTRY_EFFECT_UNKNOWN', fn);
+    const entry = statements[before.length];
+    let call;
+    if (binding) {
+      need(ts.isVariableStatement(entry) && entry.declarationList.flags & ts.NodeFlags.Const
+        && entry.declarationList.declarations.length === 1, 'READER_ENTRY_EFFECT_UNKNOWN', entry);
+      const declaration = entry.declarationList.declarations[0];
+      need(ts.isIdentifier(declaration.name) && declaration.name.text === binding
+        && declaration.initializer && ts.isAwaitExpression(declaration.initializer), 'READER_ENTRY_EFFECT_UNKNOWN', entry);
+      call = declaration.initializer.expression;
+    } else {
+      need(ts.isReturnStatement(entry), 'READER_ENTRY_EFFECT_UNKNOWN', entry); call = entry.expression;
+    }
+    need(call && ts.isCallExpression(call) && same(call.expression, 'deps.prisma.$transaction')
+      && call.arguments.length >= 1 && call.arguments.length <= 2
+      && (call.arguments.length === 1 || pureInitializer(call.arguments[1])), 'READER_ENTRY_EFFECT_UNKNOWN', entry);
+    const arrow = call.arguments[0];
+    need(ts.isArrowFunction(arrow) && ts.isBlock(arrow.body) && arrow.parameters.length === 1
+      && ts.isIdentifier(arrow.parameters[0].name) && arrow.parameters[0].name.text === 'tx'
+      && !arrow.parameters[0].initializer && !arrow.parameters[0].dotDotDotToken, 'READER_TRANSACTION_UNKNOWN', arrow);
+    return arrow;
+  };
+  const transaction = (fn, required) => {
+    // Close the entire exported entry, then its direct transaction preamble.
+    // A nested authority check cannot justify work outside that transaction.
+    const arrow = readerTransactionEntry(fn);
+    const calls = nodes(arrow.body, node => ts.isCallExpression(node) && symbol(node.expression) === required);
+    need(calls.length === 1, 'READER_AUTHORITY_MISSING', fn);
+    for (const call of calls) {
+      const top = call.parent; let statement = top;
+      while (statement.parent !== arrow.body && statement.parent) statement = statement.parent;
+      need(ts.isVariableStatement(statement) && statement.declarationList.declarations.length === 1
+        && statement.declarationList.declarations[0].initializer && ts.isAwaitExpression(statement.declarationList.declarations[0].initializer)
+        && statement.declarationList.declarations[0].initializer.expression === call, 'READER_AUTHORITY_NOT_DIRECT', statement);
+      for (const prior of arrow.body.statements.slice(0, arrow.body.statements.indexOf(statement))) {
+        need(same(prior, 'await lockTrashReferences(tx);')
+          || same(prior, 'const existing = await tx.agentTask.findUnique({ where: { idempotencyKey } });')
+          || same(prior, 'if (!existing) unavailable();'), 'EFFECT_BEFORE_READER_AUTHORITY', prior);
+      }
+    }
+  };
+  for (const name of ['getHermesVoiceTask', 'findHermesVoiceSubmission', 'loadHermesVoiceExecution', 'resumeHermesVoiceTask', 'getHermesVoiceAudio'])
+    transaction(functionNamed(voice, name), authoritySymbol);
+  transaction(functionNamed(voice, 'finalizeHermesVoiceTask'), lockSymbol);
+  // lockExecutionAuthority locks only, then resolves the kind-constrained live
+  // task before any mutation. Raw SQL is restricted to those SELECT row locks.
+  const authorityCalls = nodes(lock, node => ts.isCallExpression(node) && symbol(node.expression) === authoritySymbol);
+  need(authorityCalls.length === 2, 'LIVE_AUTHORITY_NOT_RECHECKED');
+  const firstAuthority = authorityCalls[0].getStart();
+  for (const call of nodes(lock, node => ts.isCallExpression(node) && node.getStart() < firstAuthority))
+    need(ts.isIdentifier(call.expression) && call.expression.text === 'lockTrashReferences'
+      || ts.isIdentifier(call.expression) && call.expression.text === 'lockLiveResearchObject'
+      || ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === 'sort', 'EFFECT_BEFORE_LIVE_AUTHORITY', call);
+  const lockQueries = [
+    'tx.$queryRaw`SELECT id FROM agent_sessions WHERE id = ${execution.identity.sessionId}::uuid FOR UPDATE`',
+    'tx.$queryRaw`SELECT id FROM agent_tasks WHERE id = ${id}::uuid FOR UPDATE`',
+    'tx.$queryRaw`SELECT id FROM workspaces WHERE id = ${scope.workspaceId}::uuid FOR SHARE`',
+    'tx.$queryRaw`SELECT id FROM memberships WHERE workspace_id = ${scope.workspaceId}::uuid AND user_id = ${execution.identity.userId}::uuid FOR KEY SHARE`',
+  ];
+  for (const tag of nodes(lock, ts.isTaggedTemplateExpression)) need(lockQueries.some(query => same(tag, query)), 'LOCK_SQL_CHANGED', tag);
+  const read = functionNamed(voice, 'readHermesVoiceCheckpoint');
+  requireNode(read, '!isHermesVoiceTaskKind(cp.identity.kind)', 'RECEIPT_KIND_UNCONSTRAINED');
+  const pureFunctions = [
+    ...['readHermesVoiceCheckpoint', 'readPayload', 'validAudio', 'voiceResultEquals', 'validateHermesVoiceRecording', 'requestKey'].map(name => functionNamed(voice, name)),
+    ...['isHermesVoiceTaskKind', 'hasHermesVoiceCheckpoint', 'isHermesVoiceStopped', 'projectHermesVoiceResult'].map(name => functionNamed(contract, name)),
+    ...voice.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations]),
+  ];
+  const pureCalls = new Set(['record', 'keysAllowed', 'nonempty', 'hash', 'credit', 'blocked', 'invalid', 'readPayload',
+    'validAudio', 'hasHermesVoiceCheckpoint', 'isHermesVoiceTaskKind', 'Number', 'String', 'encodeURIComponent']);
+  const pureMethods = new Set(['isArray', 'hasOwn', 'keys', 'every', 'includes', 'test', 'isFinite', 'isSafeInteger', 'split',
+    'startsWith', 'toLowerCase', 'toString', 'readUInt32LE', 'readUInt16LE', 'byteLength', 'trim']);
+  for (const fn of pureFunctions) {
+    need(!ts.isFunctionDeclaration(fn) || synchronous(fn), 'READER_VALIDATOR_EFFECT', fn);
+    for (const effect of nodes(fn, node => ts.isAwaitExpression(node) || ts.isNewExpression(node)
+      || ts.isTaggedTemplateExpression(node) || ts.isDeleteExpression(node)
+      || ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      || ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)))
+      fail('READER_VALIDATOR_EFFECT', effect);
+    for (const call of nodes(fn, ts.isCallExpression)) need(ts.isIdentifier(call.expression) && pureCalls.has(call.expression.text)
+      || ts.isPropertyAccessExpression(call.expression) && pureMethods.has(call.expression.name.text), 'READER_VALIDATOR_CALL_UNKNOWN', call);
+    for (const use of nodes(fn, ts.isIdentifier)) if (['Number', 'String', 'Array', 'Object', 'Buffer', 'encodeURIComponent'].includes(use.text))
+      need(!(symbol(use)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile), 'READER_INTRINSIC_SHADOWED', use);
+  }
+  const publicProjector = functionNamed(contract, 'projectHermesVoiceResult');
+  const publicKeys = new Set(['operation', 'canResume', 'uncertain', 'transcript', 'audioReady', 'spokenText']);
+  for (const object of nodes(publicProjector, ts.isObjectLiteralExpression)) for (const property of object.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      let expression = property.expression; while (ts.isParenthesizedExpression(expression)) expression = expression.expression;
+      need(ts.isConditionalExpression(expression) || ts.isIdentifier(expression) && expression.text === 'common', 'PRIVATE_READER_PROJECTION_ESCAPE', property);
+    }
+    else need(!ts.isComputedPropertyName(property.name) && publicKeys.has(property.name.text), 'PRIVATE_READER_PROJECTION_ESCAPE', property);
+  }
+  for (const returned of nodes(publicProjector, ts.isReturnStatement)) need(ts.isObjectLiteralExpression(returned.expression), 'PRIVATE_READER_PROJECTION_ESCAPE', returned);
+  const view = functionNamed(voice, 'voiceView');
+  const viewReturn = view.body.statements.at(-1);
+  need(ts.isReturnStatement(viewReturn) && ts.isObjectLiteralExpression(viewReturn.expression), 'PRIVATE_READER_VIEW_CHANGED');
+  for (const property of viewReturn.expression.properties) {
+    if (ts.isSpreadAssignment(property)) need(same(property.expression, 'taskToView(task)'), 'PRIVATE_READER_VIEW_CHANGED');
+    else need(['canRetry', 'result', 'error'].includes(property.name.text), 'PRIVATE_READER_VIEW_CHANGED');
+  }
+  requireNode(view, 'result: projectHermesVoiceResult(task.kind, task.status, checkpoint, isHermesVoiceStopped(task))', 'PRIVATE_READER_VIEW_CHANGED');
+  requireNode(view, 'canRetry: false', 'GENERIC_RETRY_REARM');
+  const save = functionNamed(voice, 'saveHermesVoiceCheckpoint');
+  readerTransactionEntry(save);
+  const saveBody = one(nodes(save, node => ts.isArrowFunction(node) && ts.isBlock(node.body)
+    && nodes(node.body, item => ts.isVariableDeclaration(item) && item.name.getText() === 'prior').length > 0), 'LATE_RECEIPT_BODY_UNKNOWN').body;
+  const prefix = [
+    'await lockTrashReferences(tx);',
+    'await tx.$queryRaw`SELECT id FROM agent_tasks WHERE id = ${identity.taskId}::uuid FOR UPDATE`;',
+    'const task = await tx.agentTask.findUnique({ where: { id: identity.taskId } });',
+    'const prior = readHermesVoiceCheckpoint(task?.result);',
+    "if (!task || !prior || !isDeepStrictEqual(prior.identity, identity) || task.kind !== identity.kind || task.sessionId !== identity.sessionId || !isDeepStrictEqual(task.payload, prior.request)) blocked('原语音付费请求身份不匹配');",
+  ];
+  need(prefix.every((expected, index) => same(saveBody.statements[index], expected)), 'LATE_ORIGINAL_IDENTITY_CHANGED');
+  const update = one(nodes(save, node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && node.expression.name.text === 'updateMany'), 'LATE_RESULT_CAS_UNKNOWN');
+  need(same(update.arguments[0], '{ where: { id: task.id, kind: task.kind, sessionId: task.sessionId, result: voiceResultEquals(task.result) }, data: { result: result as unknown as Prisma.InputJsonObject } }'), 'LATE_RESULT_ONLY_CAS_CHANGED');
+  for (const returned of nodes(saveBody, ts.isReturnStatement)) {
+    if (returned.getStart() > update.end) need(same(returned, 'return next;'), 'LATE_RECEIPT_DISCARDED');
+    else need(ts.isIfStatement(returned.parent) && same(returned.parent,
+      'if (isDeepStrictEqual(prior, next)) return prior;'), 'LATE_RECEIPT_DISCARDED', returned);
+  }
+  requireNode(save, "if (task.deletedAt || session?.deletedAt || ro?.deletedAt) { await tx.$executeRaw`SELECT set_config('openscience.trash_mutation', 'on', true)`; }", 'LATE_TRASH_RETENTION_CHANGED');
+  requireNode(save, 'if (checkpoint.audio) await rememberDiscardedTaskResult(deps.prisma, identity.taskId, { [HERMES_VOICE_RECEIPT_KEY]: checkpoint });', 'LATE_CLEANUP_CHANGED');
+  const finalize = functionNamed(voice, 'finalizeHermesVoiceTask'), resume = functionNamed(voice, 'resumeHermesVoiceTask');
+  requireNode(finalize, "if (live.checkpoint?.phase !== 'completed') blocked('语音尚未完成');", 'FINALIZER_RECEIPT_CHANGED');
+  requireNode(finalize, "{ where: { id: live.task.id, deletedAt: null, status: 'running', executionAttempt: execution.identity.executionAttempt, result: voiceResultEquals(live.task.result) }, data: { status: 'succeeded', progress: 100, error: null } }", 'FINALIZER_RESULT_RETENTION_CHANGED');
+  requireNode(resume, "if (isHermesVoiceStopped(live.task) || !cp?.providerId || !['submitted', 'completed'].includes(cp.phase)) blocked('只有已保存供应商任务的暂停语音可以恢复');", 'UNKNOWN_OR_STOPPED_REARM');
+  requireNode(resume, "{ where: { id: live.task.id, status: 'failed', deletedAt: null, error: live.task.error, executionAttempt: live.task.executionAttempt, result: voiceResultEquals(live.task.result) }, data: { status: 'pending', error: null, dispatchedAt: null } }", 'RESUME_RECEIPT_CHANGED');
+  const gatedRoots = new Set(['submitHermesVoiceTranscription', 'submitHermesVoiceReply', 'withHermesVoiceSubmission']);
+  const freshHelpers = new Set(['submissionTransaction', 'storeRecording', 'prepareSubmission']);
+  const owner = node => { for (let value = node.parent; value; value = value.parent)
+    if (ts.isFunctionDeclaration(value) && value.name) return value.name.text; return undefined; };
+  const domainMethods = new Set([...pureMethods, '$transaction', 'findUnique', 'updateMany', 'some', 'sort', 'headObject', 'putObject', 'deleteObject', 'catch', 'timeout']);
+  const domainCalls = new Set([...pureCalls, ...voice.statements.filter(ts.isFunctionDeclaration).map(node => node.name?.text),
+    'isDeepStrictEqual', 'sha256HexBuffer', 'lockLiveResearchObject', 'lockTrashReferences', 'rememberDiscardedTaskResult',
+    'requireActiveMembership', 'recordAudit', 'isOwnedPrismaIdempotencyConflict', 'dispatchAgentTask', 'persistHermesVoiceTaskInTransaction',
+    'taskToView', 'isHermesVoiceStopped', 'isHermesVoiceWriterEnabled', 'projectHermesVoiceResult', 'create']);
+  for (const call of nodes(voice, ts.isCallExpression)) {
+    const scope = owner(call);
+    if (ts.isIdentifier(call.expression)) {
+      need(domainCalls.has(call.expression.text), 'DOMAIN_EFFECT_UNKNOWN', call);
+      if (freshHelpers.has(call.expression.text) || call.expression.text === 'create')
+        need(gatedRoots.has(scope) || freshHelpers.has(scope), 'READER_REACHES_FRESH_CAPABILITY', call);
+      if (call.expression.text === 'dispatchAgentTask') {
+        let guard = call.parent; while (guard && !ts.isIfStatement(guard)) guard = guard.parent;
+        need(scope === 'dispatchCommitted' && same(call, 'dispatchAgentTask(deps, task.id)')
+          && guard && same(guard.expression, "task.status === 'pending'"), 'READER_DISPATCH_CONTEXT_UNKNOWN', call);
+      }
+    } else need(ts.isPropertyAccessExpression(call.expression) && domainMethods.has(call.expression.name.text), 'DOMAIN_EFFECT_UNKNOWN', call);
+    if (ts.isPropertyAccessExpression(call.expression) && ['putObject', 'deleteObject'].includes(call.expression.name.text))
+      need(gatedRoots.has(scope) || freshHelpers.has(scope), 'READER_REACHES_FRESH_STORAGE', call);
+    if (ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === 'updateMany')
+      need(['prepareSubmission', 'saveHermesVoiceCheckpoint', 'finalizeHermesVoiceTask', 'resumeHermesVoiceTask'].includes(scope), 'READER_WRITE_CONTEXT_UNKNOWN', call);
+  }
+  for (const name of ['saveHermesVoiceCheckpoint', 'finalizeHermesVoiceTask', 'resumeHermesVoiceTask'])
+    need(nodes(functionNamed(voice, name), node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === 'updateMany').length === 1, 'READER_WRITE_CONTEXT_UNKNOWN');
+  const equals = functionNamed(voice, 'voiceResultEquals');
+  need(equals.body.statements.length === 1 && same(equals.body.statements[0], 'return { equals: result == null ? Prisma.AnyNull : result as Prisma.InputJsonValue };'), 'ABSENT_RESULT_CAS_CHANGED');
+  // Projection and generic retry protections are reader capabilities, even
+  // though their new-kind arms disappear from the old-domain normalization.
+  const projection = functionNamed(agent, 'projectAgentTaskResult');
+  need(same(projection.body.statements[0], 'if (isHermesVoiceTaskKind(kind)) return null;'), 'PRIVATE_RESULT_LEAK');
+  requireNode(functionNamed(agent, 'taskToView'), '!isHermesVoiceTaskKind(task.kind) && canRetry', 'GENERIC_RETRY_REARM');
+  const worker = capsules.get('apps/agent-worker/src/voice.ts');
+  const handlers = functionNamed(worker, 'createHermesVoiceHandlers');
+  need(handlers.body.statements.length === 3 && ts.isVariableStatement(handlers.body.statements[0])
+    && ts.isVariableStatement(handlers.body.statements[1]), 'WORKER_FACTORY_EAGER_EFFECT');
+  need(same(handlers.body.statements[0], 'const wait = options.wait ?? (async milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));'), 'WORKER_FACTORY_EAGER_EFFECT');
+  const handle = handlers.body.statements[1].declarationList.declarations[0]?.initializer;
+  need(handle && ts.isArrowFunction(handle) && ts.isBlock(handle.body), 'WORKER_HANDLE_UNKNOWN');
+  const workerPrefix = [
+    "if (!workerDeps.storage) throw new Error('[blocked] VOICE_STORAGE_UNAVAILABLE');",
+    'const deps: HermesVoiceDeps = { ...workerDeps, storage: workerDeps.storage, voicePresets: [] };',
+    'const execution = await loadHermesVoiceExecution(deps, { taskId: task.id, executionAttempt: task.executionAttempt });',
+    'let checkpoint = execution.checkpoint;',
+  ];
+  need(workerPrefix.every((expected, index) => same(handle.body.statements[index], expected)), 'WORKER_EFFECT_BEFORE_AUTHORITY');
+  const fresh = one(nodes(handlers, node => ts.isIfStatement(node) && same(node.expression, '!checkpoint')), 'FRESH_WORKER_BRANCH_UNKNOWN');
+  const guard = one(nodes(handlers, node => ts.isIfStatement(node) && same(node.expression, '!checkpoint && !isHermesVoiceWriterEnabled()')), 'FRESH_WORKER_PUBLICATION_OPEN');
+  need(same(guard, 'if (!checkpoint && !isHermesVoiceWriterEnabled()) throw new Error(HERMES_VOICE_READER_ONLY);')
+    && guard.parent === fresh.parent && guard.end < fresh.getStart(), 'FRESH_WORKER_PUBLICATION_OPEN');
+  requireNode(worker, 'const originalIdentity = checkpoint.identity;', 'LATE_WORKER_IDENTITY_CHANGED');
+  requireNode(worker, 'await rememberDiscardedTaskResult(deps.prisma, originalIdentity.taskId, { hermesVoice: { audio: storedAudio } });', 'LATE_WORKER_CLEANUP_CHANGED');
+  requireNode(worker, "if (checkpoint?.phase === 'submitting') throw new Error('[blocked] VOICE_SUBMISSION_UNCERTAIN');", 'UNKNOWN_CAN_REPOST');
+  requireNode(worker, "if (!checkpoint.providerId) throw new Error('[blocked] VOICE_SUBMISSION_UNCERTAIN');", 'SAVED_ID_REQUIRED');
+  const ancestor = (node, parent) => { for (let value = node; value; value = value.parent) if (value === parent) return true; return false; };
+  for (const call of nodes(worker, ts.isCallExpression)) {
+    need(!ts.isElementAccessExpression(call.expression), 'DYNAMIC_WORKER_CAPABILITY', call);
+    if (ts.isIdentifier(call.expression)) need(['validateHermesVoiceWav', 'loadHermesVoiceExecution', 'finalizeHermesVoiceTask',
+      'isHermesVoiceWriterEnabled', 'withHermesVoiceSubmission', 'saveHermesVoiceCheckpoint', 'rememberDiscardedTaskResult',
+      'sha256HexBuffer', 'recording', 'wait', 'setTimeout', 'resolve'].includes(call.expression.text), 'WORKER_EFFECT_UNKNOWN', call);
+    else if (ts.isPropertyAccessExpression(call.expression)) need(['getObject', 'destroy', 'isBuffer', 'from', 'push', 'concat',
+      'listPresets', 'some', 'createTranscription', 'create', 'queryTranscription', 'query', 'putObject'].includes(call.expression.name.text), 'WORKER_EFFECT_UNKNOWN', call);
+    else need(same(call.expression, '(options.downloadAudio ?? downloadSynclipAudio)'), 'WORKER_EFFECT_UNKNOWN', call);
+    if (ts.isPropertyAccessExpression(call.expression) && ['create', 'createTranscription'].includes(call.expression.name.text)) {
+      need(ancestor(call, fresh.thenStatement) && nodes(fresh, value => ts.isCallExpression(value)
+        && ts.isIdentifier(value.expression) && value.expression.text === 'withHermesVoiceSubmission'
+        && value.arguments[2] && ancestor(call, value.arguments[2])).length === 1, 'FIRST_POST_OUTSIDE_ADMISSION', call);
+    }
+    if (ts.isPropertyAccessExpression(call.expression) && ['query', 'queryTranscription'].includes(call.expression.name.text))
+      need(call.arguments.length === 1 && same(call.arguments[0], 'checkpoint.providerId'), 'QUERY_ID_CHANGED', call);
+    if (ts.isIdentifier(call.expression) && call.expression.text === 'saveHermesVoiceCheckpoint')
+      need(call.arguments.length === 3 && same(call.arguments[1], 'originalIdentity'), 'LATE_WORKER_IDENTITY_CHANGED', call);
+    if (ts.isIdentifier(call.expression) && call.expression.text === 'recording') need(ancestor(call, fresh.thenStatement), 'READER_REACHES_FRESH_STORAGE');
+  }
+  const returns = handlers.body.statements.at(-1);
+  need(same(returns, "return { 'voice.transcribe': handle, 'voice.reply': handle };"), 'WORKER_ROUTES_NOT_DISJOINT');
+  // Runtime factory may read the existing secret and construct the old client;
+  // it must never submit/poll eagerly at boot. Deferred preset GET is confined
+  // to the returned listPresets method and exact old client initialization.
+  const gateway = capsules.get('packages/ai-gateway/src/synclip-voice.ts');
+  const factory = functionNamed(gateway, 'createConfiguredSynclipVoiceRuntime');
+  const externalBinding = (name, specifier) => {
+    const declaration = one(gateway.statements.filter(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === specifier), 'FACTORY_IMPORT_CHANGED');
+    const bindings = declaration.importClause?.namedBindings;
+    need(bindings && ts.isNamedImports(bindings), 'FACTORY_IMPORT_CHANGED');
+    const binding = one(bindings.elements.filter(node => node.name.text === name && !node.propertyName && !node.isTypeOnly), 'FACTORY_IMPORT_CHANGED');
+    return checker.getSymbolAtLocation(binding.name);
+  };
+  const fileReader = externalBinding('readFile', 'node:fs/promises'), absolutePath = externalBinding('isAbsolute', 'node:path');
+  for (const call of nodes(factory, node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && ['create', 'createTranscription', 'query', 'queryTranscription'].includes(node.expression.name.text))) fail('EAGER_PROVIDER_CAPABILITY', call);
+  const constructors = nodes(factory, ts.isNewExpression);
+  need(constructors.every(node => ts.isIdentifier(node.expression) && ['Error', 'SynclipAudioClient'].includes(node.expression.text))
+    && constructors.filter(node => node.expression.text === 'SynclipAudioClient').length === 1, 'FACTORY_CONSTRUCTOR_UNKNOWN');
+  need(constructors.filter(node => node.expression.text === 'SynclipAudioClient').every(node => same(node,
+    'new SynclipAudioClient({ apiKey: key, fetch: options.fetch, timeoutMs: 12_000 })')), 'FACTORY_CONSTRUCTOR_UNKNOWN');
+  for (const constructor of constructors) if (constructor.expression.text === 'Error')
+    need(!(symbol(constructor.expression)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile), 'FACTORY_CONSTRUCTOR_UNKNOWN');
+  const localAssignments = new Set(['key', 'cached', 'loading'].map(name => one(nodes(factory, node => ts.isVariableDeclaration(node)
+    && ts.isIdentifier(node.name) && node.name.text === name), 'FACTORY_LOCAL_STATE_CHANGED')).map(node => symbol(node.name)));
+  for (const assignment of nodes(factory, node => ts.isBinaryExpression(node)
+    && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment))
+    need(ts.isIdentifier(assignment.left) && localAssignments.has(symbol(assignment.left)), 'FACTORY_EXTERNAL_MUTATION', assignment);
+  need(nodes(factory, node => ts.isDeleteExpression(node) || ts.isPostfixUnaryExpression(node)
+    || ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)).length === 0, 'FACTORY_EXTERNAL_MUTATION');
+  for (const call of nodes(factory, ts.isCallExpression)) {
+    if (ts.isPropertyAccessExpression(call.expression)) {
+      need(['trim', 'includes', 'listVoices', 'map', 'filter'].includes(call.expression.name.text), 'FACTORY_EFFECT_UNKNOWN', call);
+    } else if (ts.isIdentifier(call.expression)) {
+      need(['isAbsolute', 'readFile', 'now'].includes(call.expression.text), 'FACTORY_EFFECT_UNKNOWN', call);
+      if (call.expression.text === 'readFile') need(checker.getSymbolAtLocation(call.expression) === fileReader, 'FACTORY_IMPORT_CHANGED');
+      if (call.expression.text === 'isAbsolute') need(checker.getSymbolAtLocation(call.expression) === absolutePath, 'FACTORY_IMPORT_CHANGED');
+    }
+    else {
+      const expression = ts.isParenthesizedExpression(call.expression) ? call.expression.expression : call.expression;
+      let method = call.parent; while (method && !ts.isMethodDeclaration(method)) method = method.parent;
+      need(same(call.expression, "(options.readKey ?? (async value => readFile(value, 'utf8')))" )
+        || ts.isArrowFunction(expression) && expression.parameters.length === 0 && call.arguments.length === 0
+          && method?.name.getText() === 'listPresets', 'FACTORY_EFFECT_UNKNOWN', call);
+    }
+  }
+  const projected = new Map();
+  const printTransform = (file, transform) => {
+    const result = ts.transform(file, [transformation => node => ts.visitNode(node, function visit(value) {
+      const replacement = transform(value); if (replacement !== value) return replacement && ts.visitNode(replacement, visit);
+      return ts.visitEachChild(value, visit, transformation);
+    })]);
+    try { return ts.createPrinter({ removeComments: true }).printFile(result.transformed[0]); } finally { result.dispose(); }
+  };
+  const add = (file, transformed) => projected.set(relative(root, file.fileName).replaceAll('\\', '/'), { source: file, text: transformed });
+  const importsCapsule = node => {
+    if (!(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) || !node.moduleSpecifier) return false;
+    if (program.getSourceFile(node.getSourceFile().fileName) !== node.getSourceFile()) return false;
+    const target = symbol(node.moduleSpecifier)?.declarations?.find(ts.isSourceFile);
+    return target && [...capsules.values()].includes(target);
+  };
+  const enclosing = node => { for (let item = node.parent; item; item = item.parent)
+    if (ts.isFunctionDeclaration(item) && item.name) return item.name.text; return undefined; };
+  const oldKindArguments = new Map([
+    ['evaluateAgentTaskRetryEligibility', 'task.kind'], ['persistAgentTaskCoreInTransaction', 'input.kind'],
+    ['persistAgentTaskInTransaction', 'input.kind'], ['prepareAgentTaskForCrashRecovery', 'task.kind'],
+    ['markTaskProgressOnce', 'current.kind'], ['projectAgentTaskResult', 'kind'], ['taskToView', 'task.kind'],
+  ]);
+  const impliesVoice = expression => ts.isCallExpression(expression) && symbol(expression.expression) === kindSymbol
+    || ts.isParenthesizedExpression(expression) && impliesVoice(expression.expression)
+    || ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+      && (impliesVoice(expression.left) || impliesVoice(expression.right));
+  const isolatedVoiceArm = node => {
+    for (let value = node; value?.parent; value = value.parent) {
+      const parent = value.parent;
+      if (ts.isFunctionDeclaration(parent) && parent.name?.text === 'persistHermesVoiceTaskInTransaction') return true;
+      if (ts.isIfStatement(parent) && value === parent.thenStatement && impliesVoice(parent.expression)) return true;
+      if (ts.isConditionalExpression(parent) && value === parent.whenTrue && impliesVoice(parent.condition)) return true;
+    }
+    return false;
+  };
+  const importedCapsuleSymbols = new Set();
+  for (const statement of agent.statements) if (ts.isImportDeclaration(statement) && importsCapsule(statement)
+    && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings))
+    for (const item of statement.importClause.namedBindings.elements) if (!item.isTypeOnly) importedCapsuleSymbols.add(symbol(item.name));
+  for (const use of nodes(agent, ts.isIdentifier)) if (importedCapsuleSymbols.has(symbol(use))
+    && !ts.isImportSpecifier(use.parent)) {
+    const predicate = ts.isCallExpression(use.parent) && use.parent.expression === use && symbol(use) === kindSymbol;
+    need(predicate || isolatedVoiceArm(use), 'LEGACY_CAPSULE_CALLER_ESCAPE', use);
+  }
+  const boolean = node => node?.kind === ts.SyntaxKind.TrueKeyword ? true : node?.kind === ts.SyntaxKind.FalseKeyword ? false : undefined;
+  const booleanContext = node => {
+    let value = ts.getOriginalNode(node);
+    while (value.parent && (ts.isParenthesizedExpression(value.parent)
+      || ts.isBinaryExpression(value.parent) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken].includes(value.parent.operatorToken.kind))) value = value.parent;
+    return ts.isIfStatement(value.parent) && value.parent.expression === value
+      || ts.isConditionalExpression(value.parent) && value.parent.condition === value
+      || ts.isPrefixUnaryExpression(value.parent) && value.parent.operator === ts.SyntaxKind.ExclamationToken;
+  };
+  const discardableRead = node => {
+    if (boolean(node) !== undefined || ts.isLiteralExpression(node) || node.kind === ts.SyntaxKind.NullKeyword) return true;
+    const original = ts.getOriginalNode(node);
+    if (!ts.isIdentifier(original) || original.getSourceFile() !== agent) return false;
+    const declaration = symbol(original)?.valueDeclaration;
+    if (declaration && ts.isParameter(declaration) && ts.isIdentifier(declaration.name)) return true;
+    if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer
+      || !ts.isVariableDeclarationList(declaration.parent) || !(declaration.parent.flags & ts.NodeFlags.Const)) return false;
+    const statement = declaration.parent.parent, block = statement.parent;
+    if (!ts.isVariableStatement(statement) || !ts.isBlock(block)) return false;
+    let use = original;
+    while (use.parent !== block) { if (!use.parent || ts.isFunctionLike(use)) return false; use = use.parent; }
+    return block.statements.indexOf(statement) < block.statements.indexOf(use);
+  };
+  const simplify = node => {
+    if (importsCapsule(node)) return undefined;
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'persistHermesVoiceTaskInTransaction') return undefined;
+    const original = ts.getOriginalNode(node);
+    if (ts.isCallExpression(node) && original.getSourceFile() === agent && symbol(original.expression) === kindSymbol) {
+      need(original.arguments.length === 1 && original.arguments[0].getText() === oldKindArguments.get(enclosing(original)), 'OLD_KIND_BRANCH_UNKNOWN', original);
+      return ts.factory.createFalse();
+    }
+    if (ts.isArrayLiteralExpression(node) && node.elements.some(value => ts.isStringLiteral(value) && value.text.startsWith('voice.'))) {
+      const owner = enclosing(node);
+      let declaration = node.parent; while (declaration && (ts.isAsExpression(declaration) || ts.isParenthesizedExpression(declaration))) declaration = declaration.parent;
+      need(owner === 'recoverUndispatchedAgentTasks' || ts.isVariableDeclaration(declaration)
+        && declaration.name.getText() === 'AGENT_TASK_KINDS', 'OLD_KIND_ARRAY_UNKNOWN', node);
+      return ts.factory.updateArrayLiteralExpression(node, node.elements.filter(value => !ts.isStringLiteral(value) || !['voice.transcribe', 'voice.reply'].includes(value.text)));
+    }
+    if (ts.isParenthesizedExpression(node) && boolean(node.expression) !== undefined) return node.expression;
+    if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken && boolean(node.operand) !== undefined)
+      return boolean(node.operand) ? ts.factory.createFalse() : ts.factory.createTrue();
+    if (ts.isBinaryExpression(node)) {
+      const a = boolean(node.left), b = boolean(node.right);
+      if (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+        if (a === false) return ts.factory.createFalse(); if (a === true) return node.right;
+        if (booleanContext(node) && b === false) { need(discardableRead(node.left), 'DISCARDED_OPERAND_EFFECT_UNKNOWN', original); return ts.factory.createFalse(); }
+        if (booleanContext(node) && b === true) return node.left;
+      }
+      if (node.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+        if (a === true) return ts.factory.createTrue(); if (a === false) return node.right;
+        if (booleanContext(node) && b === true) { need(discardableRead(node.left), 'DISCARDED_OPERAND_EFFECT_UNKNOWN', original); return ts.factory.createTrue(); }
+        if (booleanContext(node) && b === false) return node.left;
+      }
+    }
+    if (ts.isIfStatement(node) && boolean(node.expression) !== undefined) return boolean(node.expression) ? node.thenStatement : node.elseStatement;
+    if (ts.isConditionalExpression(node) && boolean(node.condition) !== undefined) return boolean(node.condition) ? node.whenTrue : node.whenFalse;
+    if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && ts.isIdentifier(node.initializer)
+      && node.name.text === node.initializer.text) return ts.factory.createShorthandPropertyAssignment(node.name);
+    return node;
+  };
+  // Retain original binding/statement identity while simplifying bottom-up.
+  // In a Boolean context an evaluated operand may disappear only after its
+  // literal or already-initialized lexical read is proven effect-free.
+  // Full residual equality below catches any changed legacy arm, query, call,
+  // initializer, import, configuration or dependency.
+  const agentProjection = ts.transform(agent, [transformation => node => ts.visitNode(node, function visit(value) {
+    if (importsCapsule(value) || ts.isFunctionDeclaration(value) && value.name?.text === 'persistHermesVoiceTaskInTransaction') return undefined;
+    return simplify(ts.visitEachChild(value, visit, transformation));
+  })]);
+  try { add(agent, ts.createPrinter({ removeComments: true }).printFile(agentProjection.transformed[0])); }
+  finally { agentProjection.dispose(); }
+  const index = source('apps/agent-worker/src/index.ts');
+  const voiceHandlerSymbol = symbol(handlers.name), runtimeFactorySymbol = symbol(factory.name);
+  const runtimeDecl = one(nodes(index, node => ts.isVariableDeclaration(node) && node.name.getText() === 'voiceRuntime'), 'FACTORY_WIRING_UNKNOWN');
+  need(contains(runtimeDecl, 'createConfiguredSynclipVoiceRuntime(process.env)'), 'FACTORY_CALL_CHANGED');
+  const handlerCalls = nodes(index, node => ts.isCallExpression(node) && symbol(node.expression) === voiceHandlerSymbol);
+  need(handlerCalls.length === 1 && ts.isSpreadAssignment(handlerCalls[0].parent)
+    && same(handlerCalls[0], 'createHermesVoiceHandlers(options.voiceRuntime)'), 'WORKER_HANDLER_WIRING_CHANGED');
+  const runtimeCalls = nodes(index, node => ts.isCallExpression(node) && symbol(node.expression) === runtimeFactorySymbol);
+  need(runtimeCalls.length === 1 && enclosing(runtimeCalls[0]) === 'main', 'FACTORY_CALLER_ESCAPE');
+  add(index, printTransform(index, node => {
+    if (importsCapsule(node)) return undefined;
+    if (ts.isImportSpecifier(node) && symbol(node.name) === runtimeFactorySymbol) return undefined;
+    if (ts.isSpreadAssignment(node) && node.expression === handlerCalls[0]) return undefined;
+    if (ts.isVariableStatement(node) && node.declarationList.declarations.includes(runtimeDecl)) return undefined;
+    if (ts.isShorthandPropertyAssignment(node) && node.name.text === 'voiceRuntime') return undefined;
+    return node;
+  }));
+  for (const path of ['packages/domain/src/index.ts', 'packages/ai-gateway/src/index.ts']) {
+    const file = source(path); add(file, printTransform(file, node => importsCapsule(node) ? undefined : node));
+  }
+  const audio = source('packages/ai-gateway/src/synclip-audio-api.ts');
+  const audioClass = one(audio.statements.filter(node => ts.isClassDeclaration(node) && node.name?.text === 'SynclipAudioClient'), 'AUDIO_CLIENT_MISSING');
+  const request = one(audioClass.members.filter(node => ts.isMethodDeclaration(node) && ts.isPrivateIdentifier(node.name) && node.name.text === '#request'), 'AUDIO_REQUEST_MISSING');
+  const mediaType = one(nodes(request, node => ts.isConditionalExpression(node) && same(node.condition, "typeof body === 'string'")), 'LEGACY_STRING_REQUEST_CHANGED');
+  need(same(mediaType.whenTrue, "{ 'Content-Type': 'application/json' }") && same(mediaType.whenFalse, '{}'), 'LEGACY_STRING_REQUEST_CHANGED');
+  const transcription = one(audioClass.members.filter(node => ts.isMethodDeclaration(node) && node.name.getText() === 'createTranscription'), 'FORMDATA_CONSTRUCTOR_MISSING');
+  const query = one(audioClass.members.filter(node => ts.isMethodDeclaration(node) && node.name.getText() === 'queryTranscription'), 'ASR_READER_MISSING');
+  requireNode(transcription, "this.#request('POST', '/asr', form)", 'FORMDATA_PATH_CHANGED');
+  requireNode(query, "this.#request('GET', '/tasks/' + id)", 'ASR_QUERY_CHANGED');
+  need(query.body.statements.length === 2 && same(query.body.statements[0], 'const id = validateSynclipAudioTaskId(taskId);')
+    && same(query.body.statements[1], "return transcriptionTask(await this.#request('GET', '/tasks/' + id), id);"), 'ASR_QUERY_CHANGED');
+  // Every surviving old #request invocation is compared with the old full
+  // class. Its old domain is exactly string | undefined, where these two
+  // header discriminators are equivalent; FormData belongs only to fresh ASR.
+  add(audio, printTransform(audio, node => {
+    if (node === transcription || node === query) return undefined;
+    if (ts.isFunctionDeclaration(node) && ['validateHermesVoiceWav', 'transcriptionTask'].includes(node.name?.text)) return undefined;
+    if (ts.isVariableStatement(node) && node.declarationList.declarations.some(item => ['HERMES_VOICE_MAX_SECONDS', 'HERMES_VOICE_MAX_WAV_BYTES'].includes(item.name.getText()))) return undefined;
+    if (node === mediaType) return ts.factory.createConditionalExpression(
+      ts.factory.createBinaryExpression(ts.factory.createIdentifier('body'), ts.SyntaxKind.EqualsEqualsEqualsToken, ts.factory.createIdentifier('undefined')),
+      undefined, mediaType.whenFalse, undefined, mediaType.whenTrue);
+    return node;
+  }));
+  // Runtime exports introduced by capsules must be finite entrypoints, and
+  // callers in old modules may only be the checked worker bindings above.
+  // The pair checks all imports against this captured, side-effect-free graph.
+  return { phase, domain: 'rollback-produced-state', projected, capsules, selector, contract,
+    outstanding: ['genuine full DEFAULT collector provenance', 'strict residual whole-runtime/dependency equality', 'adjacent deployment history'] };
+}
+
+function finiteVoiceWriterSourceModel(ts, left, right, current, previous) {
+  const key = 'packages/domain/src/agent/voice-contract.ts';
+  const source = left.program.getSourceFile(resolve(left.root, key)), rollback = right.program.getSourceFile(resolve(right.root, key));
+  const fail = () => { throw { reason: 'VOICE_WRITER_READER_CONTEXT_CHANGED' }; };
+  if (!source || !rollback) fail();
+  const select = file => file.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === 'isHermesVoiceWriterEnabled');
+  const x = select(source), y = select(rollback);
+  if (x.length !== 1 || y.length !== 1) fail();
+  const literal = fn => !fn.asteriskToken && !fn.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword)
+    && fn.parameters.length === 0 && fn.body?.statements.length === 1 && ts.isReturnStatement(fn.body.statements[0]) ? fn.body.statements[0].expression : undefined;
+  if (literal(x[0])?.kind !== ts.SyntaxKind.TrueKeyword || literal(y[0])?.kind !== ts.SyntaxKind.FalseKeyword) fail();
+  const a = new Map(current), b = new Map(previous), moduleKey = `module:${key}`;
+  if (!a.has(moduleKey) || !b.has(moduleKey)) fail();
+  for (const entry of new Set([...a.keys(), ...b.keys()])) if (!a.has(entry) || !b.has(entry)
+    || entry !== moduleKey && JSON.stringify(a.get(entry)) !== JSON.stringify(b.get(entry))) fail();
+  // Equal readers alone are insufficient: the phase bit must not also select
+  // a private projection/recovery implementation or escape as a callback. Bind
+  // every runtime use to the actual selector and its finite fresh-only guard.
+  const tokenText = value => { const scan = ts.createScanner(ts.ScriptTarget.ES2022, true, ts.LanguageVariant.Standard, value), out = [];
+    for (let token = scan.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scan.scan()) out.push([token, scan.getTokenText()]);
+    return JSON.stringify(out);
+  };
+  const same = (node, expected) => node && tokenText(node.getText(node.getSourceFile())) === tokenText(expected);
+  for (const [context, selector, entries] of [[left, x[0], a], [right, y[0], b]]) {
+    const checker = context.checker ?? context.program.getTypeChecker();
+    const symbol = node => { let value = checker.getSymbolAtLocation(node);
+      if (value?.flags & ts.SymbolFlags.Alias) value = checker.getAliasedSymbol(value); return value; };
+    const selected = symbol(selector.name), uses = [];
+    const inspect = node => {
+      if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+      if (ts.isIdentifier(node) && node !== selector.name && symbol(node) === selected
+        && !ts.isImportSpecifier(node.parent) && !ts.isExportSpecifier(node.parent)) uses.push(node);
+      ts.forEachChild(node, inspect);
+    };
+    for (const [entry] of entries) if (entry.startsWith('module:')) {
+      const file = context.program.getSourceFile(resolve(context.root, entry.slice(7)));
+      if (file) inspect(file);
+    }
+    if (uses.length !== 4) fail();
+    for (const use of uses) {
+      if (!ts.isCallExpression(use.parent) || use.parent.expression !== use || use.parent.arguments.length) fail();
+      let owner = use.parent; while (owner && !(ts.isFunctionDeclaration(owner) && owner.name)) owner = owner.parent;
+      let guard = use.parent; while (guard && !ts.isIfStatement(guard)) guard = guard.parent;
+      const path = relative(context.root, use.getSourceFile().fileName).replaceAll('\\', '/');
+      const location = `${path}::${owner?.name.text}`;
+      if (location === 'packages/domain/src/agent/voice.ts::requireVoiceWriter') {
+        if (owner.body.statements.length !== 1 || guard !== owner.body.statements[0]
+          || !same(guard, 'if (!isHermesVoiceWriterEnabled()) blocked(HERMES_VOICE_READER_ONLY);')) fail();
+      } else if (location === 'packages/domain/src/agent/agent.ts::persistHermesVoiceTaskInTransaction') {
+        if (guard !== owner.body.statements[0] || !same(guard,
+          "if (!isHermesVoiceWriterEnabled()) throw new AgentError('ILLEGAL_TRANSITION', HERMES_VOICE_READER_ONLY);")) fail();
+      } else if (location === 'packages/domain/src/agent/agent.ts::prepareAgentTaskForCrashRecovery') {
+        if (!same(guard, 'if (!receipt && !isHermesVoiceWriterEnabled()) return false;') || !ts.isBlock(guard.parent)
+          || !guard.parent.statements.some(node => same(node, 'const receipt = hasHermesVoiceCheckpoint(task.result);'))) fail();
+      } else if (location === 'apps/agent-worker/src/voice.ts::createHermesVoiceHandlers') {
+        if (!same(guard, 'if (!checkpoint && !isHermesVoiceWriterEnabled()) throw new Error(HERMES_VOICE_READER_ONLY);')
+          || !ts.isBlock(guard.parent) || !guard.parent.statements.some(node => same(node, 'let checkpoint = execution.checkpoint;'))) fail();
+      } else fail();
+    }
+  }
+  return { phase: 'writer', key, source, rollback,
+    text: source.text.slice(0, literal(x[0]).getStart()) + 'false' + source.text.slice(literal(x[0]).end),
+    outstanding: ['normalized whole selector-module equality', 'genuine full DEFAULT collector provenance', 'reader is the adjacent deployed rollback'] };
+}
+
+function finiteVoiceFormatReaderSourceModel(ts, left, right, current, previous) {
+  const fail = (reason, node) => { throw { reason: `VOICE_MP3_${reason}`, node }; };
+  const need = (value, reason, node) => { if (!value) fail(reason, node); };
+  const nodes = (scope, predicate) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return result; };
+  const one = (values, reason) => { need(values.length === 1, reason); return values[0]; };
+  const tokens = text => { const scan = ts.createScanner(ts.ScriptTarget.ES2022, true, ts.LanguageVariant.Standard, text.replace(/\r\n?/gu, '\n')), out = [];
+    for (let token = scan.scan(); token !== ts.SyntaxKind.EndOfFileToken; token = scan.scan()) out.push([token, scan.getTokenText()]);
+    return JSON.stringify(out);
+  };
+  const same = (node, text) => node && tokens(node.getText(node.getSourceFile())) === tokens(text);
+  const symbol = (context, node) => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const file = (context, path) => { const value = context.program.getSourceFile(resolve(context.root, path)); need(value, 'SOURCE_MISSING'); return value; };
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), 'FUNCTION_UNKNOWN');
+  const inside = (node, scope) => node.getSourceFile() === scope.getSourceFile() && node.pos >= scope.pos && node.end <= scope.end;
+  const edit = (source, changes) => {
+    const list = [...changes].sort((a, b) => b.node.getStart() - a.node.getStart()); let end = source.end, text = source.getText();
+    for (const change of list) {
+      need(change.node.getSourceFile() === source.getSourceFile() && change.node.getStart() >= source.getStart()
+        && change.node.end <= end, 'PROJECTION_OVERLAP', change.node);
+      text = text.slice(0, change.node.getStart() - source.getStart()) + change.text + text.slice(change.node.end - source.getStart());
+      end = change.node.getStart();
+    }
+    return text;
+  };
+  const gatewayPath = 'packages/ai-gateway/src/synclip-audio-api.ts', voicePath = 'packages/domain/src/agent/voice.ts';
+  const gateway = file(left, gatewayPath), voice = file(left, voicePath);
+  const oldGateway = file(right, gatewayPath), oldVoice = file(right, voicePath);
+  const a = new Map(current), b = new Map(previous), affected = new Set([`module:${gatewayPath}`, `module:${voicePath}`]);
+  for (const key of new Set([...a.keys(), ...b.keys()])) need(a.has(key) && b.has(key)
+    && (affected.has(key) || JSON.stringify(a.get(key)) === JSON.stringify(b.get(key))), 'RESIDUAL_ENTRY_CHANGED');
+  const canonicalSource = (context, source) => {
+    const compiled = ts.transpileModule(source.text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    const ast = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!ast.parseDiagnostics.length && typeof (context.canonical ?? left.canonical) === 'function', 'SOURCE_ENTRY_UNBOUND');
+    return (context.canonical ?? left.canonical)(ast);
+  };
+  for (const [path, source, old] of [[gatewayPath, gateway, oldGateway], [voicePath, voice, oldVoice]]) {
+    need(JSON.stringify(canonicalSource(left, source)) === JSON.stringify(a.get(`module:${path}`))
+      && JSON.stringify(canonicalSource(right, old)) === JSON.stringify(b.get(`module:${path}`)), 'SOURCE_ENTRY_UNBOUND');
+  }
+  const capsules = [fn(gateway, 'validateHermesVoiceAudioBytes'), fn(gateway, 'downloadHermesVoiceAudio')];
+  const kernel = fn(gateway, 'downloadAudio'), entry = fn(gateway, 'downloadSynclipAudio'), validator = fn(gateway, 'validateSynclipAudioBytes');
+  const capDeclaration = one(gateway.statements.filter(node => ts.isVariableStatement(node)
+    && node.declarationList.declarations.some(value => ts.isIdentifier(value.name) && value.name.text === 'hermesVoiceAudioMaxBytes')), 'CAP_UNKNOWN');
+  need(capDeclaration.declarationList.flags & ts.NodeFlags.Const && capDeclaration.declarationList.declarations.length === 1
+    && same(capDeclaration.declarationList.declarations[0].initializer, '16 * 1024 * 1024'), 'CAP_INITIALIZATION_CHANGED');
+  const removable = [...capsules, kernel, capDeclaration];
+  const runtimeFiles = context => context.modules ? [...context.modules.values()].filter(source => !source.isDeclarationFile)
+    : context.program.getSourceFiles().filter(source => {
+      const path = relative(context.root, source.fileName).replaceAll('\\', '/');
+      return !source.isDeclarationFile && path && !path.startsWith('../') && !path.startsWith('node_modules/') && !path.includes('/node_modules/');
+    });
+  const hasExport = (context, module, targets) => {
+    const moduleSymbol = context.checker.getSymbolAtLocation(module);
+    return moduleSymbol && context.checker.getExportsOfModule(moduleSymbol).some(value => {
+      const resolved = value.flags & ts.SymbolFlags.Alias ? context.checker.getAliasedSymbol(value) : value;
+      return targets.has(resolved);
+    });
+  };
+  const capsuleSymbols = new Set(capsules.map(value => symbol(left, value.name)));
+  const kernelSymbol = symbol(left, kernel.name);
+  const constantSymbol = symbol(left, capDeclaration.declarationList.declarations[0].name);
+  need(!capsuleSymbols.has(undefined) && constantSymbol, 'BINDING_MISSING');
+  const capabilitySpecifiers = new Set(), loaderFactories = new Set(), loaders = new Set();
+  for (const source of runtimeFiles(left)) for (const node of nodes(source, () => true)) {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier
+      && hasExport(left, node.moduleSpecifier, capsuleSymbols)) capabilitySpecifiers.add(node.moduleSpecifier.text);
+    if (ts.isImportDeclaration(node) && ['node:module', 'module'].includes(node.moduleSpecifier.text)
+      && node.importClause?.namedBindings) {
+      need(ts.isNamedImports(node.importClause.namedBindings), 'LOADER_NAMESPACE_UNKNOWN', node);
+      for (const imported of node.importClause.namedBindings.elements) if ((imported.propertyName ?? imported.name).text === 'createRequire')
+        loaderFactories.add(left.checker.getSymbolAtLocation(imported.name));
+    }
+  }
+  for (const source of runtimeFiles(left)) for (const declaration of nodes(source, ts.isVariableDeclaration)) {
+    if (declaration.initializer && ts.isCallExpression(declaration.initializer)
+      && loaderFactories.has(left.checker.getSymbolAtLocation(declaration.initializer.expression))) {
+      need(ts.isIdentifier(declaration.name), 'LOADER_ESCAPE', declaration);
+      loaders.add(left.checker.getSymbolAtLocation(declaration.name));
+    }
+  }
+  // New exported functions may be deferred declarations, never a runtime namespace/dynamic capability.
+  for (const source of runtimeFiles(left)) for (const node of nodes(source, () => true)) {
+    if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamespaceImport(node.importClause.namedBindings))
+      need(!hasExport(left, node.moduleSpecifier, capsuleSymbols), 'NAMESPACE_ESCAPE', node);
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+      || ts.isIdentifier(node.expression) && node.expression.text === 'require'
+      || loaders.has(left.checker.getSymbolAtLocation(node.expression)))) {
+      need(node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]), 'DYNAMIC_MODULE_UNKNOWN', node);
+      need(!capabilitySpecifiers.has(node.arguments[0].text) && !hasExport(left, node.arguments[0], capsuleSymbols), 'DYNAMIC_ESCAPE', node);
+    }
+    if (!ts.isIdentifier(node)) continue;
+    const binding = symbol(left, node);
+    if (loaderFactories.has(left.checker.getSymbolAtLocation(node)) && !ts.isImportSpecifier(node.parent)) {
+      need(ts.isCallExpression(node.parent) && node.parent.expression === node
+        && ts.isVariableDeclaration(node.parent.parent) && node.parent.parent.initializer === node.parent
+        && ts.isIdentifier(node.parent.parent.name), 'LOADER_FACTORY_ESCAPE', node);
+    }
+    if (loaders.has(left.checker.getSymbolAtLocation(node)) && !ts.isVariableDeclaration(node.parent))
+      need(ts.isCallExpression(node.parent) && node.parent.expression === node, 'LOADER_ESCAPE', node);
+    if (binding === kernelSymbol) need(node === kernel.name || inside(node, entry) || capsules.some(scope => inside(node, scope)), 'KERNEL_ESCAPE', node);
+    if (!capsuleSymbols.has(binding) && binding !== constantSymbol) continue;
+    need(removable.some(scope => inside(node, scope)), 'NEW_CAPABILITY_REFERENCED', node);
+  }
+  // Bind actual producer and retained-receipt call sites, rather than inferring MP3 from the database or selector.
+  for (const context of [left, right]) {
+    const contract = file(context, 'packages/domain/src/agent/voice-contract.ts');
+    need(same(fn(contract, 'isHermesVoiceWriterEnabled').body, '{ return true; }'), 'PHASE_UNKNOWN');
+    const worker = file(context, 'apps/agent-worker/src/voice.ts'), index = file(context, 'apps/agent-worker/src/index.ts');
+    const factory = fn(worker, 'createHermesVoiceHandlers'), factorySymbol = symbol(context, factory.name);
+    need(factory.parameters.length === 2 && same(factory.parameters[1].initializer, '{}')
+      && ts.isIdentifier(factory.parameters[1].name), 'FACTORY_DEFAULT_CHANGED');
+    const optionsSymbol = symbol(context, factory.parameters[1].name);
+    for (const use of nodes(factory.body, ts.isIdentifier)) if (symbol(context, use) === optionsSymbol) {
+      const access = use.parent;
+      need(ts.isPropertyAccessExpression(access) && access.expression === use
+        && ['wait', 'maxPolls', 'pollIntervalMs', 'downloadAudio'].includes(access.name.text), 'FACTORY_OPTIONS_ESCAPE', use);
+      const parent = access.parent;
+      need(!(ts.isBinaryExpression(parent) && parent.left === access
+        && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
+        && !ts.isDeleteExpression(parent) && !ts.isPostfixUnaryExpression(parent)
+        && !(ts.isPrefixUnaryExpression(parent) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)), 'FACTORY_OPTIONS_WRITE', access);
+    }
+    const save = fn(file(context, voicePath), 'saveHermesVoiceCheckpoint'), saveSymbol = symbol(context, save.name);
+    const downloadSymbol = symbol(context, fn(file(context, gatewayPath), 'downloadSynclipAudio').name);
+    let factoryCalls = 0, saveCalls = 0;
+    for (const source of runtimeFiles(context)) for (const use of nodes(source, ts.isIdentifier)) {
+      const selected = symbol(context, use);
+      if (selected !== factorySymbol && selected !== saveSymbol) continue;
+      if (use === factory.name || use === save.name || ts.isImportSpecifier(use.parent) || ts.isExportSpecifier(use.parent)) continue;
+      const call = use.parent; need(ts.isCallExpression(call) && call.expression === use, 'PRODUCER_OR_SAVE_ESCAPE', use);
+      if (selected === factorySymbol) {
+        need(source === index && same(call, 'createHermesVoiceHandlers(options.voiceRuntime)'), 'DOWNLOAD_INJECTION', call); factoryCalls++;
+      } else {
+        need(source === worker || source === save.getSourceFile(), 'SAVE_CALLER_CHANGED', call);
+        if (source === worker) {
+          need(inside(call, factory) && call.arguments.length === 3 && same(call.arguments[1], 'originalIdentity'), 'SAVE_IDENTITY_CHANGED', call);
+          const update = call.arguments[2]; need(ts.isObjectLiteralExpression(update), 'SAVE_INPUT_CHANGED', update);
+          const phase = one(update.properties.filter(value => ts.isPropertyAssignment(value) && value.name.getText() === 'phase'), 'SAVE_PHASE_CHANGED');
+          need(ts.isStringLiteral(phase.initializer) && ['failed', 'completed'].includes(phase.initializer.text), 'SAVE_PHASE_CHANGED', update);
+        } else {
+          need(same(call, "saveHermesVoiceCheckpoint(deps, prepared.identity, { phase: 'submitted', ...received })"), 'SAVE_INPUT_CHANGED', call);
+        }
+        saveCalls++;
+      }
+    }
+    need(factoryCalls === 1 && saveCalls === 4, 'PRODUCER_OR_SAVE_INVENTORY_CHANGED');
+    const download = one(nodes(factory, ts.isCallExpression).filter(call => same(call,
+      '(options.downloadAudio ?? downloadSynclipAudio)(output)')), 'RECOVERY_DOWNLOAD_CHANGED');
+    const fallback = download.expression.expression;
+    need(ts.isBinaryExpression(fallback) && symbol(context, fallback.right) === downloadSymbol, 'DOWNLOAD_BINDING_CHANGED', download);
+    const local = name => {
+      const declaration = one(nodes(factory, ts.isVariableDeclaration).filter(node => ts.isIdentifier(node.name) && node.name.text === name), 'MP3_BINDING_CHANGED');
+      need(ts.isVariableDeclarationList(declaration.parent) && declaration.parent.flags & ts.NodeFlags.Const
+        && declaration.parent.declarations.length === 1, 'MP3_BINDING_CHANGED', declaration);
+      need(symbol(context, declaration.name), 'MP3_BINDING_CHANGED', declaration);
+      return declaration;
+    };
+    const audioBytes = local('audio'), digest = local('sha256'), key = local('objectKey'), stored = local('storedAudio');
+    need(audioBytes.initializer === download.parent && ts.isAwaitExpression(download.parent)
+      && same(digest.initializer, 'sha256HexBuffer(audio.bytes)')
+      && symbol(context, digest.initializer.expression) === symbol(context, fn(file(context, 'packages/storage/src/checksum.ts'), 'sha256HexBuffer').name)
+      && same(key.initializer, '`derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.mp3`')
+      && same(stored.initializer, "{ objectKey, sha256, bytes: audio.bytes.length, contentType: 'audio/mpeg' as const }"), 'MP3_RECEIPT_CHANGED');
+    const sizeGuard = one(nodes(factory, ts.isIfStatement).filter(node => same(node,
+      "if (audio.bytes.length > 20 * 1024 * 1024) throw new Error('[blocked] VOICE_AUDIO_TOO_LARGE');")), 'MP3_SIZE_GUARD_CHANGED');
+    const put = one(nodes(factory, ts.isCallExpression).filter(node => ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === 'putObject'), 'MP3_STORAGE_CHANGED');
+    need(same(put, "deps.storage.putObject(objectKey, audio.bytes, { contentType: 'audio/mpeg', sha256 })")
+      && ts.isAwaitExpression(put.parent) && ts.isExpressionStatement(put.parent.parent), 'MP3_STORAGE_CHANGED', put);
+    const audioSave = one(nodes(factory, ts.isCallExpression).filter(call => symbol(context, call.expression) === saveSymbol
+      && same(call.arguments[2], "{ phase: 'completed', ...(output.coins_used === undefined ? {} : { credits: output.coins_used }), audio: storedAudio }")), 'MP3_SAVE_CHANGED');
+    const discarded = one(nodes(factory, ts.isCallExpression).filter(call => same(call,
+      'rememberDiscardedTaskResult(deps.prisma, originalIdentity.taskId, { hermesVoice: { audio: storedAudio } })')), 'MP3_DISCARD_CHANGED');
+    // The saved object is an immutable local construction, not merely near an MP3 put.
+    // Bind every value use, including shorthand properties, to its actual declaration.
+    const localSymbol = node => ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node
+      ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : symbol(context, node);
+    const allowed = new Map([
+      [symbol(context, audioBytes.name), [audioBytes.name, sizeGuard.expression.left.expression.expression,
+        digest.initializer.arguments[0].expression, put.arguments[1].expression,
+        stored.initializer.properties[2].initializer.expression.expression]],
+      [symbol(context, digest.name), [digest.name, key.initializer.templateSpans[2].expression,
+        put.arguments[2].properties[1].name, stored.initializer.properties[1].name]],
+      [symbol(context, key.name), [key.name, put.arguments[0], stored.initializer.properties[0].name]],
+      [symbol(context, stored.name), [stored.name, audioSave.arguments[2].properties[2].initializer,
+        discarded.arguments[2].properties[0].initializer.properties[0].initializer]],
+    ]);
+    // Check both directions: a same-spelled nested parameter must not replace
+    // one of these expected value nodes while the outer const stays unused.
+    for (const [binding, references] of allowed) for (const reference of references)
+      need(ts.isIdentifier(reference) && localSymbol(reference) === binding, 'LOCAL_BINDING_CHANGED', reference);
+    for (const use of nodes(factory, ts.isIdentifier)) {
+      const references = allowed.get(localSymbol(use));
+      if (references) need(references.includes(use), 'MP3_LOCAL_ESCAPE_OR_WRITE', use);
+    }
+    const block = audioBytes.parent.parent.parent;
+    need(ts.isBlock(block) && [digest, key, stored].every(node => node.parent.parent.parent === block)
+      && put.parent.parent.parent === block && sizeGuard.parent === block
+      && audioBytes.end < sizeGuard.pos && sizeGuard.end < digest.pos && digest.end < key.pos
+      && key.end < put.pos && put.end < stored.pos && stored.end < audioSave.pos, 'MP3_STORAGE_ORDER_CHANGED');
+    // No second storage access, alias, computed write, or unclassified dependency escape.
+    const depsDeclaration = local('deps'), depsSymbol = symbol(context, depsDeclaration.name);
+    need(same(depsDeclaration.initializer, '{ ...workerDeps, storage: workerDeps.storage, voicePresets: [] }'), 'MP3_DEPENDENCY_CHANGED');
+    need(symbol(context, put.expression.expression.expression) === depsSymbol
+      && symbol(context, audioSave.arguments[0]) === depsSymbol
+      && symbol(context, discarded.arguments[0].expression) === depsSymbol, 'MP3_DEPENDENCY_BINDING_CHANGED');
+    const handler = local('handle').initializer;
+    need(ts.isArrowFunction(handler) && handler.parameters.length === 2 && ts.isIdentifier(handler.parameters[0].name), 'MP3_HANDLER_CHANGED');
+    const workerDepsSymbol = symbol(context, handler.parameters[0].name);
+    const storageGuard = one(nodes(handler.body, ts.isIfStatement).filter(node => same(node,
+      "if (!workerDeps.storage) throw new Error('[blocked] VOICE_STORAGE_UNAVAILABLE');")), 'MP3_STORAGE_GUARD_CHANGED');
+    for (const use of nodes(handler.body, ts.isIdentifier)) if (symbol(context, use) === workerDepsSymbol)
+      need(inside(use, storageGuard) || inside(use, depsDeclaration.initializer), 'MP3_STORAGE_ESCAPE', use);
+    const depsCalls = new Set(['loadHermesVoiceExecution', 'finalizeHermesVoiceTask', 'recording', 'withHermesVoiceSubmission', 'saveHermesVoiceCheckpoint']);
+    for (const use of nodes(factory, ts.isIdentifier)) if (symbol(context, use) === depsSymbol && use !== depsDeclaration.name) {
+      const parent = use.parent;
+      if (ts.isCallExpression(parent) && parent.arguments[0] === use && ts.isIdentifier(parent.expression)) {
+        need(depsCalls.has(parent.expression.text)
+          && (parent.expression.text === 'recording' ? symbol(context, parent.expression) === symbol(context, fn(worker, 'recording').name)
+            : symbol(context, parent.expression)?.declarations?.some(node => relative(context.root, node.getSourceFile().fileName).replaceAll('\\', '/').startsWith('packages/domain/src/'))),
+        'MP3_DEPENDENCY_ESCAPE', use);
+      } else need(ts.isPropertyAccessExpression(parent) && parent.expression === use
+        && (parent.name.text === 'storage' && parent === put.expression.expression
+          || parent.name.text === 'prisma' && parent === discarded.arguments[0]
+          || parent.name.text === 'voicePresets'), 'MP3_DEPENDENCY_ESCAPE', use);
+    }
+  }
+  // The unprojected worker, receipt/CAS, commercial call sites, imports and configuration must remain exact.
+  const literalCall = entry.body?.statements;
+  need(literalCall?.length === 1 && ts.isReturnStatement(literalCall[0]) && ts.isCallExpression(literalCall[0].expression), 'DEFAULT_WRAPPER_CHANGED');
+  const invoke = literalCall[0].expression;
+  need(symbol(left, invoke.expression) === symbol(left, kernel.name) && invoke.arguments.length === 3
+    && invoke.arguments.slice(0, 2).every((arg, i) => symbol(left, arg) === symbol(left, entry.parameters[i].name)), 'DEFAULT_BINDING_CHANGED');
+  const config = invoke.arguments[2];
+  need(same(config, "{ maxBytes: SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES, accept: 'audio/mpeg,application/octet-stream', types: ['audio/mpeg', 'application/octet-stream'], decode: bytes => validateSynclipAudioBytes(bytes) }"), 'DEFAULT_CONFIG_CHANGED', config);
+  const decode = config.properties.find(value => value.name.getText() === 'decode').initializer;
+  need(ts.isArrowFunction(decode) && ts.isCallExpression(decode.body)
+    && symbol(left, decode.body.expression) === symbol(left, validator.name)
+    && symbol(left, decode.body.arguments[0]) === symbol(left, decode.parameters[0].name), 'DEFAULT_DECODER_CHANGED');
+  need(kernel.parameters.length === 3 && kernel.parameters.every((parameter, i) => ts.isIdentifier(parameter.name)
+    && !parameter.initializer && !parameter.dotDotDotToken && (i === 2 || parameter.name.text === entry.parameters[i].name.getText()))
+    && !kernel.asteriskToken && kernel.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword)
+    && !kernel.modifiers.some(value => value.kind === ts.SyntaxKind.ExportKeyword), 'KERNEL_SIGNATURE_CHANGED');
+  const formatSymbol = symbol(left, kernel.parameters[2].name), bodyEdits = [];
+  for (const use of nodes(kernel.body, ts.isIdentifier)) if (symbol(left, use) === formatSymbol) {
+    const member = use.parent; need(ts.isPropertyAccessExpression(member) && member.expression === use, 'FORMAT_ESCAPE', use);
+    const name = member.name.text;
+    if (name === 'decode') {
+      const call = member.parent;
+      need(ts.isCallExpression(call) && call.expression === member && call.arguments.length === 2
+        && same(call.arguments[0], 'Buffer.concat(chunks, size)')
+        && ts.isIdentifier(call.arguments[1]) && call.arguments[1].text === 'contentType', 'DECODER_EFFECT_CHANGED', call);
+      const mimeUse = one(nodes(call.arguments[1], ts.isIdentifier).filter(node => node.text === 'contentType'), 'MIME_BINDING_CHANGED');
+      const mimeDeclaration = symbol(left, mimeUse)?.valueDeclaration;
+      need(mimeDeclaration && ts.isVariableDeclaration(mimeDeclaration) && mimeDeclaration.parent.flags & ts.NodeFlags.Const
+        && same(mimeDeclaration.initializer, "response.headers['content-type']"), 'MIME_BINDING_CHANGED', mimeUse);
+      // Only an immutable lexical primitive read is unused by this exact one-argument
+      // decoder. No method evaluation or global intrinsic purity is assumed.
+      bodyEdits.push({ node: call, text: `validateSynclipAudioBytes(${call.arguments[0].getText()})` });
+    } else {
+      const replacement = new Map([['maxBytes', 'SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES'], ['accept', "'audio/mpeg,application/octet-stream'"], ['types', "['audio/mpeg', 'application/octet-stream']"]]).get(name);
+      need(replacement, 'FORMAT_MEMBER_CHANGED', member); bodyEdits.push({ node: member, text: replacement });
+    }
+  }
+  const restoredDownload = entry.getText().slice(0, entry.body.getStart() - entry.getStart()) + edit(kernel.body, bodyEdits);
+  const gatewayEdits = [{ node: entry, text: restoredDownload }, ...removable.map(node => ({ node, text: '' }))];
+  const audio = fn(voice, 'validAudio'), oldAudio = fn(oldVoice, 'validAudio');
+  for (const validator of [audio, oldAudio]) need(!validator.asteriskToken
+    && !validator.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword)
+    && validator.parameters.length === 1 && !validator.parameters[0].initializer && !validator.parameters[0].dotDotDotToken,
+  'FORMAT_READER_SIGNATURE_CHANGED');
+  need(tokens(audio.getText().slice(0, audio.body.getStart() - audio.getStart()))
+    === tokens(oldAudio.getText().slice(0, oldAudio.body.getStart() - oldAudio.getStart())), 'FORMAT_READER_SIGNATURE_CHANGED');
+  const receipt = fn(voice, 'readHermesVoiceCheckpoint'), oldReceipt = fn(oldVoice, 'readHermesVoiceCheckpoint');
+  need(same(oldAudio.body, `{
+    return record(audio) && keysAllowed(audio, ['objectKey', 'sha256', 'bytes', 'contentType'])
+      && nonempty(audio.objectKey) && /^derived\\/hermes-voice\\/[^\\s?#\\\\]+\\.mp3$/u.test(audio.objectKey)
+      && !audio.objectKey.split('/').includes('..') && hash(audio.sha256)
+      && Number.isSafeInteger(audio.bytes) && Number(audio.bytes) > 0 && Number(audio.bytes) <= 20 * 1024 * 1024
+      && audio.contentType === 'audio/mpeg';
+  }`), 'OLD_FORMAT_READER_CHANGED');
+  // Only the matched, dominated format extension is erased; all other reader/source/CAS bytes compare below.
+  need(same(audio.body, `{
+    return record(audio) && keysAllowed(audio, ['objectKey', 'sha256', 'bytes', 'contentType'])
+      && nonempty(audio.objectKey) && /^derived\\/hermes-voice\\/[^\\s?#\\\\]+\\.(?:mp3|wav)$/u.test(audio.objectKey)
+      && !audio.objectKey.split('/').includes('..') && hash(audio.sha256)
+      && Number.isSafeInteger(audio.bytes) && Number(audio.bytes) > 0 && Number(audio.bytes) <= 20 * 1024 * 1024
+      && ((audio.contentType === 'audio/mpeg' && audio.objectKey.endsWith('.mp3'))
+        || (audio.contentType === 'audio/wav' && audio.objectKey.endsWith('.wav') && Number(audio.bytes) <= 16 * 1024 * 1024));
+  }`), 'FORMAT_READER_CHANGED', audio);
+  const extension = one(nodes(receipt, ts.isTemplateExpression).filter(node => node.templateSpans.some(span => ts.isConditionalExpression(span.expression)
+    && same(span.expression, "cp.audio.contentType === 'audio/wav' ? 'wav' : 'mp3'"))), 'EXTENSION_CHANGED');
+  const oldExtension = one(nodes(oldReceipt, ts.isTemplateExpression).filter(node => node.getText().includes('/${cp.identity.taskId}/${cp.audio.sha256}.mp3')), 'OLD_EXTENSION_UNKNOWN');
+  const audioCheck = one(nodes(receipt, ts.isCallExpression).filter(call => same(call, 'validAudio(cp.audio)')), 'AUDIO_CHECK_UNKNOWN');
+  need(symbol(left, audioCheck.expression) === symbol(left, audio.name), 'AUDIO_CHECK_BINDING_CHANGED');
+  let guarded = extension; while (guarded && !ts.isIfStatement(guarded)) guarded = guarded.parent;
+  need(guarded && same(guarded, `if (cp.phase === 'completed' && (payload.operation === 'transcription'
+    ? typeof cp.transcript !== 'string' || cp.transcript.length > 20_000 || cp.audio !== undefined
+    : !validAudio(cp.audio) || cp.transcript !== undefined
+      || cp.audio.objectKey !== \`derived/hermes-voice/\${encodeURIComponent(String(cp.identity.userId))}/\${cp.identity.taskId}/\${cp.audio.sha256}.\${cp.audio.contentType === 'audio/wav' ? 'wav' : 'mp3'}\`)) blocked('私有语音完成回执无效');`), 'AUDIO_GUARD_CHANGED');
+  const receiptText = edit(receipt, [{ node: extension, text: oldExtension.getText() }]);
+  // Match the complete receipt body after its sole bounded extension replacement; this preserves validAudio dominance.
+  need(tokens(receiptText) === tokens(oldReceipt.getText()), 'RECEIPT_RESIDUAL_CHANGED');
+  const projected = new Map([[gatewayPath, { source: gateway, text: edit(gateway, gatewayEdits) }],
+    [voicePath, { source: voice, text: edit(voice, [{ node: audio, text: oldAudio.getText() }, { node: receipt, text: receiptText }]) }]]);
+  for (const [path, value] of projected) {
+    const compiled = ts.transpileModule(value.text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    const ast = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!ast.parseDiagnostics.length && JSON.stringify(left.canonical ? left.canonical(ast) : null) === JSON.stringify(b.get(`module:${path}`)), 'PROJECTED_RUNTIME_CHANGED');
+  }
+  return { phase: 'format-reader', domain: 'old-mp3-produced-state', projected,
+    rollbackModules: new Map([[gatewayPath, oldGateway], [voicePath, oldVoice]]) };
+}
+
+function finiteVoicePairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
+  try {
+    const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
+    if (roots !== APPLICATION_ROLLBACK_READERS || !left || !right || left.ts !== ts || right.ts !== ts
+      || left.roots !== roots || right.roots !== roots || left.root !== candidateRoot || right.root !== rollbackRoot
+      || left.program.getTypeChecker() !== left.checker || right.program.getTypeChecker() !== right.checker) return false;
+    const a = new Map(current), b = new Map(previous), selectorPath = 'packages/domain/src/agent/voice-contract.ts';
+    const oldContract = right.program.getSourceFile(resolve(right.root, selectorPath));
+    if (oldContract) {
+      const selectorIsTrue = source => source?.statements.some(node => ts.isFunctionDeclaration(node)
+        && node.name?.text === 'isHermesVoiceWriterEnabled' && !node.asteriskToken
+        && !node.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword) && node.parameters.length === 0
+        && node.body?.statements.length === 1 && ts.isReturnStatement(node.body.statements[0])
+        && node.body.statements[0].expression?.kind === ts.SyntaxKind.TrueKeyword);
+      if (selectorIsTrue(oldContract) && selectorIsTrue(left.program.getSourceFile(resolve(left.root, selectorPath)))) {
+        const model = finiteVoiceFormatReaderSourceModel(ts, left, right, current, previous);
+        return [...model.projected].every(([path, value]) => left.modules.get(resolve(left.root, path)) === value.source
+          && right.modules.get(resolve(right.root, path)) === model.rollbackModules.get(path));
+      }
+      // The false-to-true selector direction retains its original exact reader proof.
+      // Only the pure selector's literal changes; all reader capabilities,
+      // import initialization, callers, dependencies and late CAS stay exact.
+      const model = finiteVoiceWriterSourceModel(ts, left, right, current, previous);
+      const compiled = ts.transpileModule(model.text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+      const ast = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+      for (const key of new Set([...a.keys(), ...b.keys()])) {
+        if (!a.has(key) || !b.has(key)) return false;
+        if (JSON.stringify(key === `module:${selectorPath}` ? left.canonical(ast) : a.get(key)) !== JSON.stringify(b.get(key))) return false;
+      }
+      return left.modules.get(resolve(left.root, selectorPath)) === model.source && right.modules.get(resolve(right.root, selectorPath)) === model.rollback;
+    }
+    const model = finiteVoiceSourceModel(ts, left, right);
+    if (model.phase !== 'reader') return false;
+    const normalized = new Map(), affected = new Set();
+    for (const [path, value] of model.projected) {
+      const key = `module:${path}`;
+      if (!a.has(key) || !b.has(key) || left.modules.get(resolve(left.root, path)) !== value.source) return false;
+      const emitted = ts.transpileModule(value.text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+      const ast = ts.createSourceFile('runtime.js', emitted.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+      if (ast.parseDiagnostics.length || JSON.stringify(left.canonical(ast)) !== JSON.stringify(b.get(key))) return false;
+      normalized.set(path, ast); affected.add(key);
+    }
+    for (const [path, file] of model.capsules) {
+      if (left.modules.get(resolve(left.root, path)) !== file || !a.has(`module:${path}`) || b.has(`module:${path}`)) return false;
+      affected.add(`module:${path}`);
+    }
+    const importSpecifiers = file => file.statements.filter(node => (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier)
+      .map(node => node.moduleSpecifier.text);
+    for (const key of new Set([...a.keys(), ...b.keys()])) {
+      if (affected.has(key)) continue;
+      if (a.has(key) && b.has(key)) { if (JSON.stringify(a.get(key)) !== JSON.stringify(b.get(key))) return false; continue; }
+      // A capsule may only add imports of the very same external implementation
+      // already retained in the old closure. No package/config/vendor/node is
+      // dropped by a path exemption, and unclassified differences always fail.
+      const match = /^(.*):external:(.+)$/u.exec(key);
+      if (!a.has(key) || b.has(key) || !match || !model.capsules.has(match[1])
+        || !importSpecifiers(model.capsules.get(match[1])).includes(match[2])
+        || ![...b].some(([name, value]) => name.endsWith(`:external:${match[2]}`) && JSON.stringify(value) === JSON.stringify(a.get(key)))) return false;
+    }
+    // Each new runtime import must resolve to an unchanged old module or to
+    // the analyzed acyclic/declaration-only capsule set. Added arbitrary source
+    // dependencies cannot hide behind an unused barrel export.
+    for (const [path, file] of model.capsules) for (const statement of file.statements) {
+      if (!ts.isImportDeclaration(statement) || statement.importClause?.isTypeOnly) continue;
+      const specifier = statement.moduleSpecifier.text;
+      if (a.has(`${path}:external:${specifier}`)) continue;
+      let module = left.checker.getSymbolAtLocation(statement.moduleSpecifier);
+      const target = module?.declarations?.find(ts.isSourceFile);
+      if (!target) return false;
+      const targetPath = relative(left.root, target.fileName).replaceAll('\\', '/');
+      if (!model.capsules.has(targetPath) && !b.has(`module:${targetPath}`)) return false;
+      if (targetPath === path) return false;
+    }
+    return true;
+  } catch { return false; }
+}
+
+
 // A source lemma only. It does not carry collector authority and is not an
 // application compatibility permit. In particular, own null/malformed selected
 // data cannot borrow the legacy ABSENT branch.
@@ -5780,10 +6823,76 @@ function finiteSelectedGuideHandlerTerms(ts, context, rollbackContext) {
   need(nativeUses.length === 4 && nativeUses.every(node => node === native.name || node === newConditional.condition
     || node === newConditional.whenTrue.properties[0].name || node === guideCall.arguments[3]), native);
   // Before the old Native initializer the table allocates closure values only.
-  // There is no callback/factory invocation to commute across the env reads.
+  // The combined voice reader adds one concrete factory before that initializer.
+  // Its call can commute only after binding its complete allocation-only body,
+  // omitted fresh options and actual data-only createHandlers suppliers below.
   const before = oldTable.expression.properties.slice(0, oldTable.expression.properties.indexOf(oldPresentation));
-  need(before.every(node => ts.isPropertyAssignment(node) && (ts.isStringLiteral(node.name) || ts.isIdentifier(node.name))
-    && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))), oldTable);
+  let voicePredecessor;
+  const bound = (owner, node) => {
+    let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
+      ? owner.checker.getShorthandAssignmentValueSymbol(node.parent) : owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value;
+  };
+  for (const [index, node] of before.entries()) {
+    if (ts.isPropertyAssignment(node) && (ts.isStringLiteral(node.name) || ts.isIdentifier(node.name))
+      && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) continue;
+    const currentSpread = table.expression.properties[index];
+    need(index === 0 && !voicePredecessor && ts.isSpreadAssignment(node) && ts.isSpreadAssignment(currentSpread), node);
+    const currentVoice = source(context, 'apps/agent-worker/src/voice.ts');
+    const oldVoice = source(rollbackContext, 'apps/agent-worker/src/voice.ts');
+    const voiceFactory = fn(currentVoice, 'createHermesVoiceHandlers'), oldVoiceFactory = fn(oldVoice, 'createHermesVoiceHandlers');
+    need(equal(voiceFactory, oldVoiceFactory), voiceFactory);
+    const callShape = (owner, spreadNode, handlerFactory, target) => {
+      const call = unwrap(spreadNode.expression);
+      need(ts.isCallExpression(call) && ts.isIdentifier(call.expression) && !call.questionDotToken
+        && bound(owner, call.expression)?.valueDeclaration === target && call.arguments.length === 1, spreadNode);
+      const argument = call.arguments[0];
+      need(ts.isPropertyAccessExpression(argument) && !argument.questionDotToken && argument.name.text === 'voiceRuntime'
+        && ts.isIdentifier(argument.expression) && bound(owner, argument.expression) === bound(owner, handlerFactory.parameters[1].name), call);
+      const calls = [];
+      for (const parsed of owner.program.getSourceFiles()) {
+        if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(owner.root, parsed.fileName).replaceAll('\\', '/'))) continue;
+        for (const reference of nodes(parsed, ts.isIdentifier)) {
+          if (bound(owner, reference)?.valueDeclaration !== target || reference === target.name
+            || ts.isImportSpecifier(reference.parent) || ts.isExportSpecifier(reference.parent)) continue;
+          need(reference === call.expression, reference); calls.push(reference.parent);
+        }
+      }
+      need(calls.length === 1 && calls[0] === call, call);
+      return call;
+    };
+    const voiceCall = callShape(context, currentSpread, factory, voiceFactory);
+    const oldVoiceCall = callShape(rollbackContext, node, oldFactory, oldVoiceFactory);
+    need(equal(voiceCall, oldVoiceCall), voiceCall);
+    need(!voiceFactory.asteriskToken && !voiceFactory.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword)
+      && voiceFactory.parameters.length === 2 && voiceFactory.parameters.every(value => ts.isIdentifier(value.name) && !value.dotDotDotToken)
+      && !voiceFactory.parameters[0].initializer && voiceFactory.parameters[1].name.text === 'options'
+      && voiceFactory.parameters[1].initializer && ts.isObjectLiteralExpression(voiceFactory.parameters[1].initializer)
+      && voiceFactory.parameters[1].initializer.properties.length === 0 && voiceFactory.body?.statements.length === 3, voiceFactory);
+    const [waitStatement, handleStatement, returned] = voiceFactory.body.statements;
+    const constDeclaration = statement => {
+      need(ts.isVariableStatement(statement) && Boolean(statement.declarationList.flags & ts.NodeFlags.Const)
+        && statement.declarationList.declarations.length === 1 && ts.isIdentifier(statement.declarationList.declarations[0].name), statement);
+      return statement.declarationList.declarations[0];
+    };
+    const wait = constDeclaration(waitStatement), handle = constDeclaration(handleStatement);
+    const waitGrammar = ts.createSourceFile('voice-allocation.ts',
+      'const wait = options.wait ?? (async milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));',
+      ts.ScriptTarget.ES2022, true).statements[0];
+    need(JSON.stringify(context.canonical(waitStatement)) === JSON.stringify(context.canonical(waitGrammar)), waitStatement);
+    const waitInput = unwrap(wait.initializer).left;
+    need(bound(context, waitInput.expression) === bound(context, voiceFactory.parameters[1].name), wait);
+    need(handle.initializer && ts.isArrowFunction(handle.initializer) && ts.isBlock(handle.initializer.body)
+      && handle.initializer.modifiers?.some(value => value.kind === ts.SyntaxKind.AsyncKeyword), handle);
+    need(ts.isReturnStatement(returned) && ts.isObjectLiteralExpression(returned.expression)
+      && returned.expression.properties.length === 2, returned);
+    for (const [position, key] of ['voice.transcribe', 'voice.reply'].entries()) {
+      const entry = returned.expression.properties[position];
+      need(ts.isPropertyAssignment(entry) && ts.isStringLiteral(entry.name) && entry.name.text === key
+        && ts.isIdentifier(entry.initializer) && bound(context, entry.initializer) === bound(context, handle.name), returned);
+    }
+    voicePredecessor = { factory: voiceFactory, previous: oldVoiceFactory, call: voiceCall, oldCall: oldVoiceCall, wait, handle, returned };
+  }
   const handlerSource = source(context, 'apps/agent-worker/src/presentation/handler.ts');
   const handlerFactory = fn(handlerSource, 'createPresentationGenerationHandler');
   need(symbol(presentation.initializer.expression) === symbol(handlerFactory.name)
@@ -5805,6 +6914,21 @@ function finiteSelectedGuideHandlerTerms(ts, context, rollbackContext) {
         need(ts.isObjectLiteralExpression(options) && options.properties.every(value => ts.isSpreadAssignment(value)
           || (ts.isPropertyAssignment(value) || ts.isShorthandPropertyAssignment(value))
             && (ts.isIdentifier(value.name) || ts.isStringLiteral(value.name)) && value.name.text !== '__proto__'), options);
+        if (voicePredecessor) {
+          // In this moved interval options.voiceRuntime must be a data read.
+          // A spread of an opaque object could introduce an accessor/prototype
+          // premise not established by the old shallow supplier check.
+          const dataObject = (raw, depth = 0) => {
+            const value = unwrap(raw);
+            if (!value || depth > 32) return false;
+            if (ts.isConditionalExpression(value)) return dataObject(value.whenTrue, depth + 1) && dataObject(value.whenFalse, depth + 1);
+            return ts.isObjectLiteralExpression(value) && value.properties.every(entry => ts.isSpreadAssignment(entry)
+              ? dataObject(entry.expression, depth + 1)
+              : (ts.isPropertyAssignment(entry) || ts.isShorthandPropertyAssignment(entry))
+                && (ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name)) && entry.name.text !== '__proto__');
+          };
+          need(dataObject(options), options);
+        }
       }
       suppliers.push(call);
     }
@@ -5822,7 +6946,7 @@ function finiteSelectedGuideHandlerTerms(ts, context, rollbackContext) {
   let text;
   try { text = ts.createPrinter({ removeComments: true }).printFile(transformed.transformed[0]); }
   finally { transformed.dispose(); }
-  return { status: 'conditional', source: current, rollback: previous, factory, oldFactory, native, suppliers, text,
+  return { status: 'conditional', source: current, rollback: previous, factory, oldFactory, native, suppliers, voicePredecessor, text,
     outstanding: ['complete caller inventory under successful collector supplementary source closure',
       'legacy guide branch absence before fourth argument is removed', 'complete remaining module runtime equality'] };
 }
@@ -7272,6 +8396,7 @@ export async function verifyApplicationRollbackReaders({ candidateRoot, rollback
         && (finiteVideoPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteImageCapablePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteImageFirstPairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
+          || finiteVoicePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)
           || finiteSelectedGuidePairCompatibility(ts, current, previous, resolve(candidateRoot), resolve(rollbackRoot), roots)))) {
       if (diagnostics === true) {
         try { console.error(`ROLLBACK_COMPARISON_DIAGNOSTIC ${JSON.stringify(rollbackComparisonDiagnostic(current, previous, candidateRoot, rollbackRoot))}`); }

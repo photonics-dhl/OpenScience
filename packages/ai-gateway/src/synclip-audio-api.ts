@@ -28,6 +28,18 @@ export type SynclipAudioPriceQuote = { characters: number; estimatedCoins: numbe
 export type SynclipAudioQuote = SynclipAudioPriceQuote & { workerCeiling: number; hostCeiling: number };
 export interface SynclipAudioRequest { text: string; voice: string; speed?: number }
 export interface SynclipAudioSubmission { task_id: string }
+/** Interactive microphone recordings use canonical mono 16 kHz PCM WAV, at most one minute. */
+export const HERMES_VOICE_MAX_SECONDS = 60;
+export const HERMES_VOICE_MAX_WAV_BYTES = 44 + HERMES_VOICE_MAX_SECONDS * 32_000;
+export interface SynclipTranscriptionRequest { audio: Buffer; language?: 'zh' | 'en' }
+export interface SynclipTranscriptionSubmission {
+  task_id: string; status: 'queued' | 'processing'; poll_url?: string;
+  credits_charged: number; duration_seconds: number;
+}
+export type SynclipTranscriptionTask = { task_id: string; coins_used?: number; progress?: number } & (
+  | { status: 'queued' | 'processing' | 'failed'; output?: never }
+  | { status: 'completed'; output: { type: 'text'; text: string; duration: number; language?: string } }
+);
 export type SynclipAudioStatus = 'queued' | 'processing' | 'completed' | 'failed';
 interface SynclipAudioTaskBase { task_id: string; progress?: number; coins_used?: number }
 export type SynclipAudioTask = SynclipAudioTaskBase & (
@@ -88,6 +100,39 @@ function publicUrl(value: unknown): string {
 export function validateSynclipAudioTaskId(value: unknown): string {
   if (!token(value)) throw new SynclipAudioError('SYNCLIP_AUDIO_TASK_ID_INVALID', 'invalid');
   return value;
+}
+
+/** Validate duration from the bytes, never from a browser-supplied duration or MIME label. */
+export function validateHermesVoiceWav(value: unknown): number {
+  if (!Buffer.isBuffer(value) || value.length < 46 || value.length > HERMES_VOICE_MAX_WAV_BYTES
+    || value.toString('ascii', 0, 4) !== 'RIFF' || value.readUInt32LE(4) !== value.length - 8
+    || value.toString('ascii', 8, 16) !== 'WAVEfmt ' || value.readUInt32LE(16) !== 16
+    || value.readUInt16LE(20) !== 1 || value.readUInt16LE(22) !== 1
+    || value.readUInt32LE(24) !== 16_000 || value.readUInt32LE(28) !== 32_000
+    || value.readUInt16LE(32) !== 2 || value.readUInt16LE(34) !== 16
+    || value.toString('ascii', 36, 40) !== 'data' || value.readUInt32LE(40) !== value.length - 44
+    || (value.length - 44) % 2 !== 0) throw new SynclipAudioError('SYNCLIP_AUDIO_REQUEST_INVALID', 'invalid');
+  return (value.length - 44) / 32_000;
+}
+
+function transcriptionTask(value: unknown, expectedId: string): SynclipTranscriptionTask {
+  const id = validateSynclipAudioTaskId(expectedId);
+  if (!record(value) || value.task_id !== id || !['queued', 'processing', 'completed', 'failed'].includes(String(value.status))
+    || (value.progress !== undefined && (!nonnegative(value.progress) || value.progress > 100))
+    || (value.coins_used !== undefined && !nonnegative(value.coins_used))) throw invalid();
+  const base = { task_id: id, ...(value.coins_used === undefined ? {} : { coins_used: value.coins_used as number }),
+    ...(value.progress === undefined ? {} : { progress: value.progress as number }) };
+  if (value.status !== 'completed') {
+    if (value.output !== undefined && value.output !== null) throw invalid();
+    return { ...base, status: value.status as 'queued' | 'processing' | 'failed' };
+  }
+  const output = value.output;
+  if (!record(output) || output.type !== 'text' || typeof output.text !== 'string'
+    || output.text.length > 2_000 || invalidCharacters(output.text, true)
+    || !nonnegative(output.duration) || output.duration > HERMES_VOICE_MAX_SECONDS
+    || (output.language !== undefined && (typeof output.language !== 'string' || !/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/u.test(output.language)))) throw invalid();
+  return { ...base, status: 'completed', output: { type: 'text', text: output.text, duration: output.duration,
+    ...(output.language === undefined ? {} : { language: output.language }) } };
 }
 
 export function validateSynclipAudioRequest(value: unknown): SynclipAudioRequest {
@@ -241,14 +286,14 @@ export class SynclipAudioClient {
     this.#timeout = config.timeoutMs ?? 15_000;
   }
 
-  async #request(method: 'GET' | 'POST', path: string, body?: string): Promise<unknown> {
+  async #request(method: 'GET' | 'POST', path: string, body?: string | FormData): Promise<unknown> {
     const url = SYNCLIP_AUDIO_ORIGIN + path;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const operation = async () => {
       const response = await this.#fetch(url, { method, redirect: 'error', signal: controller.signal,
         headers: { Authorization: 'Bearer ' + this.#key, Accept: 'application/json',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body }) });
+          ...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {}) }, ...(body === undefined ? {} : { body }) });
       if (controller.signal.aborted) { cancel(response); throw new SynclipAudioError('SYNCLIP_AUDIO_TIMEOUT'); }
       if (response.redirected || (response.url && response.url !== url)) { cancel(response); throw invalid(); }
       if (!response.ok) { cancel(response); throw new SynclipAudioError('SYNCLIP_AUDIO_HTTP_FAILED', 'uncertain', response.status); }
@@ -265,6 +310,31 @@ export class SynclipAudioClient {
       if (error instanceof SynclipAudioError) throw error;
       throw new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED');
     } finally { if (timer !== undefined) clearTimeout(timer); }
+  }
+
+  /** Synclip runs whisper-1 asynchronously; do not send an undocumented model field. */
+  async createTranscription(input: SynclipTranscriptionRequest): Promise<SynclipTranscriptionSubmission> {
+    if (!record(input) || Object.keys(input).some(key => !['audio', 'language'].includes(key))
+      || (input.language !== undefined && input.language !== 'zh' && input.language !== 'en')) {
+      throw new SynclipAudioError('SYNCLIP_AUDIO_REQUEST_INVALID', 'invalid');
+    }
+    validateHermesVoiceWav(input.audio);
+    const form = new FormData();
+    form.append('file', new Blob([Uint8Array.from(input.audio)], { type: 'audio/wav' }), 'speech.wav');
+    if (input.language) form.append('language', input.language);
+    const data = await this.#request('POST', '/asr', form);
+    if (!record(data) || !token(data.task_id) || !['queued', 'processing'].includes(String(data.status))
+      || (data.poll_url !== undefined && data.poll_url !== '/v1/tasks/' + data.task_id)
+      || !nonnegative(data.credits_charged) || data.credits_charged > 1
+      || !nonnegative(data.duration_seconds) || data.duration_seconds > HERMES_VOICE_MAX_SECONDS) throw invalid();
+    return { task_id: data.task_id, status: data.status as 'queued' | 'processing',
+      ...(data.poll_url === undefined ? {} : { poll_url: data.poll_url as string }),
+      credits_charged: data.credits_charged, duration_seconds: data.duration_seconds };
+  }
+
+  async queryTranscription(taskId: string): Promise<SynclipTranscriptionTask> {
+    const id = validateSynclipAudioTaskId(taskId);
+    return transcriptionTask(await this.#request('GET', '/tasks/' + id), id);
   }
 
   async listVoices(): Promise<SynclipAudioVoice[]> {
@@ -292,6 +362,8 @@ export class SynclipAudioClient {
 }
 
 export interface SynclipAudioBytes { bytes: Buffer; format: 'mp3'; contentType: 'audio/mpeg' }
+export type HermesVoiceAudioBytes = SynclipAudioBytes | { bytes: Buffer; format: 'wav'; contentType: 'audio/wav' };
+const hermesVoiceAudioMaxBytes = 16 * 1024 * 1024;
 const mpeg1Bitrates = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] as const;
 const mpeg2Bitrates = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160] as const;
 
@@ -337,6 +409,37 @@ export function validateSynclipAudioBytes(bytes: Buffer): SynclipAudioBytes {
   return { bytes, format: 'mp3', contentType: 'audio/mpeg' };
 }
 
+/** The paid Hermes result evidenced PCM16 mono/24kHz. Other WAV codecs remain unsupported. */
+export function validateHermesVoiceAudioBytes(bytes: Buffer): HermesVoiceAudioBytes {
+  if (!Buffer.isBuffer(bytes)) throw invalid();
+  if (bytes.length > hermesVoiceAudioMaxBytes) throw new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE');
+  if (bytes.toString('latin1', 0, 4) !== 'RIFF') return validateSynclipAudioBytes(bytes);
+  if (bytes.length < 46 || bytes.readUInt32LE(4) !== bytes.length - 8 || bytes.toString('latin1', 8, 12) !== 'WAVE') throw invalid();
+  let offset = 12, chunks = 0, format = false, data = false;
+  while (offset < bytes.length) {
+    // Bound zero-length metadata chunks as well as the total untrusted byte count.
+    if (++chunks > 128 || offset + 8 > bytes.length) throw invalid();
+    const id = bytes.toString('latin1', offset, offset + 4), size = bytes.readUInt32LE(offset + 4);
+    const start = offset + 8, end = start + size, next = end + (size & 1);
+    if (end > bytes.length || next > bytes.length) throw invalid();
+    if (id === 'fmt ') {
+      if (format || data) throw invalid();
+      if (size !== 16 || bytes.readUInt16LE(start) !== 1 || bytes.readUInt16LE(start + 2) !== 1
+        || bytes.readUInt32LE(start + 4) !== 24_000 || bytes.readUInt32LE(start + 8) !== 48_000
+        || bytes.readUInt16LE(start + 12) !== 2 || bytes.readUInt16LE(start + 14) !== 16) {
+        throw new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED');
+      }
+      format = true;
+    } else if (id === 'data') {
+      if (!format || data || size === 0 || size % 2 !== 0) throw invalid();
+      data = true;
+    }
+    offset = next;
+  }
+  if (!format || !data) throw invalid();
+  return { bytes, format: 'wav', contentType: 'audio/wav' };
+}
+
 export type SynclipAudioDownloadRequestOptions = RequestOptions & Pick<TcpSocketConnectOpts, 'autoSelectFamily'>;
 export interface SynclipAudioDownloadOptions {
   timeoutMs?: number;
@@ -361,6 +464,25 @@ for (const [address, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0',
 
 /** Download a saved completed result without credentials, redirects, or another provider request. */
 export async function downloadSynclipAudio(task: SynclipAudioTask, options: SynclipAudioDownloadOptions = {}): Promise<SynclipAudioBytes> {
+  return downloadAudio(task, options, { maxBytes: SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES,
+    accept: 'audio/mpeg,application/octet-stream', types: ['audio/mpeg', 'application/octet-stream'],
+    decode: bytes => validateSynclipAudioBytes(bytes) });
+}
+
+/** Dedicated Hermes output only; commercial MP3 callers keep their existing contract. */
+export async function downloadHermesVoiceAudio(task: SynclipAudioTask, options: SynclipAudioDownloadOptions = {}): Promise<HermesVoiceAudioBytes> {
+  return downloadAudio(task, options, { maxBytes: hermesVoiceAudioMaxBytes,
+    accept: 'audio/mpeg,audio/wav,application/octet-stream', types: ['audio/mpeg', 'audio/wav', 'application/octet-stream'],
+    decode: (bytes, mime) => {
+      const audio = validateHermesVoiceAudioBytes(bytes);
+      const contentType = mime.split(';')[0]!.trim().toLowerCase();
+      if (contentType !== 'application/octet-stream' && contentType !== audio.contentType) throw invalid();
+      return audio;
+    } });
+}
+
+async function downloadAudio<T>(task: SynclipAudioTask, options: SynclipAudioDownloadOptions,
+  format: { maxBytes: number; accept: string; types: readonly string[]; decode: (bytes: Buffer, mime: string) => T }): Promise<T> {
   validateDownloadOptions(options);
   const value = validateSynclipAudioTask(task, record(task) ? String(task.task_id) : '');
   const now = (options.now ?? Date.now)();
@@ -380,7 +502,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
       || addresses.some(item => !record(item) || item.family !== 4 || typeof item.address !== 'string'
         || isIP(item.address) !== 4 || blocked.check(item.address, 'ipv4'))) throw invalid();
     const address = addresses[0]!.address;
-    return new Promise<SynclipAudioBytes>((accept, reject) => {
+    return new Promise<T>((accept, reject) => {
       let settled = false;
       const chunks: Buffer[] = [];
       let partial: Buffer | undefined;
@@ -400,7 +522,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
           if (options.all) callback(null, [{ address, family: 4 }]);
           else callback(null, address, 4);
         },
-        headers: { Accept: 'audio/mpeg,application/octet-stream', 'Accept-Encoding': 'identity' } }, response => {
+        headers: { Accept: format.accept, 'Accept-Encoding': 'identity' } }, response => {
         incoming = response;
         response.on('error', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
         response.on('aborted', () => fail(new SynclipAudioError('SYNCLIP_AUDIO_NETWORK_FAILED')));
@@ -411,11 +533,11 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
         const encoding = response.headers['content-encoding'];
         const contentType = response.headers['content-type'];
         if ((encoding !== undefined && encoding !== 'identity') || typeof contentType !== 'string'
-          || !['audio/mpeg', 'application/octet-stream'].includes(contentType.split(';')[0]!.trim().toLowerCase())) {
+          || !format.types.includes(contentType.split(';')[0]!.trim().toLowerCase())) {
           fail(new SynclipAudioError('SYNCLIP_AUDIO_FORMAT_UNSUPPORTED')); return;
         }
         const length = response.headers['content-length'];
-        if (length !== undefined && (typeof length !== 'string' || !/^\d+$/u.test(length) || Number(length) > SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES)) {
+        if (length !== undefined && (typeof length !== 'string' || !/^\d+$/u.test(length) || Number(length) > format.maxBytes)) {
           fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return;
         }
         let size = 0;
@@ -423,7 +545,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
           if (settled) return;
           if (!Buffer.isBuffer(chunk)) { fail(invalid()); return; }
           size += chunk.length;
-          if (size > SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES) { fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return; }
+          if (size > format.maxBytes) { fail(new SynclipAudioError('SYNCLIP_AUDIO_RESPONSE_TOO_LARGE')); return; }
           // Coalesce tiny network chunks so the byte cap also bounds retained Buffer objects.
           for (let offset = 0; offset < chunk.length;) {
             if (!partial || partialSize === partial.length) {
@@ -441,7 +563,7 @@ export async function downloadSynclipAudio(task: SynclipAudioTask, options: Sync
           if (length !== undefined && size !== Number(length)) { fail(invalid()); return; }
           try {
             if (partial) chunks[chunks.length - 1] = partial.subarray(0, partialSize);
-            const result = validateSynclipAudioBytes(Buffer.concat(chunks, size));
+            const result = format.decode(Buffer.concat(chunks, size), contentType);
             chunks.length = 0;
             partial = undefined;
             settled = true;

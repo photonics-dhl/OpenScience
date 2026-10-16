@@ -96,6 +96,8 @@ services:
       - /opt/openscience-codex-review/results:/codex-sol-review-jobs/results:ro
       # Observe atomically replaced video heartbeats without provider credentials or input access.
       - /opt/openscience-synclip-video/spool/results:/synclip-video-jobs/results:ro
+      # Empty until explicitly provisioned; never mount the original host key.
+      - /opt/openscience-synclip/voice-secrets:/run/openscience-voice:ro
     command: ["node", "dist/index.js"]
     env_file:
       - /opt/openscience/.env.prod
@@ -111,6 +113,7 @@ services:
       HERMES_VIDEO_ENABLED: ${HERMES_VIDEO_ENABLED:-false}
       HERMES_VIDEO_PROVIDER: ${HERMES_VIDEO_PROVIDER:-disabled}
       SYNCLIP_VIDEO_ENABLED: ${SYNCLIP_VIDEO_ENABLED:-false}
+      SYNCLIP_API_KEY_FILE: ${SYNCLIP_VOICE_API_KEY_FILE:-}
       # The inbox path participates in configuration checks only; it is not mounted into API.
       SYNCLIP_VIDEO_INBOX_DIR: /synclip-video-jobs/inbox
       SYNCLIP_VIDEO_RESULTS_DIR: /synclip-video-jobs/results
@@ -200,6 +203,7 @@ services:
       - /opt/openscience-synclip/spool/inbox:/synclip-image-jobs/inbox:rw
       - /opt/openscience-synclip/spool/results:/synclip-image-jobs/results:ro
       - /opt/openscience-codex-review/inbox:/codex-sol-review-jobs/inbox:ro
+      - /opt/openscience-synclip/voice-secrets:/run/openscience-voice:ro
       - /opt/openscience-codex-review/results:/codex-sol-review-jobs/results:ro
       - /opt/openscience-private-cleanup/inbox:/private-cleanup/inbox:rw
       - /opt/openscience-private-cleanup/results:/private-cleanup/results:ro
@@ -220,6 +224,7 @@ services:
       CODEX_IMAGE_INBOX_DIR: /codex-jobs/inbox
       CODEX_IMAGE_RESULTS_DIR: /codex-jobs/results
       SYNCLIP_IMAGE_ENABLED: ${SYNCLIP_IMAGE_ENABLED:-false}
+      SYNCLIP_API_KEY_FILE: ${SYNCLIP_VOICE_API_KEY_FILE:-}
       SYNCLIP_IMAGE_INBOX_DIR: /synclip-image-jobs/inbox
       SYNCLIP_IMAGE_RESULTS_DIR: /synclip-image-jobs/results
       CODEX_SOL_IMAGE_REVIEW_ENABLED: ${CODEX_SOL_IMAGE_REVIEW_ENABLED:-false}

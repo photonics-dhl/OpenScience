@@ -43,6 +43,13 @@ export const RATE_LIMIT_ROUTES: Record<string, RouteRule> = {
   // Hermes/AI task submission: authenticated and credit-gated, but still bound burst traffic.
   '/agent/tasks': { limit: 20, windowSec: 60 },
   '/agent/tasks/:id/retry': { limit: 10, windowSec: 60 },
+  '/agent/voice/capabilities': { limit: 30, windowSec: 60 },
+  '/agent/voice/transcriptions': { limit: 10, windowSec: 60 },
+  '/agent/voice/replies': { limit: 10, windowSec: 60 },
+  '/agent/voice/submissions/:key': { limit: 60, windowSec: 60 },
+  '/agent/voice/tasks/:id': { limit: 120, windowSec: 60 },
+  '/agent/voice/tasks/:id/resume': { limit: 10, windowSec: 60 },
+  '/agent/voice/tasks/:id/audio': { limit: 60, windowSec: 60 },
   '/research-objects/:id/hermes-runs': { limit: 10, windowSec: 60, readLimit: 60 },
   '/research-objects/:id/hermes-runs/:runId/source-review': { limit: 10, windowSec: 60 },
   // Unified browser entry point for literature retrieval (provider selection is server-owned).

@@ -77,7 +77,7 @@ test('rollback verifier diagnostics are opt-in, bounded and preserve rejection',
   assert.equal(JSON.parse(events[2].replace(/^ROLLBACK_COMPATIBILITY_DIAGNOSTIC /u, '')).code, 'ENOENT');
 });
 
-test('rollback verifier dispatches guarded image proofs only after original default collections differ', async () => {
+test('rollback verifier dispatches guarded finite proofs only after original default collections differ', async () => {
   // This is dispatch coverage, not a positive compatibility proof. The real
   // image helpers separately refuse copied arrays and source-only Programs.
   const verifierSource=deployLockSource.match(/export async function verifyApplicationRollbackReaders\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
@@ -91,15 +91,16 @@ test('rollback verifier dispatches guarded image proofs only after original defa
     finiteVideoPairCompatibility(...args){events.push(['video',...args]);return accept==='video';},
     finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
+    finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
     finiteSelectedGuidePairCompatibility(...args){events.push(['selected',...args]);return accept==='selected';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first','selected']){
+  for(const allowed of ['video','capable','first','voice','selected']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','selected'].slice(0,['video','capable','first','selected'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','selected'].slice(0,['video','capable','first','voice','selected'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -696,7 +697,8 @@ function historicalVideoSource(projectRoot, sourceRef) {
   if (historicalVideoSources.has(sourceRef)) return historicalVideoSources.get(sourceRef);
   const files = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', sourceRef, '--', 'apps', 'packages'],
     { cwd: projectRoot, encoding: 'utf8' }).split('\0').filter(file =>
-    /\/src\/.*\.(?:[cm]?[jt]sx?)$/u.test(file) || /\/package\.json$/u.test(file));
+    /\/src\/.*\.(?:[cm]?[jt]sx?)$/u.test(file) || /\/package\.json$/u.test(file)
+      || /^apps\/web\//u.test(file) && /\.(?:[cm]?[jt]sx?|json|css)$/u.test(file));
   const blobs = execFileSync('git', ['cat-file', '--batch'], { cwd: projectRoot,
     input: files.map(file => `${sourceRef}:${file}\n`).join(''), maxBuffer: 64 * 1024 * 1024 });
   const sources = new Map();
@@ -716,7 +718,7 @@ function historicalVideoSource(projectRoot, sourceRef) {
   return result;
 }
 
-async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
+async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSourceOnly = false, ambientSources = new Map() } = {}) {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const ts = createRequire(import.meta.url)('typescript');
   // Retained fixtures are source-only historical oracles, never installed roots.
@@ -727,6 +729,7 @@ async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
   const tracked = files.filter(file => /\/src\/.*\.ts$/u.test(file) && !file.endsWith('.d.ts')).map(file => join(projectRoot, file));
   const key = filename => resolve(filename).replaceAll('\\', '/').toLowerCase();
   const ownsSource = filename => ['apps', 'packages'].some(directory => key(filename).startsWith(`${key(join(projectRoot, directory))}/`));
+  const sourceInventory = new Set(files.filter(Boolean).map(file => key(join(projectRoot, file))));
   const changedFiles = [...changes].map(([file, change]) => {
     const filename = join(projectRoot, file);
     if (historical) assert.ok(historical.sources.has(key(filename)), `mutation must target historical source: ${file}`);
@@ -736,6 +739,15 @@ async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
     return { filename, updated };
   });
   const overlays = new Map(changedFiles.map(item => [key(item.filename), item.updated]));
+  // Filesystem-visible test inputs are separate from explicit source mutations.
+  const ambient = new Map([...ambientSources].map(([file, text]) => [key(join(projectRoot, file)), text]));
+  // An ambient output must not replace current tracked bytes; tracked changes
+  // already have the explicit, exact-byte-checked mutation path above.
+  for (const filename of ambient.keys()) assert.ok(!sourceInventory.has(filename), 'ambient input cannot replace tracked source');
+  // W source fixtures compare tracked source inventories, not installed roots.
+  // Keep actual working-tree bytes and explicit mutations, including new files.
+  const readable = filename => !trackedSourceOnly || !ownsSource(filename)
+    || sourceInventory.has(key(filename)) || overlays.has(key(filename));
   // Same source-only analysis boundary as rollbackReaderClosure: this is not a
   // package typecheck, and never substitutes third-party declarations for code.
   const options = { allowJs: true, noLib: true, types: [], noEmit: true,
@@ -743,14 +755,18 @@ async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
   const host = ts.createCompilerHost(options);
   const originalRead = host.readFile.bind(host), originalExists = host.fileExists.bind(host);
   host.readFile = filename => overlays.has(key(filename)) ? overlays.get(key(filename))
-    : historical && ownsSource(filename) ? historical.sources.get(key(filename)) : originalRead(filename);
+    : historical && ownsSource(filename) ? historical.sources.get(key(filename))
+      : !readable(filename) ? undefined : ambient.has(key(filename)) ? ambient.get(key(filename)) : originalRead(filename);
   host.fileExists = filename => overlays.has(key(filename))
-    || (historical && ownsSource(filename) ? historical.sources.has(key(filename)) : originalExists(filename));
+    || (historical && ownsSource(filename) ? historical.sources.has(key(filename))
+      : readable(filename) && (ambient.has(key(filename)) || originalExists(filename)));
   const source = host.getSourceFile.bind(host);
   host.getSourceFile = (filename, languageVersion, ...args) => overlays.has(key(filename))
     ? ts.createSourceFile(filename, overlays.get(key(filename)), languageVersion, true)
     : historical && ownsSource(filename) ? (host.fileExists(filename)
-      ? ts.createSourceFile(filename, host.readFile(filename), languageVersion, true) : undefined) : source(filename, languageVersion, ...args);
+      ? ts.createSourceFile(filename, host.readFile(filename), languageVersion, true) : undefined)
+      : !readable(filename) ? undefined : ambient.has(key(filename)) ? ts.createSourceFile(filename, ambient.get(key(filename)), languageVersion, true)
+        : source(filename, languageVersion, ...args);
   host.resolveModuleNames = (names, containingFile) => names.map(specifier => {
     let base;
     if (specifier.startsWith('.')) base = resolve(dirname(containingFile), specifier.replace(/\.js$/u, '')).replace(/([\\/])dist([\\/])/u, '$1src$2');
@@ -782,8 +798,9 @@ async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
     resolveSource: (specifier, containingFile) => host.resolveModuleNames([specifier], containingFile)[0] };
 }
 
-// Only legacy video controls opt into the released V1 oracle. All image
-// controls retain the current candidate source by default.
+// Legacy video controls opt into the released V1 oracle. The two historical
+// image recovery/legacy component controls explicitly use the released 3a
+// inventory; all other image controls retain the current candidate by default.
 function historicalVideoIngressProgram(changes = new Map(), sourceRef = 'e75f2764ded1074f4d307d34dca833517f0d3696') {
   return videoIngressProgram(changes, { sourceRef });
 }
@@ -808,6 +825,337 @@ function videoPairRuntime(ts, text) {
   const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
+
+function voicePairSourceComponents() {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  assert.ok(component.startsWith('function finiteVoiceSourceModel('), 'finite voice proof must exist inside the original verifier');
+  return runInNewContext(`${component}; ({ model: finiteVoiceSourceModel, writer: finiteVoiceWriterSourceModel, formatReader: typeof finiteVoiceFormatReaderSourceModel === 'function' ? finiteVoiceFormatReaderSourceModel : undefined, pair: finiteVoicePairCompatibility, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+}
+
+// Preserve the actually released reader and all its mutations independently of
+// the current writer phase. These historical source Programs grant no authority.
+const releasedVoiceReaderSource = { sourceRef: '70e81398903db9cfd6f46cbab51db18ba5f7cb05' };
+
+// Retain the previous pure-selector fixture after the format reader evolves.
+// The two MP3 runtime modules were unchanged by the released selector writer.
+// Reuse the already retained reader oracle; no additional CI ref is needed.
+// This remains an explicit source overlay, never a release or collector grant.
+async function retainedVoiceWriterProgram(changes = new Map(), options = {}) {
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const historical = historicalVideoSource(root, releasedVoiceReaderSource.sourceRef);
+  const overlays = new Map(['packages/ai-gateway/src/synclip-audio-api.ts', 'packages/domain/src/agent/voice.ts']
+    .map(path => [path, historical.sources.get(resolve(root, path).replaceAll('\\', '/').toLowerCase())]));
+  for (const [path, change] of changes) {
+    const original = overlays.get(path) ?? (existsSync(resolve(root, path)) ? readFileSync(resolve(root, path), 'utf8') : '');
+    overlays.set(path, typeof change === 'function' ? change(original) : change);
+  }
+  return videoIngressProgram(overlays, options);
+}
+
+// These component regressions retain the complete approved format-reader source
+// family; CURRENT and the independent combined/voice direction remain separate.
+function retainedVoiceFormatProgram(changes = new Map(), options = {}) {
+  return videoIngressProgram(changes, { sourceRef: 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff', ...options });
+}
+
+test('voice format reader source reconstructs the actual previous MP3 runtime without granting collector authority', async () => {
+  const methods = voicePairSourceComponents();
+  const current = await retainedVoiceFormatProgram(new Map(), { trackedSourceOnly: true });
+  const previous = await retainedVoiceFormatProgram(new Map(), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+  let model;
+  const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+  try { model = methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 120) ?? ''}`); }
+  assert.equal(model.phase, 'format-reader');
+  assert.equal(model.projected.size, 2);
+  for (const [path, value] of model.projected) assert.deepEqual(videoPairRuntime(current.ts, value.text),
+    videoPairRuntime(previous.ts, previous.program.getSourceFile(resolve(previous.projectRoot, path)).text), path);
+  assert.equal(methods.pair(current.ts, voiceSourceEntries(current), voiceSourceEntries(previous), current.projectRoot, previous.projectRoot, []), false);
+  assert.equal(methods.pair(current.ts, voiceSourceEntries(current), voiceSourceEntries(previous), current.projectRoot, previous.projectRoot, methods.defaultRoots), false,
+    'even the matching roots token cannot replace the private successful collector provenance');
+  const terms = voiceSourceEntries(current), oldTerms = voiceSourceEntries(previous);
+  const corrupt = values => values.map(([key, value]) => [key, key === 'module:packages/ai-gateway/src/synclip-audio-api.ts' ? ['forged-runtime'] : value]);
+  assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), corrupt(terms), oldTerms),
+    error => error.reason === 'VOICE_MP3_SOURCE_ENTRY_UNBOUND');
+  assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), terms, corrupt(oldTerms)),
+    error => error.reason === 'VOICE_MP3_SOURCE_ENTRY_UNBOUND');
+});
+
+test('voice format reader source rejects changed producers, late receipts, security and unclassified entries', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const gateway = 'packages/ai-gateway/src/synclip-audio-api.ts', voice = 'packages/domain/src/agent/voice.ts';
+  const worker = 'apps/agent-worker/src/voice.ts', index = 'apps/agent-worker/src/index.ts';
+  const previous = await retainedVoiceFormatProgram(new Map(), rollback);
+  const cases = [
+    ['fresh download injection', worker, text => text.replace("    if (!checkpoint) {", "    if (!checkpoint) { options.downloadAudio = async () => ({ bytes: Buffer.alloc(48), format: 'mp3', contentType: 'audio/mpeg' });"), true],
+    ['saved-ID download injection', worker, text => text.replace('    if (!checkpoint.providerId)', "    if (checkpoint) options.downloadAudio = async () => ({ bytes: Buffer.alloc(48), format: 'mp3', contentType: 'audio/mpeg' });\n    if (!checkpoint.providerId)"), true],
+    ['production factory injection', index, text => text.replace('createHermesVoiceHandlers(options.voiceRuntime)', 'createHermesVoiceHandlers(options.voiceRuntime, { downloadAudio: undefined })'), true],
+    ['extra audio receipt caller', voice, text => `${text}\nexport async function extraAudioCaller(deps, prepared, received) { return saveHermesVoiceCheckpoint(deps, prepared.identity, { phase: 'submitted', ...received }); }\n`, true],
+    ['late receipt status write', voice, text => text.replace('data: { result: result as unknown as Prisma.InputJsonObject }', "data: { status: 'pending', result: result as unknown as Prisma.InputJsonObject }")],
+    ['owner path weakening', voice, text => text.replace('!audio.objectKey.split', 'audio.objectKey.split')],
+    ['source authority weakening', voice, text => text.replace("source.status !== 'succeeded'", "source.status !== 'succeeded' && false")],
+    ['default MIME change', gateway, text => text.replace("types: ['audio/mpeg', 'application/octet-stream']", "types: ['audio/mpeg', 'audio/wav', 'application/octet-stream']")],
+    ['old byte limit change', gateway, text => text.replace('SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES = 32', 'SYNCLIP_AUDIO_MAX_DOWNLOAD_BYTES = 64')],
+    ['TLS change', gateway, text => text.replace('rejectUnauthorized: true', 'rejectUnauthorized: false')],
+    ['credential change', gateway, text => text.replace("headers: { Accept: format.accept,", "headers: { Authorization: 'forbidden-fixture', Accept: format.accept,")],
+    ['new constant eager effect', gateway, text => text.replace('hermesVoiceAudioMaxBytes = 16 * 1024 * 1024', 'hermesVoiceAudioMaxBytes = Number(16 * 1024 * 1024)')],
+    ['dynamic capability escape', gateway, text => `${text}\nexport async function escapedOutput() { return import('@openscience/ai-gateway'); }\n`],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const candidate = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback) : previous;
+    const context = { ...videoPairContext(candidate), canonical: node => videoPairRuntime(candidate.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(candidate.ts, context, videoPairContext(old), voiceSourceEntries(candidate), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+  const actual = await retainedVoiceFormatProgram(new Map(), { trackedSourceOnly: true });
+  const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+  assert.throws(() => methods.formatReader(actual.ts, context, videoPairContext(previous),
+    [...voiceSourceEntries(actual), ['module:packages/new/src/unclassified.ts', []]], voiceSourceEntries(previous)),
+  error => error.reason === 'VOICE_MP3_RESIDUAL_ENTRY_CHANGED');
+});
+
+test('voice format reader rejects both actual High P1 counterexamples', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const worker = 'apps/agent-worker/src/voice.ts', gateway = 'packages/ai-gateway/src/synclip-audio-api.ts';
+  const cases = [
+    ['MP3 put retained but saved receipt comes from an additional WAV write', worker, text => text.replace(
+      "const storedAudio = { objectKey, sha256, bytes: audio.bytes.length, contentType: 'audio/mpeg' as const };",
+      "const wavKey = objectKey.replace(/\\.mp3$/u, '.wav'); await deps.storage.putObject(wavKey, audio.bytes, { contentType: 'audio/wav', sha256 }); const storedAudio = { objectKey: wavKey, sha256, bytes: audio.bytes.length, contentType: 'audio/wav' as const };")],
+    ['both callbacks replace split before the candidate-only second normalization', gateway, text => text
+      .replace('format.decode(Buffer.concat(chunks, size), contentType)', "format.decode(Buffer.concat(chunks, size), contentType.split(';')[0]!.trim().toLowerCase())")
+      .replace('const result = ', "String.prototype.split = function () { throw new Error('second normalization'); }; const result = ")],
+  ];
+  for (const [name, path, mutate] of cases) await t.test(name, async () => {
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback);
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice format reader guards signatures and new output recovery references', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const cases = [
+    ['reader default evaluation', 'packages/domain/src/agent/voice.ts', text => text.replace('function validAudio(audio: unknown)', 'function validAudio(audio: unknown = globalThis)'), true],
+    ['kernel default evaluation', 'packages/ai-gateway/src/synclip-audio-api.ts', text => text.replace('decode: (bytes: Buffer, mime: string) => T }): Promise<T>', 'decode: (bytes: Buffer, mime: string) => T } = {} as never): Promise<T>')],
+    ['fresh and submitted new output', 'apps/agent-worker/src/voice.ts', text => text.replaceAll('downloadSynclipAudio', 'downloadHermesVoiceAudio'), true],
+    ['namespace output capability', 'apps/agent-worker/src/voice.ts', text => `import * as outputGateway from '@openscience/ai-gateway';\n${text}\nconst exposedOutput = () => outputGateway;\n`, true],
+    ['existing runtime loader capability', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace("loadRuntimeModule('yauzl')", "loadRuntimeModule('@openscience/ai-gateway')"), true],
+  ];
+  const previous = await retainedVoiceFormatProgram(new Map(), rollback);
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback) : previous;
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice format reader binds immutable saved audio and the unique storage write', async t => {
+  const methods = voicePairSourceComponents(), path = 'apps/agent-worker/src/voice.ts';
+  const rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const cases = [
+    ['middle receipt field rewrite', text => text.replace('          try {', "          storedAudio.contentType = 'audio/wav' as never;\n          try {")],
+    ['receipt spread override', text => text.replaceAll('audio: storedAudio', "audio: { ...storedAudio, contentType: 'audio/wav' }")],
+    ['unclassified computed storage write', text => text.replace('          try {', "          await workerDeps.storage!['putObject']('unclassified.wav', Buffer.alloc(2), { contentType: 'audio/wav' });\n          try {")],
+  ];
+  for (const [name, mutate] of cases) await t.test(name, async () => {
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback);
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice format reader rejects shadowed save and late-discard receipt symbols', async () => {
+  const methods = voicePairSourceComponents(), path = 'apps/agent-worker/src/voice.ts';
+  const shadow = text => text.replace('          try {', '          await (async (storedAudio) => {\n          try {')
+    .replace(/            throw error;\r?\n          \}/u,
+      "$&\n          })({ objectKey: `derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${'b'.repeat(64)}.wav`, sha256: 'b'.repeat(64), bytes: 48, contentType: 'audio/wav' as const });");
+  const current = await retainedVoiceFormatProgram(new Map([[path, shadow]]), { trackedSourceOnly: true });
+  const previous = await retainedVoiceFormatProgram(new Map([[path, shadow]]), { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' });
+  const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+  assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(previous), voiceSourceEntries(current), voiceSourceEntries(previous)),
+    error => error.reason === 'VOICE_MP3_LOCAL_BINDING_CHANGED');
+});
+
+test('voice format reader closes module factory escapes without erasing decoder evaluation', async t => {
+  const methods = voicePairSourceComponents(), rollback = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
+  const previous = await retainedVoiceFormatProgram(new Map(), rollback);
+  const cases = [
+    ['module factory alias', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace('const loadRuntimeModule = createRequire(__filename);', 'const factoryAlias = createRequire; const loadRuntimeModule = factoryAlias(__filename);'), true],
+    ['module namespace factory', 'apps/agent-worker/src/ingestion-parser.ts', text => text.replace("import { createRequire } from 'node:module';", "import * as nativeModule from 'node:module';").replace('createRequire(__filename)', 'nativeModule.createRequire(__filename)'), true],
+    ['decoder extra evaluation', 'packages/ai-gateway/src/synclip-audio-api.ts', text => text.replace('format.decode(Buffer.concat(chunks, size), contentType)', 'format.decode(Buffer.concat(chunks, size), (Date.now(), contentType))')],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await retainedVoiceFormatProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const old = both ? await retainedVoiceFormatProgram(new Map([[path, mutate]]), rollback) : previous;
+    const context = { ...videoPairContext(current), canonical: node => videoPairRuntime(current.ts, node.getText()) };
+    assert.throws(() => methods.formatReader(current.ts, context, videoPairContext(old), voiceSourceEntries(current), voiceSourceEntries(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_MP3_'), name);
+  });
+});
+
+test('voice reader source proof preserves the actual old runtime and source-only Programs grant no deployment authority', async () => {
+  const methods = voicePairSourceComponents(), actual = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  let model;
+  try { model = methods.model(actual.ts, videoPairContext(actual), videoPairContext(old)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 160) ?? ''}`); }
+  assert.equal(model.phase, 'reader');
+  assert.equal(model.domain, 'rollback-produced-state');
+  assert.ok(model.capsules.size >= 4, 'actual new initialization/call closure is analyzed');
+  for (const [key, value] of model.projected) assert.deepEqual(videoPairRuntime(actual.ts, value.text),
+    videoPairRuntime(old.ts, old.program.getSourceFile(resolve(old.projectRoot, key)).text), key);
+  assert.equal(methods.pair(actual.ts, [], [], actual.projectRoot, old.projectRoot, []), false,
+    'source proof never fabricates a genuine DEFAULT collector');
+});
+
+test('voice reader proof rejects opened admission, leaked private results, rearmed retry, lost late receipts and changed legacy audio', async () => {
+  const methods = voicePairSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  for (const [path, change] of [
+    ['packages/domain/src/agent/voice-contract.ts', value => value.replace('return false;', 'return true;')],
+    ['packages/domain/src/agent/voice-contract.ts', value => value.replace('export function isHermesVoiceWriterEnabled', 'export async function isHermesVoiceWriterEnabled')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('if (!isHermesVoiceWriterEnabled())', 'if (false)')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('function blocked(', 'async function blocked(')],
+    ['apps/agent-worker/src/voice.ts', value => value.replace('if (!checkpoint && !isHermesVoiceWriterEnabled())', 'if (false)')],
+    ['packages/domain/src/agent/agent.ts', value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;', 'if (isHermesVoiceTaskKind(kind)) return rawResult as Record<string, unknown>;')],
+    ['packages/domain/src/agent/agent.ts', value => value.replace('canRetry: !isHermesVoiceTaskKind(task.kind) && canRetry', 'canRetry: canRetry')],
+    ['packages/domain/src/agent/agent.ts', value => value.replace("throw new AgentError('VALIDATION_ERROR', 'Voice tasks require the dedicated Hermes voice submission');", 'return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('data: { result: result as unknown as Prisma.InputJsonObject }', "data: { result: result as unknown as Prisma.InputJsonObject, status: 'pending' }")],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('result: voiceResultEquals(task.result) }, data:', 'result: undefined }, data:')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('const next: HermesVoiceCheckpoint =', 'if (task.deletedAt) return prior; const next: HermesVoiceCheckpoint =')],
+    ['packages/domain/src/agent/voice-contract.ts', value => value.replace('if (stopped) return { operation };', 'if (stopped) return { ...checkpoint } as any;')],
+    ['packages/domain/src/agent/voice.ts', value => value.replace('if (!hasHermesVoiceCheckpoint(result))', 'fetch("https://example.invalid"); if (!hasHermesVoiceCheckpoint(result))')],
+    ['packages/ai-gateway/src/synclip-voice.ts', value => value.replace('const path = env.', 'fetch("https://example.invalid"); const path = env.')],
+    ['apps/agent-worker/src/voice.ts', value => value.replace('const originalIdentity = checkpoint.identity;', "await runtime.client.create({ text: 'unsafe', voice: 'unsafe' }); const originalIdentity = checkpoint.identity;")],
+    ['packages/ai-gateway/src/synclip-audio-api.ts', value => value.replace("...(typeof body === 'string' ? { 'Content-Type': 'application/json' } : {})", "...(typeof body === 'string' ? {} : {})")],
+    ['packages/ai-gateway/src/synclip-audio-api.ts', value => value.replace('return transcriptionTask(await this.#request', "await this.#request('POST', '/asr'); return transcriptionTask(await this.#request")],
+    ['packages/domain/src/agent/voice-contract.ts', value => value + '\nfetch("https://example.invalid");\n'],
+    ['packages/domain/src/agent/voice-contract.ts', value => 'import "./agent";\n' + value],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, change]]), releasedVoiceReaderSource);
+    assert.throws(() => methods.model(changed.ts, videoPairContext(changed), videoPairContext(old)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('VOICE_'), path);
+  }
+});
+
+test('voice reader High boundaries reject discarded operand effects and dispatch before authority', async () => {
+  const methods = voicePairSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  const prematureDispatch = (value, name, taskId) => {
+    const file = old.ts.createSourceFile('voice.ts', value, old.ts.ScriptTarget.ES2022, true);
+    const fn = file.statements.find(node => old.ts.isFunctionDeclaration(node) && node.name?.text === name);
+    assert.ok(fn?.body, name);
+    const position = fn.body.getStart(file) + 1;
+    return value.slice(0, position) + ` await dispatchAgentTask(deps, ${taskId});` + value.slice(position);
+  };
+  const accepted = [];
+  for (const [label, path, change] of [
+    ['P1a retryCount increment', 'packages/domain/src/agent/agent.ts', value => value.replace(
+      "if (isHermesVoiceTaskKind(task.kind)) return { authorityValid: true, canRetry: false };",
+      "if (task.retryCount++ >= 0 && isHermesVoiceTaskKind(task.kind)) return { authorityValid: true, canRetry: false };")],
+    ['P1b unauthorised GET dispatch', 'packages/domain/src/agent/voice.ts', value => value.replace(
+      'export async function getHermesVoiceTask(deps: HermesVoiceDeps, input: { userId: string; taskId: string }): Promise<AgentTaskView> {',
+      'export async function getHermesVoiceTask(deps: HermesVoiceDeps, input: { userId: string; taskId: string }): Promise<AgentTaskView> { await dispatchAgentTask(deps, input.taskId);')],
+    ...[
+      ['findHermesVoiceSubmission', 'input.idempotencyKey'], ['loadHermesVoiceExecution', 'input.taskId'],
+      ['resumeHermesVoiceTask', 'input.taskId'], ['getHermesVoiceAudio', 'input.taskId'],
+      ['finalizeHermesVoiceTask', 'execution.identity.taskId'], ['saveHermesVoiceCheckpoint', 'identity.taskId'],
+    ].map(([name, taskId]) => [`P1b ${name} entry`, 'packages/domain/src/agent/voice.ts', value => prematureDispatch(value, name, taskId)]),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, change]]), releasedVoiceReaderSource);
+    try { methods.model(changed.ts, videoPairContext(changed), videoPairContext(old)); accepted.push(label); }
+    catch (error) { assert.match(error.reason ?? '', /^VOICE_/u, label); }
+  }
+  assert.deepEqual(accepted, [], 'both exact High counterexamples must fail closed');
+});
+
+function voiceSourceEntries(value) {
+  // Conditional source terms, never successful collector arrays. Each source
+  // module in these Programs participates; the pair still refuses this data.
+  return value.program.getSourceFiles().filter(file => file.fileName.replaceAll('\\', '/').startsWith(value.projectRoot.replaceAll('\\', '/'))
+    && !/^apps\/(?:api|web)\//u.test(relative(value.projectRoot, file.fileName).replaceAll('\\', '/')))
+    .map(file => [`module:${relative(value.projectRoot, file.fileName).replaceAll('\\', '/')}`, videoPairRuntime(value.ts, file.text)]);
+}
+
+test('voice writer source transition permits only the pure selector while retaining reader and every remaining entry', async () => {
+  const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
+  const key = 'packages/domain/src/agent/voice-contract.ts';
+  const writer = await retainedVoiceWriterProgram(new Map(), { trackedSourceOnly: true });
+  const entries = voiceSourceEntries;
+  const a = entries(writer), b = entries(reader);
+  const model = methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), a, b);
+  assert.equal(model.phase, 'writer');
+  assert.deepEqual(videoPairRuntime(writer.ts, model.text), videoPairRuntime(reader.ts, reader.program.getSourceFile(resolve(reader.projectRoot, key)).text));
+  const old = await videoIngressProgram(new Map(), { sourceRef: '3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5' });
+  assert.throws(() => methods.model(writer.ts, videoPairContext(writer), videoPairContext(old)),
+    error => error.reason === 'VOICE_FRESH_PHASE_NOT_READER', 'writer-origin state cannot use the reader-to-old proof');
+  assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(old), a, entries(old)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the old release is not the compatible voice reader');
+  for (const path of ['packages/domain/src/agent/voice.ts', 'packages/ai-gateway/src/synclip-audio-api.ts',
+    'packages/domain/src/agent/first-image-continuation.ts']) {
+    const changed = a.map(row => row[0] === `module:${path}` ? [row[0], 'changed actual source-runtime term'] : row);
+    assert.notDeepEqual(changed, a, path);
+    assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), changed, b),
+      error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+  }
+  assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), [...a, ['module:packages/new/src/runtime.ts', []]], b));
+  assert.equal(methods.pair(writer.ts, a, b, writer.projectRoot, reader.projectRoot, []), false);
+  const privateGate = value => value.replace('if (isHermesVoiceTaskKind(kind)) return null;',
+    'if (isHermesVoiceTaskKind(kind)) return isHermesVoiceWriterEnabled() ? rawResult as Record<string, unknown> : null;');
+  const unsafeReader = await videoIngressProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), releasedVoiceReaderSource);
+  const unsafeWriter = await retainedVoiceWriterProgram(new Map([['packages/domain/src/agent/agent.ts', privateGate]]), { trackedSourceOnly: true });
+  assert.throws(() => methods.writer(unsafeWriter.ts, videoPairContext(unsafeWriter), videoPairContext(unsafeReader), entries(unsafeWriter), entries(unsafeReader)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED', 'the same new private phase-dependent behavior in both roots must reject');
+});
+
+test('voice writer source inventory bounds ambient JavaScript resolution without hiding explicit mutations', async () => {
+  const methods = voicePairSourceComponents();
+  const client = 'packages/search/src/client.ts', extra = 'packages/search/generated/voice-source-boundary.js';
+  // A neutral output-module sentinel exercises filesystem visibility; it does
+  // not substitute a generated Prisma client or execute application code.
+  const text = 'export const sourceBoundarySentinel = 1;\n';
+  const changes = new Map([[client, value => `import '../generated/voice-source-boundary.js';\n${value}`]]);
+  const ambientSources = new Map([[extra, text]]);
+  const reader = await videoIngressProgram(changes, { ...releasedVoiceReaderSource, ambientSources });
+  const raw = await retainedVoiceWriterProgram(changes, { ambientSources });
+  const get = value => value.program.getSourceFile(resolve(value.projectRoot, extra));
+  assert.equal(get(raw)?.text, text, 'the default filesystem view must resolve the ambient module');
+  const file = raw.program.getSourceFile(resolve(raw.projectRoot, client));
+  const imported = file.statements.find(node => raw.ts.isImportDeclaration(node)
+    && node.moduleSpecifier.text === '../generated/voice-source-boundary.js');
+  assert.ok(raw.program.getTypeChecker().getSymbolAtLocation(imported.moduleSpecifier)?.declarations
+    ?.some(node => node.getSourceFile() === get(raw)), 'the real import must bind the extra JS before comparison');
+  assert.throws(() => methods.writer(raw.ts, videoPairContext(raw), videoPairContext(reader), voiceSourceEntries(raw), voiceSourceEntries(reader)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+  const scoped = await retainedVoiceWriterProgram(changes, { ambientSources, trackedSourceOnly: true });
+  assert.equal(Boolean(get(scoped)), false, 'the source inventory must exclude ambient JS during resolution, not after comparison');
+  assert.equal(get(reader), undefined);
+  assert.equal(methods.writer(scoped.ts, videoPairContext(scoped), videoPairContext(reader), voiceSourceEntries(scoped), voiceSourceEntries(reader)).phase, 'writer');
+  const explicit = await retainedVoiceWriterProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
+  assert.equal(get(explicit)?.text, text, 'an explicit source mutation must remain visible even outside the tracked inventory');
+  assert.throws(() => methods.writer(explicit.ts, videoPairContext(explicit), videoPairContext(reader), voiceSourceEntries(explicit), voiceSourceEntries(reader)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+});
+
+test('voice writer tracked runtime mutations retain exact current bytes and strict residual rejection', async () => {
+  const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
+  const path = 'packages/ai-gateway/src/synclip-audio-api.ts';
+  const text = readFileSync(resolve(reader.projectRoot, path), 'utf8') + '\nexport const voiceSourceMutationSentinel = true;\n';
+  const writer = await retainedVoiceWriterProgram(new Map([[path, text]]), { trackedSourceOnly: true });
+  assert.equal(writer.program.getSourceFile(resolve(writer.projectRoot, path)).text, text,
+    'tracked-source inventory must preserve the exact current mutation, not read a HEAD blob');
+  assert.throws(() => methods.writer(writer.ts, videoPairContext(writer), videoPairContext(reader), voiceSourceEntries(writer), voiceSourceEntries(reader)),
+    error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
+});
 
 function selectedGuideSourceComponents() {
   const start = deployLockSource.indexOf('function finiteSelectedGuideSupplementaryTerms(');
@@ -835,8 +1183,14 @@ function selectedGuideSourceContext(actual) {
   return { ...videoPairContext(actual), canonical, sourceHost: actual.sourceHost, resolveSource: actual.resolveSource };
 }
 
+// Original selected-component positives and mutations use the same complete
+// image4cc inventory and source host; they are not the live combined candidate.
+function retainedSelectedGuideProgram(changes = new Map()) {
+  return videoIngressProgram(changes, { sourceRef: '4cc78008f86da811aeb695b5d3639a5b52891d57' });
+}
+
 test('selected guide supplementary writer input retains captured nodes and actual API and Drawer sources', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const narrow = actual.ts.createProgram([resolve(actual.projectRoot, 'apps/agent-worker/src/index.ts')],
     actual.program.getCompilerOptions(), actual.sourceHost);
   const captured = selectedGuideSourceContext({ ...actual, program: narrow });
@@ -850,8 +1204,8 @@ test('selected guide supplementary writer input retains captured nodes and actua
   assert.ok(extra.api.fileName.endsWith('apps/api/src/routes/agent.ts'));
   assert.ok(extra.drawer.fileName.endsWith('apps/web/components/hermes/HermesAssistantDrawer.tsx'));
   for (const source of narrow.getSourceFiles()) assert.equal(extra.program.getSourceFile(source.fileName), source);
-  assert.equal(extra.api.text, readFileSync(extra.api.fileName, 'utf8'));
-  assert.equal(extra.drawer.text, readFileSync(extra.drawer.fileName, 'utf8'));
+  assert.equal(extra.api.text, actual.sourceHost.readFile(extra.api.fileName));
+  assert.equal(extra.drawer.text, actual.sourceHost.readFile(extra.drawer.fileName));
   assert.ok(extra.apiEntry.fileName.endsWith('apps/api/src/index.ts'));
   assert.ok(extra.parserEntry.fileName.endsWith('apps/agent-worker/src/parser-acceptance-runner.ts'));
   assert.ok(extra.outstanding.length > 0, 'supplemental input alone is never a production permit');
@@ -867,7 +1221,7 @@ test('selected guide supplementary writer input retains captured nodes and actua
 
 test('selected guide decoder proves own-member absence without accepting null or a changed legacy parser', async () => {
   const components = selectedGuideSourceComponents();
-  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const model = components.decoder(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
   assert.equal(model.status, 'conditional');
   assert.equal(model.capable, true);
@@ -879,7 +1233,7 @@ test('selected guide decoder proves own-member absence without accepting null or
     text => text.replace('return parseWorkspaceGuidePayload(value);', 'return parseWorkspaceGuidePayload({});'),
     text => text.replace("['researchObjectId', 'versionId'])", "['researchObjectId', 'versionId', 'selectedImageAssetId'])"),
   ]) {
-    const changed = await videoIngressProgram(new Map([[path, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[path, change]]));
     assert.throws(() => components.decoder(changed.ts, selectedGuideSourceContext(changed), selectedGuideSourceContext(previous)),
       error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
   }
@@ -887,7 +1241,7 @@ test('selected guide decoder proves own-member absence without accepting null or
 
 test('selected guide fresh source follows actual HTTP and transitive task persistence callers', async () => {
   const components = selectedGuideSourceComponents();
-  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, selectedGuideSourceContext(previous));
   let model;
   try { model = components.fresh(actual.ts, context, decoder, selectedGuideSourceContext(previous)); }
@@ -897,7 +1251,7 @@ test('selected guide fresh source follows actual HTTP and transitive task persis
   assert.ok(model.origins.length > 0);
   assert.ok(model.nonGuide.some(value => value.kind === 'presentation.generate'));
   const path = 'apps/api/src/routes/agent.ts';
-  const writer = await videoIngressProgram(new Map([[path, text => text
+  const writer = await retainedSelectedGuideProgram(new Map([[path, text => text
     .replace('listAgentTasks, parseWorkspaceGuidePayload,', 'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage,')
     .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
   const changedContext = selectedGuideSourceContext(writer);
@@ -909,7 +1263,7 @@ test('selected guide fresh source follows actual HTTP and transitive task persis
     "const afterValidation = body.payload.context.presentation!; Object.assign(afterValidation, { selectedImageAssetId: '00000000-0000-4000-8000-000000000001' });",
     'const afterValidation = body.payload; unknownWriter(afterValidation);',
   ]) {
-    const changed = await videoIngressProgram(new Map([[path, text => text.replace('const body = agentTaskBodySchema.parse(req.body);',
+    const changed = await retainedSelectedGuideProgram(new Map([[path, text => text.replace('const body = agentTaskBodySchema.parse(req.body);',
       `const body = agentTaskBodySchema.parse(req.body); ${addition}`)]]));
     const scope = selectedGuideSourceContext(changed);
     const read = components.decoder(changed.ts, scope, selectedGuideSourceContext(previous));
@@ -928,7 +1282,7 @@ test('selected guide schema proof rejects a replaced or escaped actual Zod bindi
     text => text.replace("import { z } from 'zod';", "import { z } from 'zod'; Object.assign(z, { object: unownedObject });"),
     text => text.replace("import { z } from 'zod';", "import { z } from 'zod'; const escapedSchema = z; unowned(escapedSchema);"),
   ]) {
-    const actual = await videoIngressProgram(new Map([[file, change]]));
+    const actual = await retainedSelectedGuideProgram(new Map([[file, change]]));
     const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, baseline);
     assert.throws(() => components.fresh(actual.ts, context, decoder, baseline),
       error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
@@ -947,7 +1301,7 @@ test('selected guide fresh proof refuses changed actual persistence forwarders a
     text => text.replace('const { dispatch, beforePersist, ...persistenceInput } = input;',
       "const { dispatch, beforePersist, ...persistenceInput } = input; persistenceInput.kind = 'workspace.guide';"),
   ]) {
-    const actual = await videoIngressProgram(new Map([[file, change]]));
+    const actual = await retainedSelectedGuideProgram(new Map([[file, change]]));
     const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, baseline);
     assert.throws(() => components.fresh(actual.ts, context, decoder, baseline),
       error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
@@ -956,7 +1310,7 @@ test('selected guide fresh proof refuses changed actual persistence forwarders a
 
 test('selected guide relocated byte reader retains actual bounds hash finally and all ordinary call arguments', async () => {
   const components = selectedGuideSourceComponents();
-  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const model = components.relocation(actual.ts, selectedGuideSourceContext(actual), baseline);
   assert.equal(model.status, 'conditional');
@@ -968,18 +1322,18 @@ test('selected guide relocated byte reader retains actual bounds hash finally an
     text => text.replace(".digest('hex') !== expectedHash", ".digest('hex') === expectedHash"),
     text => text.replace('object.body.destroy();', 'void object.body;'),
   ]) {
-    const changed = await videoIngressProgram(new Map([[path, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[path, change]]));
     assert.throws(() => components.relocation(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_BYTE_READER_CHANGED');
   }
-  const escaped = await videoIngressProgram(new Map([['apps/agent-worker/src/presentation/handler.ts',
+  const escaped = await retainedSelectedGuideProgram(new Map([['apps/agent-worker/src/presentation/handler.ts',
     text => `${text}\nconst escapedByteReader = readPresentationInput;\n`]]));
   assert.throws(() => components.relocation(escaped.ts, selectedGuideSourceContext(escaped), baseline),
     error => error.reason === 'SELECTED_GUIDE_BYTE_READER_CHANGED');
 });
 
 test('selected guide workspace branch reduces to the complete old module without ordinary or builtin escape changes', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const context = selectedGuideSourceContext(actual), baseline = selectedGuideSourceContext(previous);
   const decoder = components.decoder(actual.ts, context, baseline);
@@ -997,7 +1351,7 @@ test('selected guide workspace branch reduces to the complete old module without
     text => text.replace('const INTENTS = new Set', 'const escaped = isDeepStrictEqual; unowned(escaped); const INTENTS = new Set'),
     text => text.replace('workspace.guide 服务端任务上下文无效', 'changed ordinary task guard'),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
     const read = components.decoder(changed.ts, scope, baseline);
     assert.throws(() => components.workspace(changed.ts, scope, baseline, read),
       error => error.reason === 'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN');
@@ -1005,7 +1359,7 @@ test('selected guide workspace branch reduces to the complete old module without
 });
 
 test('selected guide Native ordinary projection preserves complete actual CAS terminal authority and parser runtime', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const context = selectedGuideSourceContext(actual), baseline = selectedGuideSourceContext(previous);
   const decoder = components.decoder(actual.ts, context, baseline);
@@ -1022,7 +1376,7 @@ test('selected guide Native ordinary projection preserves complete actual CAS te
     text => text.replace('function selectedGuide(', 'function escaped(task: unknown) { return selectedGuide(task); } function selectedGuide('),
     text => text.replace("marker?.profile === 'paper-illustration' && task?.kind === 'workspace.guide') {", "marker?.profile === 'paper-illustration') {"),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
     const read = components.decoder(changed.ts, scope, baseline);
     assert.throws(() => components.native(changed.ts, scope, baseline, read),
       error => error.reason === 'SELECTED_GUIDE_NATIVE_RESIDUAL_UNKNOWN');
@@ -1030,7 +1384,7 @@ test('selected guide Native ordinary projection preserves complete actual CAS te
 });
 
 test('selected guide byte relocation restores both entire modules and checks free bindings and selected-only extra callers', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const modelFor = input => {
@@ -1051,14 +1405,14 @@ test('selected guide byte relocation restores both entire modules and checks fre
     ['apps/agent-worker/src/presentation/handler.ts', text => text.replace('Storyboard art correction checkpoint is invalid', 'changed ordinary art checkpoint error')],
     ['apps/agent-worker/src/presentation/generated-image-review.ts', text => text.replace('export async function readPresentationInput(', 'const Buffer = unownedBuffer; export async function readPresentationInput(')],
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN');
   }
 });
 
 test('selected guide Native config projection binds both actual uses suppliers and legacy callback ordering', async () => {
   const components = selectedGuideSourceComponents();
-  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   let model;
   try { model = components.handlers(actual.ts, selectedGuideSourceContext(actual), baseline); }
@@ -1073,7 +1427,7 @@ test('selected guide Native config projection binds both actual uses suppliers a
     text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { get videoSpool() { throw new Error("observable options read"); },'),
     text => text + '\nconst escapedFactory = createHandlers;\n',
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => components.handlers(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED');
   }
@@ -1081,7 +1435,7 @@ test('selected guide Native config projection binds both actual uses suppliers a
 
 test('selected guide illustration binds closed ordinary and video constructors and exact paper images delegation', async () => {
   const components = selectedGuideSourceComponents();
-  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   let model;
   try { model = components.illustration(actual.ts, selectedGuideSourceContext(actual), baseline); }
@@ -1101,14 +1455,14 @@ test('selected guide illustration binds closed ordinary and video constructors a
     ['apps/agent-worker/src/native-agent/host-task.ts', text => text.replace('const images = await input.paper.images(value.arguments, value.result);',
       'observeFunctionIdentity(input.paper.images.name); const images = await input.paper.images(value.arguments, value.result);')],
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => components.illustration(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED');
   }
 });
 
 test('selected guide illustration restores the entire old module with no schema export or materializer remainder', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const modelFor = input => {
@@ -1127,13 +1481,13 @@ test('selected guide illustration restores the entire old module with no schema 
     text => text.replace('type SelectedImageAuthorContext =', 'export { SELECTED_IMAGE_TOOLS }; type SelectedImageAuthorContext ='),
     text => text.replace("return { status: 'illustration_context', settings: input.settings,", "return { status: 'changed_illustration_context', settings: input.settings,"),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_ILLUSTRATION_RESIDUAL_UNKNOWN');
   }
 });
 
 test('selected guide dormant declarations leave all three actual legacy modules and exports exact', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const modelFor = input => {
@@ -1151,13 +1505,13 @@ test('selected guide dormant declarations leave all three actual legacy modules 
     ['packages/domain/src/assets/scene-image.ts', text => text.replace('export async function requireSelectedImageSource(', 'const escapedWriteScope = requirePresentationWriteScope; export async function requireSelectedImageSource(')],
     ['packages/domain/src/index.ts', text => text + '\nexport const untrackedSelectedValue = 1;\n'],
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_DORMANT_MODULE_UNKNOWN');
   }
 });
 
 test('selected guide public reader preserves ordinary opaque data and quarantines unknown provenance on the same row', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const model = components.publicReader(actual.ts, selectedGuideSourceContext(actual), baseline);
@@ -1172,14 +1526,14 @@ test('selected guide public reader preserves ordinary opaque data and quarantine
     text => text.replace('task.result !== rawResult', 'task.result === rawResult'),
     text => text.replace('delete publicResult.audioAuditionGrant;', 'delete publicResult.ordinaryExtension;'),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => components.publicReader(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_PUBLIC_READER_UNKNOWN');
   }
 });
 
 test('selected guide whole agent residual retains ordinary constructors retry and all original private filters', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const context = selectedGuideSourceContext(actual);
@@ -1195,7 +1549,7 @@ test('selected guide whole agent residual retains ordinary constructors retry an
     text => text.replace('AI Credit 不足（§2.4-7），请补充后再试', 'changed ordinary billing behavior'),
     text => text.replace('kind: input.kind,\r\n        payload:', "kind: 'workspace.guide',\r\n        payload:"),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
     const changedDecoder = components.decoder(changed.ts, scope, baseline), changedReader = components.publicReader(changed.ts, scope, baseline);
     assert.throws(() => components.agent(changed.ts, scope, baseline, changedDecoder, changedReader),
       error => error.reason === 'SELECTED_GUIDE_AGENT_RESIDUAL_UNKNOWN');
@@ -1203,7 +1557,7 @@ test('selected guide whole agent residual retains ordinary constructors retry an
 });
 
 test('selected guide ingestion projection supplies its exact persisted row without changing the original reader', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   const model = components.ingestion(actual.ts, selectedGuideSourceContext(actual), baseline);
@@ -1215,7 +1569,7 @@ test('selected guide ingestion projection supplies its exact persisted row witho
     text => text.replace("task.agentTask?.kind ?? ''", "task.agentTask?.kind ?? 'workspace.guide'"),
     text => text.replace('artifact: true, agentTask: true, batch:', 'artifact: true, agentTask: false, batch:'),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => components.ingestion(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_INGESTION_READER_UNKNOWN');
   }
@@ -1223,7 +1577,7 @@ test('selected guide ingestion projection supplies its exact persisted row witho
 
 test('selected guide new schema initializer is owned plain data and never an effect or cyclic value read', async () => {
   const components = selectedGuideSourceComponents();
-  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const actual = await retainedSelectedGuideProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   let model;
   try { model = components.initialization(actual.ts, selectedGuideSourceContext(actual), baseline); }
@@ -1242,7 +1596,7 @@ test('selected guide new schema initializer is owned plain data and never an eff
     text => text.replace(/(const SELECTED_IMAGE_TOOLS = )(\[[\s\S]*?\]);(\r?\ntype SelectedImageAuthorContext)/u, '$1initializeSelected($2);$3'),
     text => text.replace("parameters: object({ kind: { type: 'string', enum: ['explanation', 'question'] }", "parameters: object({ __proto__: unownedPrototype, kind: { type: 'string', enum: ['explanation', 'question'] }"),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => components.initialization(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
   }
@@ -1252,7 +1606,7 @@ test('selected guide High exact RegExp literal witness cannot obtain an initiali
   const components = selectedGuideSourceComponents();
   const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
   const needle = "description: 'Read the actual selected saved image. This exact image is the revision target, not a style example. No other image can be selected here.'";
-  const actual = await videoIngressProgram(new Map([[file, text => {
+  const actual = await retainedSelectedGuideProgram(new Map([[file, text => {
     assert.equal(text.split(needle).length, 2);
     return text.replace(needle, 'description: /(/');
   }]]));
@@ -1269,7 +1623,7 @@ test('selected guide High ordinary constructor witness has equal old and current
     assert.equal(text.split(needle).length, 2);
     return text.replace(needle, "return { echoed: true, selectedImageReference: { note: 'ordinary legacy opaque field' } };");
   };
-  const actual = await videoIngressProgram(new Map([[file, change]]));
+  const actual = await retainedSelectedGuideProgram(new Map([[file, change]]));
   const previous = await historicalVideoIngressProgram(new Map([[file, change]]), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
   assert.equal(model.status, 'conditional');
@@ -1297,7 +1651,7 @@ test('selected guide High ordinary constructor witness has equal old and current
 });
 
 test('selected guide whole model preserves an arbitrary ordinary historical root through its actual retainers', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
   const baseline = selectedGuideSourceContext(previous);
   let model;
@@ -1316,7 +1670,7 @@ test('selected guide whole model preserves an arbitrary ordinary historical root
   for (const [key, value] of model.projected)
     assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
   const file = 'apps/api/src/routes/agent.ts';
-  const writer = await videoIngressProgram(new Map([[file, text => text
+  const writer = await retainedSelectedGuideProgram(new Map([[file, text => text
     .replace('listAgentTasks, parseWorkspaceGuidePayload,', 'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage,')
     .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
   assert.throws(() => components.sourceModel(writer.ts, selectedGuideSourceContext(writer), baseline),
@@ -1346,7 +1700,7 @@ test('selected guide whole source closure rejects namespace observation and a se
       'void Object.keys(selectedDomain); return { requestId: String(req.id),'),
     text => text.replace('return { requestId: String(req.id),', 'void requireSelectedImageSource; return { requestId: String(req.id),'),
   ]) {
-    const changed = await videoIngressProgram(new Map([[file, change]]));
+    const changed = await retainedSelectedGuideProgram(new Map([[file, change]]));
     assert.throws(() => components.sourceModel(changed.ts, selectedGuideSourceContext(changed), baseline),
       error => error.reason === 'SELECTED_GUIDE_DECLARATION_OR_ESCAPE_UNKNOWN',
       'Both mutations must reach the actual bound-reference/namespace closure');
@@ -1356,11 +1710,61 @@ test('selected guide whole source closure rejects namespace observation and a se
 test('selected guide legacy retry cannot execute an added effect before its absence refusal', async () => {
   const components = selectedGuideSourceComponents(), path = 'packages/domain/src/agent/agent.ts';
   const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
-  const changed = await videoIngressProgram(new Map([[path, text => text.replace(
+  const changed = await retainedSelectedGuideProgram(new Map([[path, text => text.replace(
     /(function canRecoverSelectedGuideFinal\(task: AgentTaskRetrySnapshot\): boolean \{\r?\n  try \{)/u,
     '$1\n    globalThis.observeLegacyRetry();')]]));
   assert.throws(() => components.sourceModel(changed.ts, selectedGuideSourceContext(changed), selectedGuideSourceContext(previous)),
     error => error.reason === 'SELECTED_GUIDE_LEGACY_GUIDE_RETRY_UNKNOWN');
+});
+
+test('selected guide current combination closes the whole source over the exact voice reader', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
+  const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh.fresh, 'legacy');
+  assert.equal(model.projected.size, 11);
+  assert.equal(model.origin.domain, 'authenticated-ordinary-opaque-json-root');
+  assert.ok(model.handlers.voicePredecessor);
+  assert.equal(relative(actual.projectRoot, model.handlers.voicePredecessor.factory.getSourceFile().fileName).replaceAll('\\', '/'), 'apps/agent-worker/src/voice.ts');
+  for (const [key, value] of model.projected)
+    assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
+});
+
+test('selected guide current voice predecessor refuses eager effects keys and non-data suppliers at their actual nodes', async t => {
+  const components = selectedGuideSourceComponents(), voice = 'apps/agent-worker/src/voice.ts', worker = 'apps/agent-worker/src/index.ts';
+  const check = async (changes, both, evidence) => {
+    const actual = await videoIngressProgram(changes);
+    const previous = await historicalVideoIngressProgram(both ? changes : new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
+    assert.throws(() => components.handlers(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
+      error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED' && evidence(error.node, actual),
+      'The named boundary must refuse at its supplying node, not an unrelated earlier frontier');
+  };
+  await t.test('same factory eager effect on both source sides', () => check(new Map([[voice,
+    text => text.replace('  const wait = options.wait ??', '  globalThis.eagerVoiceFactory();\n  const wait = options.wait ??')]]), true,
+  node => node.getSourceFile().fileName.replaceAll('\\', '/').endsWith('/voice.ts')));
+  await t.test('same changed returned key on both source sides', () => check(new Map([[voice,
+    text => text.replace("'voice.reply': handle", "'voice.changed': handle")]]), true,
+  node => node.getSourceFile().fileName.replaceAll('\\', '/').endsWith('/voice.ts')));
+  await t.test('actual caller accessor', () => check(new Map([[worker,
+    text => text.replace(/(const handlers = createHandlers\(gateway, \{\r?\n)      voiceRuntime,/u,
+      '$1      get voiceRuntime() { return undefined; },')]]), false,
+  node => node.getText().includes('get voiceRuntime()')));
+  await t.test('actual caller opaque options', () => check(new Map([[worker,
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, opaqueOptions || {')]]), false,
+  node => node.getText().startsWith('opaqueOptions')));
+  await t.test('actual caller opaque spread', () => check(new Map([[worker,
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { ...opaqueOptions,')]]), false,
+  node => node.getText().includes('...opaqueOptions')));
+  await t.test('actual caller accessor inside conditional spread', () => check(new Map([[worker,
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { ...(true ? { get voiceRuntime() { return undefined; } } : {}),')]]), false,
+  node => node.getText().includes('get voiceRuntime()')));
+  await t.test('actual factory second argument', () => check(new Map([[worker,
+    text => text.replace('...createHermesVoiceHandlers(options.voiceRuntime),', '...createHermesVoiceHandlers(options.voiceRuntime, {}),')]]), false,
+  node => node.getText().includes('createHermesVoiceHandlers(options.voiceRuntime, {})')));
+  await t.test('actual factory shorthand escape', () => check(new Map([[worker,
+    text => text + '\nconst leakedVoiceFactory = { createHermesVoiceHandlers };\n']]), false,
+  (node, input) => input.ts.isShorthandPropertyAssignment(node.parent)));
 });
 
 test('selected guide supplemental HTTP library identity requires the actual locked importer and same installed package', () => {
@@ -1666,7 +2070,9 @@ test('image recovery projection retains both original task and run recovery modu
   const project=runInNewContext(`${component}; finiteImageRecoveryProjections`,{resolve,relative});
   const files=['packages/domain/src/agent/agent.ts','packages/domain/src/agent/research-run.ts'];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
-  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  // This historical image component proof is not current whole-candidate compatibility.
+  const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
+  const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(originals,{sourceRef});
   const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
   assert.equal(model.status,'conditional');
   for(const [key,value]of model.projected)assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
@@ -1675,7 +2081,7 @@ test('image recovery projection retains both original task and run recovery modu
       'const rawMarker = jsonRecord(jsonRecord(task.result).nativeAgentExecution); await tx.extraOperation();')],
     [files[0],value=>value.replace('task.retryCount === 0','task.retryCount >= 0')],
   ]){
-    const unsafe=await videoIngressProgram(new Map([[path,change]]));
+    const unsafe=await videoIngressProgram(new Map([[path,change]]),{sourceRef});
     assert.throws(()=>{
       const projected=project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy));
       for(const [key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
@@ -1750,7 +2156,7 @@ test('image consumer projection retains original decision parsing and journal tu
   }
 });
 
-test('image legacy source model composes the real projections and refuses a live prepared-method escape', async () => {
+test('image legacy source model composes historical projections and refuses current voice and live prepared-method escapes', async () => {
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   const project=runInNewContext(`${component}; finiteImageLegacySourceModel`,{resolve,relative});
@@ -1764,7 +2170,19 @@ test('image legacy source model composes the real projections and refuses a live
     'packages/ai-gateway/src/native-image-review.ts','packages/ai-gateway/src/index.ts',
   ];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
-  const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
+  // Only this historical image component is compared with the retained ca0a bytes.
+  const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
+  const actual=await videoIngressProgram(new Map(),{sourceRef}),legacy=await videoIngressProgram(originals,{sourceRef});
+  const current=await videoIngressProgram();
+  assert.throws(()=>project(current.ts,videoPairContext(current),videoPairContext(legacy)),error=>{
+    assert.equal(error.reason,'IMAGE_DECLARATION_CONTEXT_UNKNOWN');
+    assert.ok(current.ts.isIdentifier(error.node),'the current image-only proof must identify its unclassified voice caller');
+    assert.equal(error.node.text,'persistHermesVoiceTaskInTransaction');
+    assert.equal(resolve(error.node.getSourceFile().fileName),resolve(current.projectRoot,'packages/domain/src/agent/voice.ts'));
+    assert.ok(current.ts.isCallExpression(error.node.parent)&&error.node.parent.expression===error.node,
+      'the rejected identifier must be the actual voice call expression');
+    return true;
+  });
   const model=project(actual.ts,videoPairContext(actual),videoPairContext(legacy));assert.equal(model.status,'conditional');
   assert.ok(model.closure.declarations.size>0);
   for(const[key,value]of model.projected){
@@ -1778,7 +2196,7 @@ test('image legacy source model composes the real projections and refuses a live
     }else assert.deepEqual(videoPairRuntime(actual.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
   }
   const unsafe=await videoIngressProgram(new Map([['packages/ai-gateway/src/gateway.ts',value=>value.replace(
-    '    messages = snapshotChatMessages(messages);','    void this.prepareNativeImageReviewTurn; messages = snapshotChatMessages(messages);')]]));
+    '    messages = snapshotChatMessages(messages);','    void this.prepareNativeImageReviewTurn; messages = snapshotChatMessages(messages);')]]),{sourceRef});
   assert.throws(()=>project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy)),error=>error.reason==='IMAGE_DECLARATION_CONTEXT_UNKNOWN');
 });
 

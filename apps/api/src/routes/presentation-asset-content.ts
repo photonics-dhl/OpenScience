@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { FastifyReply } from 'fastify';
 import type { StorageAdapter } from '@openscience/storage';
-import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PublicEvidenceSourceError } from '@openscience/domain';
+import { DETERMINISTIC_PRESENTATION_GENERATOR, DETERMINISTIC_PRESENTATION_GENERATOR_VERSION, PublicEvidenceSourceError, type HermesVoiceAudio } from '@openscience/domain';
 
 const MAX_PRESENTATION_BYTES = 16 * 1024 * 1024;
 const safeInlineImages = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif']);
 const safeInlineVideos = new Set(['video/mp4', 'video/webm']);
+const presentationAudioTypes = new Set(['audio/mpeg']);
+const hermesVoiceAudioTypes = new Set(['audio/mpeg', 'audio/wav']);
 
 function singleByteRange(range: string, size: number): { start: number; end: number } | null {
   const match = /^bytes=(\d*)-(\d*)$/.exec(range);
@@ -34,11 +36,26 @@ export async function sendPresentationAssetContent(
   visibility: 'public' | 'private',
   headers: { range?: string; 'if-range'?: string } = {},
 ) {
+  return sendAssetContent(storage, asset, reply, visibility, headers, presentationAudioTypes);
+}
+
+/** Called only after dedicated voice authority; stored generator labels grant no WAV access. */
+export async function sendHermesVoiceAudioContent(storage: StorageAdapter, taskId: string, audio: HermesVoiceAudio,
+  reply: FastifyReply, headers: { range?: string; 'if-range'?: string } = {}) {
+  return sendAssetContent(storage, { id: taskId, objectKey: audio.objectKey, contentHash: audio.sha256,
+    size: audio.bytes, contentType: audio.contentType, kind: 'audio', generator: 'synclip', generatorVersion: 'hermes-voice' },
+  reply, 'private', headers, hermesVoiceAudioTypes);
+}
+
+async function sendAssetContent(storage: StorageAdapter,
+  asset: { id: string; objectKey: string; contentHash: string; kind: string; generator: string; generatorVersion: string;
+    size?: number; contentType?: string }, reply: FastifyReply, visibility: 'public' | 'private',
+  headers: { range?: string; 'if-range'?: string }, audioTypes: ReadonlySet<string>) {
   const privateAudio = asset.kind === 'audio' && visibility === 'private';
   if (asset.kind === 'audio') {
     reply.header('Cache-Control', 'private, no-store').header('Referrer-Policy', 'no-referrer')
       .header('X-Content-Type-Options', 'nosniff').header('Content-Security-Policy', "sandbox; default-src 'none'");
-    if (!privateAudio || asset.contentType !== 'audio/mpeg' || !Number.isSafeInteger(asset.size)
+    if (!privateAudio || !audioTypes.has(asset.contentType ?? '') || !Number.isSafeInteger(asset.size)
       || (asset.size ?? 0) < 1 || (asset.size ?? 0) > MAX_PRESENTATION_BYTES || !/^[a-f0-9]{64}$/iu.test(asset.contentHash)) {
       throw new PublicEvidenceSourceError('NOT_FOUND', 'presentation asset not found');
     }
@@ -51,7 +68,7 @@ export async function sendPresentationAssetContent(
   }
   if (!head) throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'presentation asset is temporarily unavailable');
   if (head.size < 1 || head.size > MAX_PRESENTATION_BYTES
-    || (privateAudio && (head.size !== asset.size || head.contentType?.toLowerCase().split(';', 1)[0] !== 'audio/mpeg'))) {
+    || (privateAudio && (head.size !== asset.size || head.contentType?.toLowerCase().split(';', 1)[0] !== asset.contentType))) {
     throw new PublicEvidenceSourceError('NOT_FOUND', 'presentation asset not found');
   }
   let object;
@@ -61,7 +78,7 @@ export async function sendPresentationAssetContent(
     throw new PublicEvidenceSourceError('SOURCE_UNAVAILABLE', 'presentation asset is temporarily unavailable', { cause: error });
   }
   if (object.size !== head.size || object.size > MAX_PRESENTATION_BYTES
-    || (privateAudio && object.contentType?.toLowerCase().split(';', 1)[0] !== 'audio/mpeg')) {
+    || (privateAudio && object.contentType?.toLowerCase().split(';', 1)[0] !== asset.contentType)) {
     object.body.destroy();
     throw new PublicEvidenceSourceError('NOT_FOUND', 'presentation asset not found');
   }
@@ -98,7 +115,7 @@ export async function sendPresentationAssetContent(
   const contentType = inline ? storedType : 'application/octet-stream';
   reply
     .header('Content-Type', contentType)
-    .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="presentation-${asset.id}${privateAudio ? '.mp3' : ''}"`)
+    .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="presentation-${asset.id}${privateAudio ? storedType === 'audio/wav' ? '.wav' : '.mp3' : ''}"`)
     .header('X-Content-Type-Options', 'nosniff')
     .header('Content-Security-Policy', "sandbox; default-src 'none'")
     .header('Cache-Control', visibility === 'private' ? 'private, no-store' : 'public, max-age=31536000, immutable')

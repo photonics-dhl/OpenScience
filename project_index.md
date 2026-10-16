@@ -806,3 +806,5 @@ Chat生图操作：`f804348c:infra/chatgpt-browser/runner.cjs`在空编辑器先
 | .agents/skills/baoyu-article-illustrator/、baoyu-cover-image/、baoyu-infographic/；apps/agent-worker/src/skills/installed-media-skills.ts | 三个原版MIT设计技能及Hermes只读原文章节加载；消费写入既有资产provenance | 2026-09-14已部署ea43696d；上游commit1567581c；真实方案141f42d3消费三包，但方案质量不合格已rejected，见CURRENT |
 
 | .agents/skills/openscience-research-illustration/；packages/domain/src/assets/illustration-brief.ts；apps/agent-worker/src/presentation/{illustration-planner,illustration-review,storyboard,scene-image,handler}.ts；packages/ai-gateway/src/{image,codex-image-protocol,codex-image,gateway}.ts；f804348c:infra/chatgpt-browser/{broker.mjs,runner.cjs} | 自有科学分析驱动配图skill、带原文basis的brief与Chat真实参考图传递 | 已部署；旧构建阻断已解决，真实科学审阅阻断错误方案，私有修订正在推进。精确版本/产物质量见CURRENT handoff，不以安装代替效果 |
+
+Hermes 语音源码与验收定位：`packages/domain/src/agent/voice{,-contract}.ts`、`packages/ai-gateway/src/synclip-voice.ts`、`apps/api/src/routes/voice.ts`、`apps/agent-worker/src/voice.ts`、`apps/web/components/hermes/HermesVoiceControls.tsx` 及相邻语音测试；候选启用和回退见原[部署手册](docs/runbooks/deployment.md)，任务/预算/实际生产与验证状态只见[Hermes CURRENT](docs/handoff/2026-09-10-hermes-web-image-handoff.md)。

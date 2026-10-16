@@ -10,6 +10,9 @@ const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.ti
 test.beforeEach(async ({ page }) => {
   await page.context().route('**/api/**', (route) => {
     const url = new URL(route.request().url());
+    if (route.request().method() === 'GET' && url.pathname === '/api/agent/voice/capabilities' && url.searchParams.size === 0) {
+      return route.fulfill({ json: { available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [] } });
+    }
     throw new Error(`Unmocked API request: ${route.request().method()} ${url.pathname}${url.search}`);
   });
 });
@@ -203,7 +206,14 @@ test('the confirmed paper is included in the next commit through the editor', as
   await expect(assistant).not.toHaveAttribute('aria-modal');
   await assistant.getByRole('button', { name: 'Close Hermes', exact: true }).click();
   await expect(assistant).toHaveCount(0);
+  const content = page.locator('[data-workbench-section="content"]');
+  await expect(content.getByRole('textbox')).toHaveCount(0);
+  await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
+  await expect(content.getByRole('textbox')).toHaveCount(1);
   await page.locator('#sdf-field-problem').fill(editedCore.problem);
+  await content.getByRole('heading', { name: 'Research content', exact: true }).click();
+  await expect(content.getByRole('textbox')).toHaveCount(0);
+  await expect(content.locator('#research-section-problem')).toContainText(editedCore.problem);
   await expect.poll(() => saves).toBe(1);
   expect(commits).toBe(0);
   await page.locator('[data-hermes-input-owner="true"]').click();
@@ -310,6 +320,178 @@ test('saved materials survive Files refresh and same-name attachments create a m
   await page.getByTestId('artifact-input').setInputFiles({ name: 'figure.png', mimeType: 'image/png', buffer: Buffer.from('controlled fixture') });
   await page.getByRole('button', { name: 'Save materials to draft', exact: true }).click();
   await expect.poll(() => submitted).toMatchObject({ version: 1, artifacts: [original, { artifactId: 'added', logicalPath: 'figure.png.1' }] });
+});
+
+const previewPdfBytes = (() => {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>',
+    '<< /Length 4 >>\nstream\nq\nQ\nendstream',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((object, index) => {
+    const offset = Buffer.byteLength(pdf);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+    return offset;
+  });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 5\n0000000000 65535 f \n${offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf);
+})();
+
+type PreviewUrlLog = { created: string[]; revoked: string[] };
+type PreviewWindow = { attachmentPreviewUrls: PreviewUrlLog };
+
+async function attachmentPreviewFixtures(page: Page, artifacts: Array<{ artifactId: string; logicalPath: string }>) {
+  await fixtures(page, []);
+  await page.route('**/api/research-objects/journey-ro/versions', route => readJson(route, { versions: [{ versionId: 'confirmed-version', versionNo: 2, status: 'draft', createdAt: '2026-10-08T00:00:00.000Z', commitMessage: 'Saved source' }] }));
+  await page.route('**/api/versions/confirmed-version', route => readJson(route, { version: { versionId: 'confirmed-version', snapshot: { core, artifacts } } }));
+  await page.addInitScript(() => {
+    const log: PreviewUrlLog = { created: [], revoked: [] };
+    (window as unknown as PreviewWindow).attachmentPreviewUrls = log;
+    const create = URL.createObjectURL.bind(URL);
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => { const url = create(blob); log.created.push(url); return url; };
+    URL.revokeObjectURL = (url) => { log.revoked.push(url); revoke(url); };
+  });
+}
+
+test('PDF original actions stay visible independently of the embedded renderer and images keep their preview', async ({ page }) => {
+  await attachmentPreviewFixtures(page, [
+    { artifactId: 'preview-pdf', logicalPath: 'paper.pdf' },
+    { artifactId: 'preview-image', logicalPath: 'figure.png' },
+    { artifactId: 'preview-text', logicalPath: 'notes.txt' },
+  ]);
+  await page.route('**/api/artifacts/preview-pdf/download', route => route.fulfill({ contentType: 'application/pdf; charset=binary', body: previewPdfBytes }));
+  await page.route('**/api/artifacts/preview-image/download', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64') }));
+  await page.goto('/research-objects/journey-ro/files');
+  await page.locator('[data-artifact-row]').filter({ hasText: 'paper.pdf' }).getByRole('button', { name: 'Preview', exact: true }).click();
+  const pdf = page.getByRole('dialog', { name: 'paper.pdf', exact: true });
+  const embedded = pdf.locator('object[type="application/pdf"]');
+  const openOriginal = pdf.getByRole('link', { name: 'Open original', exact: true });
+  const downloadOriginal = pdf.getByRole('link', { name: 'Download original', exact: true });
+  await expect(openOriginal).toBeVisible();
+  await expect(downloadOriginal).toBeVisible();
+  await expect(pdf.getByText('PDF previews depend on your browser. You can also open or download the original.', { exact: true })).toBeVisible();
+  await expect(embedded).toHaveAttribute('data', /^blob:/);
+  const blobUrl = await embedded.getAttribute('data');
+  await expect(openOriginal).toHaveAttribute('href', blobUrl!);
+  await expect(openOriginal).toHaveAttribute('target', '_blank');
+  await expect(openOriginal).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(downloadOriginal).toHaveAttribute('href', blobUrl!);
+  await expect(downloadOriginal).toHaveAttribute('download', 'paper.pdf');
+  await expect(embedded.locator('a')).toHaveCount(0);
+  const bytes = await page.evaluate(async (url) => Array.from(new Uint8Array(await (await fetch(url!)).arrayBuffer())), blobUrl);
+  expect(Buffer.from(bytes)).toEqual(previewPdfBytes);
+  await expect(pdf.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(openOriginal).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(downloadOriginal).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(pdf).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as unknown as PreviewWindow).attachmentPreviewUrls.revoked)).toContain(blobUrl);
+
+  await page.locator('[data-artifact-row]').filter({ hasText: 'figure.png' }).getByRole('button', { name: 'Preview', exact: true }).click();
+  const image = page.getByRole('dialog', { name: 'figure.png', exact: true });
+  await expect(image.getByRole('img', { name: 'figure.png', exact: true })).toBeVisible();
+  await expect.poll(() => image.getByRole('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(1);
+  await expect(image.getByRole('link', { name: 'Open original', exact: true })).toHaveCount(0);
+  await expect(image.locator('object')).toHaveCount(0);
+  await image.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(image).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as unknown as PreviewWindow).attachmentPreviewUrls.revoked.length)).toBe(2);
+  const text = page.locator('[data-artifact-row]').filter({ hasText: 'notes.txt' });
+  await expect(text.getByRole('button', { name: 'Preview', exact: true })).toHaveCount(0);
+  await expect(text.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', '/api/artifacts/preview-text/download');
+});
+
+for (const response of [
+  { name: 'wrong MIME', status: 200, contentType: 'text/html', body: '<html>Not a PDF</html>' },
+  { name: 'invalid PDF signature', status: 200, contentType: 'application/pdf', body: 'Not a PDF' },
+  { name: 'forbidden download', status: 403, contentType: 'application/pdf', body: previewPdfBytes },
+]) {
+  test(`PDF original blob actions are absent after ${response.name}`, async ({ page }) => {
+    await attachmentPreviewFixtures(page, [{ artifactId: 'preview-pdf', logicalPath: 'paper.pdf' }]);
+    await page.route('**/api/artifacts/preview-pdf/download', route => route.fulfill({ status: response.status, contentType: response.contentType, body: response.body }));
+    await page.goto('/research-objects/journey-ro/files');
+    await page.locator('[data-artifact-row]').filter({ hasText: 'paper.pdf' }).getByRole('button', { name: 'Preview', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'paper.pdf', exact: true });
+    await expect(dialog.getByRole('alert')).toHaveText('This attachment could not be previewed. Download it to view the original file.');
+    await expect(dialog.locator('object, a[href^="blob:"]')).toHaveCount(0);
+    await expect(dialog.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', '/api/artifacts/preview-pdf/download');
+    expect(await page.evaluate(() => (window as unknown as PreviewWindow).attachmentPreviewUrls.created)).toEqual([]);
+  });
+}
+
+test('closing a loading PDF ignores its late response and another attachment keeps its own original URL', async ({ page }) => {
+  await attachmentPreviewFixtures(page, [{ artifactId: 'preview-pdf', logicalPath: 'paper.pdf' }, { artifactId: 'other-pdf', logicalPath: 'other.pdf' }]);
+  let releaseDownload!: () => void;
+  let downloadStarted!: () => void;
+  let downloadFinished!: () => void;
+  const gate = new Promise<void>(resolve => { releaseDownload = resolve; });
+  const started = new Promise<void>(resolve => { downloadStarted = resolve; });
+  const finished = new Promise<void>(resolve => { downloadFinished = resolve; });
+  let requestSettled!: () => void;
+  const settled = new Promise<void>(resolve => { requestSettled = resolve; });
+  const onSettled = (request: Request) => { if (new URL(request.url()).pathname === '/api/artifacts/preview-pdf/download') requestSettled(); };
+  page.on('requestfinished', onSettled);
+  page.on('requestfailed', onSettled);
+  let handlerStarted = false;
+  await page.route('**/api/artifacts/preview-pdf/download', async route => {
+    handlerStarted = true;
+    downloadStarted();
+    try { await gate; await route.fulfill({ contentType: 'application/pdf', body: previewPdfBytes }); }
+    finally { downloadFinished(); }
+  });
+  await page.route('**/api/artifacts/other-pdf/download', route => route.fulfill({ contentType: 'application/pdf', body: previewPdfBytes }));
+  try {
+    await page.goto('/research-objects/journey-ro/files');
+    const trigger = page.locator('[data-artifact-row]').filter({ hasText: 'paper.pdf' }).getByRole('button', { name: 'Preview', exact: true });
+    await trigger.click();
+    await started;
+    const dialog = page.getByRole('dialog', { name: 'paper.pdf', exact: true });
+    await expect(dialog.getByRole('status')).toHaveText('Loading preview…');
+    await expect(dialog.locator('a[href^="blob:"]')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await page.locator('[data-artifact-row]').filter({ hasText: 'other.pdf' }).getByRole('button', { name: 'Preview', exact: true }).click();
+    const other = page.getByRole('dialog', { name: 'other.pdf', exact: true });
+    await expect(other.getByRole('link', { name: 'Open original', exact: true })).toBeVisible();
+    const currentUrl = await other.getByRole('link', { name: 'Open original', exact: true }).getAttribute('href');
+    releaseDownload();
+    await finished;
+    await settled;
+    await expect(dialog).toHaveCount(0);
+    await expect(other.getByRole('link', { name: 'Open original', exact: true })).toHaveAttribute('href', currentUrl!);
+    expect(await page.evaluate(() => (window as unknown as PreviewWindow).attachmentPreviewUrls.created)).toEqual([currentUrl]);
+    await page.keyboard.press('Escape');
+    await expect(other).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => (window as unknown as PreviewWindow).attachmentPreviewUrls.revoked)).toEqual([currentUrl]);
+  } finally {
+    releaseDownload();
+    page.off('requestfinished', onSettled);
+    page.off('requestfailed', onSettled);
+    if (handlerStarted) await finished;
+  }
+});
+
+test('leaving Files through browser history revokes the original PDF URL', async ({ page }) => {
+  await attachmentPreviewFixtures(page, [{ artifactId: 'preview-pdf', logicalPath: 'paper.pdf' }]);
+  await page.route('**/api/artifacts/preview-pdf/download', route => route.fulfill({ contentType: 'application/pdf', body: previewPdfBytes }));
+  await page.goto('/research-objects/journey-ro/versions');
+  await page.locator('[data-research-workspace-nav] a[href="/research-objects/journey-ro/files"]').click();
+  await expect(page).toHaveURL(/\/research-objects\/journey-ro\/files$/);
+  await page.locator('[data-artifact-row]').filter({ hasText: 'paper.pdf' }).getByRole('button', { name: 'Preview', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'paper.pdf', exact: true });
+  const original = dialog.getByRole('link', { name: 'Open original', exact: true });
+  await expect(original).toBeVisible();
+  const blobUrl = await original.getAttribute('href');
+  await page.goBack();
+  await expect(page).toHaveURL(/\/research-objects\/journey-ro\/versions$/);
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (window as unknown as PreviewWindow).attachmentPreviewUrls.revoked)).toEqual([blobUrl]);
 });
 
 async function versionEvidenceFixtures(page: Page) {

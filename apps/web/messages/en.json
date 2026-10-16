@@ -1,4 +1,40 @@
 {
+  "hermesVoice": {
+    "label": "Hermes voice",
+    "start": "Voice input",
+    "cancelPermission": "Cancel recording",
+    "stop": "Stop recording · {seconds}s",
+    "preparing": "Preparing recording…",
+    "preparingSession": "Preparing conversation…",
+    "sessionFailed": "The conversation could not be prepared. No transcription was submitted. Your recording is retained; press Transcribe to try again.",
+    "transcribe": "Transcribe · 1 AI point",
+    "discard": "Discard recording",
+    "cost": "Up to 60 seconds. Transcription and spoken replies each cost 1 AI point. Review the text before sending.",
+    "unavailable": "Voice is unavailable. You can keep typing.",
+    "unsupported": "This browser cannot record audio. You can keep typing.",
+    "permissionDenied": "Microphone access was not granted. Allow it in browser settings or keep typing.",
+    "recordingFailed": "Recording did not finish. Record again or keep typing.",
+    "readReply": "Read reply · 1 AI point",
+    "replyTooLong": "This reply exceeds the speech limit. Ask Hermes for a shorter answer, then read it aloud. The full text is preserved.",
+    "noVoice": "No voice is available for the current language.",
+    "recognizing": "Recognizing speech…",
+    "generatingReply": "Preparing spoken reply…",
+    "unknown": "The submission is unconfirmed and may have been charged. Check the original submission before doing anything else.",
+    "readFailed": "Status could not be loaded. Check the original task.",
+    "failed": "The voice task did not finish. You can keep using text.",
+    "transcriptInvalid": "The transcript is empty or exceeds 2,000 characters and was not inserted. Record a shorter message.",
+    "query": "Check original submission",
+    "continue": "Continue original voice task",
+    "review": "Review and edit the transcript",
+    "append": "Append to message",
+    "useTranscript": "Use in message",
+    "draftFull": "Messages allow 2,000 characters. Shorten the draft or transcript first.",
+    "applied": "Transcript inserted. Review your message, then press Send.",
+    "audioLabel": "Hermes spoken reply",
+    "playReply": "Play reply",
+    "stopPlayback": "Stop playback",
+    "playbackFailed": "Playback failed. The full reply is still readable. Try playing it again."
+  },
   "hermesAudioAudition": {
     "title": "Narration preview",
     "scene": "Scene {number} · {seconds}s",
@@ -636,6 +672,18 @@
     }
   },
   "editor": {
+    "reading": {
+      "title": "Research content",
+      "navigation": "Content chapters",
+      "fields": {
+        "problem": "Research question",
+        "insight": "Core insight",
+        "method": "Research method",
+        "results": "Main results",
+        "limitations": "Limitations and boundaries",
+        "reproducibility": "Reproducibility"
+      }
+    },
     "savedVersionSources": "Check sources in the latest saved version",
     "draftRevision": "Private draft",
     "common": {
@@ -1256,6 +1304,9 @@
   "attachmentViewer": {
     "preview": "Preview",
     "download": "Download",
+    "openOriginal": "Open original",
+    "downloadOriginal": "Download original",
+    "pdfPreviewNotice": "PDF previews depend on your browser. You can also open or download the original.",
     "close": "Close",
     "loading": "Loading preview…",
     "unavailable": "This attachment could not be previewed. Download it to view the original file.",
