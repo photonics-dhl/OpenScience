@@ -696,6 +696,13 @@ test('editing presents the contribution and six fields from the existing researc
     await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toHaveValue(reviewCore.method);
     await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
     await expect(field).toHaveValue(reviewCore.problem);
+    await content.getByRole('button', { name: 'Research method · Edit', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(content.getByRole('textbox')).toHaveCount(1);
+    await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toBeFocused();
+    await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toHaveValue(reviewCore.method);
+    await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
+    await expect(field).toHaveValue(reviewCore.problem);
     const opener = label(page);
     await opener.focus();
     await page.keyboard.press('Enter');
@@ -706,6 +713,30 @@ test('editing presents the contribution and six fields from the existing researc
     await content.getByRole('button', { name: 'Research question · Edit', exact: true }).click();
     await expect(field).toHaveValue(reviewCore.problem);
   }
+});
+
+test.describe('reading edit touch input', () => {
+  test.use({ hasTouch: true });
+
+  test('switches the active reading editor with one tap and closes on an outside tap', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockWorkspace(page);
+    await mockPublishedPreview(page);
+    await page.goto(baseUrl + '/dashboard?hermes-motion=reduced', { waitUntil: 'networkidle' });
+    await enterEditor(page);
+    const content = page.locator('[data-workbench-section="content"]');
+    await expect(content.getByRole('textbox')).toHaveCount(0);
+    await content.getByRole('button', { name: 'Research question · Edit', exact: true }).tap();
+    await expect(content.getByRole('textbox', { name: 'Research question', exact: true })).toBeFocused();
+    await content.getByRole('button', { name: 'Research method · Edit', exact: true }).tap();
+    await expect(content.getByRole('textbox')).toHaveCount(1);
+    await expect(content.getByRole('textbox', { name: 'Research question', exact: true })).toHaveCount(0);
+    await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toBeFocused();
+    await expect(content.getByRole('textbox', { name: 'Research method', exact: true })).toHaveValue(reviewCore.method);
+    await content.getByRole('heading', { name: 'Research content', exact: true }).tap();
+    await expect(content.getByRole('textbox')).toHaveCount(0);
+    await expect(content.locator('#research-section-method')).toContainText(reviewCore.method);
+  });
 });
 
 test('Hermes opens an empty editor conversation with its full companion visible', async ({ page }) => {

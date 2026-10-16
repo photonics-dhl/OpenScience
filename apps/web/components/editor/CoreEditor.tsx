@@ -129,7 +129,16 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
           <section className={styles.passage} data-active={current === field ? 'true' : undefined} data-sdf-node={index + 1} id={`research-section-${field}`} key={field} tabIndex={showChapters ? -1 : undefined}>
             {readFirst ? <div className={styles.readingSectionHeader}>
               <Heading>{fieldLabel(field)}</Heading>
-              {!readOnly ? <button aria-label={`${fieldLabel(field)} · ${t('edit')}`} className={styles.readingEdit} type="button" onClick={() => beginEditing(field)}>{t('edit')}</button> : null}
+              {!readOnly ? <button
+                aria-label={`${fieldLabel(field)} · ${t('edit')}`}
+                className={styles.readingEdit}
+                type="button"
+                onPointerDown={(event) => {
+                  // Keep the current textarea in place until this click switches fields.
+                  if (event.isPrimary && event.button === 0) event.preventDefault();
+                }}
+                onClick={() => beginEditing(field)}
+              >{t('edit')}</button> : null}
             </div> : <h2 className={styles.sectionHeading}>
               <span aria-hidden="true" className={styles.sectionMarker} />
               {readOnly ? <span>{fieldLabel(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => beginEditing(field)}>{fieldLabel(field)}</button>}
