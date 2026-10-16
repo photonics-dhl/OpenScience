@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
-import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, getAgentTask, retryAgentTask } from '../../../../packages/domain/src/agent/agent';
+import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, getAgentTask, listAgentTasks, retryAgentTask } from '../../../../packages/domain/src/agent/agent';
 import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration, recoverCompletedHermesSceneImageResults } from '../../../../packages/domain/src/agent/research-run';
 import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint, requireSceneImageParent } from '@openscience/domain';
 import { workspaceGuideHandler } from '../../src/workspace-guide';
@@ -11,6 +11,7 @@ import { createPresentationGenerationHandler, requireIllustrationReviewSubmissio
 import { createHandlers, createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../../src/index';
 import * as nativeHost from '../../src/native-agent/host-task';
 import * as scenePlanning from '../../src/presentation/scene-image';
+import * as selectedImageSource from '../../../../packages/domain/src/assets/scene-image';
 import { SynclipVideoTimingError } from '../../src/presentation/synclip-video-spool';
 import type { runHostedNativeTask } from '../../src/native-agent/host-task';
 
@@ -211,8 +212,17 @@ describe('selected-image Native guide', () => {
     expect(JSON.stringify(f.fetcher.mock.calls)).toContain(f.bytes.toString('base64'));
     expect(f.db.presentationAssets).toHaveLength(2);
     expect(f.generate).not.toHaveBeenCalled(); expect(f.oldPlan).not.toHaveBeenCalled();
+    const beforeAdoption = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    expect(beforeAdoption.result?.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(beforeAdoption.result).toHaveProperty('selectedImageReference.assetId', f.image.id);
+    expect(beforeAdoption.result).not.toHaveProperty('selectedImageContext');
+    expect(beforeAdoption.result).not.toHaveProperty('selectedImageReply');
     await markTaskProgress(f.deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
     expect(owner.status).toBe('succeeded');
+    const adopted = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    expect(adopted.result?.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(adopted.result).not.toHaveProperty('selectedImageContext');
+    expect(adopted.result).not.toHaveProperty('selectedImageReply');
   });
   it.each(['deleted', 'content', 'bytes', 'evidence', 'viewer'])('stops changed %s before any new model call', async change => {
     const f = await selectedGuideFixture();
@@ -238,6 +248,10 @@ describe('selected-image Native guide', () => {
     expect(result).toMatchObject({ summary: text, needsMoreInformation: kind === 'question', nextSteps: [] });
     expect(result.selectedImageDraft).toBeUndefined();
     await markTaskProgress(f.deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    const publicTask = await getAgentTask(f.deps as never, { userId: id(1), taskId: f.guide.id });
+    expect(publicTask.result).toMatchObject({ summary: text, selectedImageReference: { assetId: f.image.id } });
+    expect(publicTask.result).not.toHaveProperty('selectedImageContext');
+    expect(publicTask.result).not.toHaveProperty('selectedImageReply');
     expect(f.fetcher).toHaveBeenCalledTimes(4); expect(f.db.presentationAssets).toHaveLength(2);
   });
   it('refuses a text-only plan that never actually views the selected PNG', async () => {
@@ -304,12 +318,46 @@ describe('selected-image Native guide', () => {
     expect(readNativeAgentExecution(owner.result)?.checkpoint?.state).toBe('completed');
     expect(owner.result.selectedImageDraft).toBeUndefined();
     await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: 1, status: 'failed', error: failure.message });
-    expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(false);
-    await expect(retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).rejects.toThrow();
     const saved = structuredClone({ payload: owner.payload, sessionId: owner.sessionId, idempotencyKey: owner.idempotencyKey, result: owner.result, ledger: f.db.usageLedger });
-    f.db.memberships[0].role = 'author';
-    expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(true);
-    await retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    const root = f.deps.prisma, realSource = selectedImageSource.requireSelectedImageSource;
+    const binder = vi.spyOn(selectedImageSource, 'requireSelectedImageSource').mockImplementation((...args) => realSource(...args));
+    type Tx = Parameters<typeof realSource>[0];
+    const transactionClients: Tx[] = [], transact = root.$transaction.bind(root);
+    let insideTransaction = false, reads = 0;
+    const transactions = vi.spyOn(root, '$transaction').mockImplementation((async (work: (tx: Tx) => Promise<unknown>,
+      options?: Parameters<typeof root.$transaction>[1]) => transact(async tx => {
+        transactionClients.push(tx); insideTransaction = true;
+        try { return await work(tx); } finally { insideTransaction = false; }
+      }, options)) as never);
+    Object.defineProperty(f.deps, 'prisma', { configurable: true, get: () => {
+      reads += 1;
+      if (insideTransaction) throw new Error('Selected retry must use its explicit transaction');
+      return root;
+    } });
+    try {
+      expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(false);
+      expect(reads).toBe(2); expect(binder.mock.calls[0]![0]).toBe(root);
+      await expect(retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).rejects.toThrow();
+      expect(binder.mock.calls[1]![0]).toBe(transactionClients[0]);
+      f.db.memberships[0].role = 'author'; reads = 0;
+      expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(true);
+      expect(reads).toBe(2); expect(binder.mock.calls[2]![0]).toBe(root); reads = 0;
+      expect((await listAgentTasks(f.deps as never, { userId: id(1) })).find(task => task.id === owner.id)?.canRetry).toBe(true);
+      expect(reads).toBe(2); expect(binder.mock.calls[3]![0]).toBe(root);
+      await retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+      expect(binder.mock.calls[4]![0]).toBe(transactionClients[1]);
+      expect(transactionClients).toHaveLength(2);
+      expect(transactionClients.every(tx => tx !== root)).toBe(true);
+      expect(transactions.mock.calls.map(call => call[1])).toEqual([
+        { isolationLevel: 'Serializable' }, { isolationLevel: 'Serializable' },
+      ]);
+      expect(binder.mock.calls.map(call => call[1])).toEqual(Array.from({ length: 5 }, () => ({
+        userId: id(1), researchObjectId: id(3), versionId: id(4), assetId: f.image.id,
+      })));
+    } finally {
+      binder.mockRestore(); transactions.mockRestore();
+      Object.defineProperty(f.deps, 'prisma', { configurable: true, writable: true, value: root });
+    }
     const claimed = await claimAgentTask(f.deps as never, owner.id);
     expect(claimed!.executionAttempt).toBe(2);
     const resumed = f.db.agentTasks.find(row => row.id === owner.id)!;
@@ -317,7 +365,12 @@ describe('selected-image Native guide', () => {
     const result = await f.run(claimed!.executionAttempt);
     expect(result).toHaveProperty('selectedImageDraft');
     await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: claimed!.executionAttempt, status: 'succeeded', result });
-    expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).status).toBe('succeeded');
+    const publicTask = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    expect(publicTask.status).toBe('succeeded');
+    expect(publicTask.result?.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(publicTask.result).toHaveProperty('selectedImageReference.assetId', f.image.id);
+    expect(publicTask.result).not.toHaveProperty('selectedImageContext');
+    expect(publicTask.result).not.toHaveProperty('selectedImageReply');
     const completed = f.db.agentTasks.find(row => row.id === owner.id)!;
     expect(completed.result.nativeAgentExecution).toEqual(saved.result.nativeAgentExecution);
     expect(completed.result.selectedImageContext).toEqual(saved.result.selectedImageContext);
@@ -350,8 +403,13 @@ describe('selected-image Native guide', () => {
       if (change === 'session') f.db.agentSessions.find(row => row.id === owner.sessionId)!.kind = 'sdf.extract';
       if (change === 'budget') owner.retryCount = 1;
       const saved = structuredClone({ result: owner.result, payload: owner.payload, ledger: f.db.usageLedger });
-      if (change === 'wrong-target') await expect(getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).rejects.toThrow();
-      else expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(false);
+      const publicTask = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+      expect(publicTask.canRetry).toBe(false);
+      if (change === 'wrong-target') {
+        expect(publicTask.result).not.toHaveProperty('selectedImageReference');
+        expect(publicTask.result).not.toHaveProperty('selectedImageContext');
+        expect(publicTask.result).not.toHaveProperty('selectedImageReply');
+      }
       await expect(retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).rejects.toThrow();
       expect({ result: owner.result, payload: owner.payload, ledger: f.db.usageLedger }).toEqual(saved);
       expect(f.fetcher).toHaveBeenCalledTimes(6); expect(f.generate).not.toHaveBeenCalled();

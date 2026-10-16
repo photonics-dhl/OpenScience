@@ -388,7 +388,7 @@ export async function getIngestionTask(
   const task = await deps.prisma.ingestionTask.findUnique({ where: { id: input.taskId }, include: { artifact: true, agentTask: true, batch: { include: { researchObject: true }, } } });
   if (!task || task.artifact.deletedAt || task.agentTask?.deletedAt || task.batch.researchObject.deletedAt) throw new IngestionError('INGESTION_NOT_FOUND', 'Ingestion task not found');
   await requireMembership(deps, task.batch.researchObject.workspaceId, input.userId);
-  const result = projectAgentTaskResult(task.agentTask?.result, task.agentTask?.kind ?? '');
+  const result = projectAgentTaskResult(task.agentTask?.result, task.agentTask?.kind ?? '', task.agentTask ?? undefined);
   return { task: { ...taskToView(task), result }, batchId: task.batchId, researchObjectId: task.batch.researchObjectId, version: task.batch.researchObject.version };
 }
 

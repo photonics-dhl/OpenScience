@@ -5,7 +5,7 @@ import {
   chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { builtinModules } from 'node:module';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -91,14 +91,15 @@ test('rollback verifier dispatches guarded image proofs only after original defa
     finiteVideoPairCompatibility(...args){events.push(['video',...args]);return accept==='video';},
     finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
+    finiteSelectedGuidePairCompatibility(...args){events.push(['selected',...args]);return accept==='selected';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first']){
+  for(const allowed of ['video','capable','first','selected']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first'].slice(0,['video','capable','first'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','selected'].slice(0,['video','capable','first','selected'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -149,15 +150,19 @@ test('comparison diagnostics bound missing keys and multiple differences without
   const helperSource = deployLockSource.match(/function rollbackComparisonDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(helperSource);
   const describe = runInNewContext(`${helperSource}; rollbackComparisonDiagnostic`, { resolve });
-  const current = [['PRIVATE_KEY', 'PRIVATE_VALUE'], ...Array.from({ length: 5 }, (_, i) => [`module:packages/domain/src/reader${i}.ts`, 'PRIVATE_VALUE'])];
+  const current = [['PRIVATE_KEY', 'PRIVATE_VALUE'], ...Array.from({ length: 16 }, (_, i) => [`module:packages/domain/src/reader${i}.ts`, 'PRIVATE_VALUE'])];
   const report = describe(current, [], '/candidate', '/rollback');
-  assert.equal(report.differences, 6);
-  assert.equal(report.entries.length, 4);
+  assert.equal(report.differences, 17);
+  assert.equal(report.entries.length, 16);
   assert.equal(report.truncated, true);
   assert.equal(report.entries[0].key, '[redacted-key]');
   assert.equal(report.entries[0].candidatePresent, true);
   assert.equal(report.entries[0].rollbackPresent, false);
   assert.doesNotMatch(JSON.stringify(report), /PRIVATE_KEY|PRIVATE_VALUE|candidateLength|jsonOffset/);
+  const complete = describe(current.slice(1, 13), [], '/candidate', '/rollback');
+  assert.equal(complete.differences, 12);
+  assert.equal(complete.entries.length, 12);
+  assert.equal(complete.truncated, false);
 });
 
 test('bounded Worker recovery wiring proof accepts the current construction path', () => {
@@ -773,7 +778,8 @@ async function videoIngressProgram(changes = new Map(), { sourceRef } = {}) {
       'historical Program must contain only selected baseline bytes plus exact mutations');
   for (const item of changedFiles) assert.equal(program.getSourceFiles().find(file => key(file.fileName) === key(item.filename))?.text,
     item.updated, 'the real Program must contain the exact mutation before testing its rejection');
-  return { ts, program, projectRoot };
+  return { ts, program, projectRoot, sourceHost: host,
+    resolveSource: (specifier, containingFile) => host.resolveModuleNames([specifier], containingFile)[0] };
 }
 
 // Only legacy video controls opt into the released V1 oracle. All image
@@ -802,6 +808,583 @@ function videoPairRuntime(ts, text) {
   const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
+
+function selectedGuideSourceComponents() {
+  const start = deployLockSource.indexOf('function finiteSelectedGuideSupplementaryTerms(');
+  assert.ok(start !== -1, 'the selected decoder proof must be implemented');
+  const component = deployLockSource.slice(start, deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic(', start));
+  return runInNewContext(`${component}; ({ supplemental: finiteSelectedGuideSupplementaryTerms, decoder: finiteSelectedGuideDecoderTerms, fresh: finiteSelectedGuideFreshTerms,
+    relocation: finiteSelectedGuideRelocationTerms, relocationResidual: finiteSelectedGuideRelocationResidualTerms,
+    workspace: finiteSelectedGuideWorkspaceTerms, native: finiteSelectedGuideNativeTerms, handlers: finiteSelectedGuideHandlerTerms,
+    illustration: finiteSelectedGuideIllustrationTerms, illustrationResidual: finiteSelectedGuideIllustrationResidualTerms,
+    dormant: finiteSelectedGuideDormantModuleTerms, ingestion: finiteSelectedGuideIngestionReaderTerms, publicReader: finiteSelectedGuidePublicReaderTerms,
+    agent: finiteSelectedGuideAgentResidualTerms,
+    sourceModel: finiteSelectedGuideSourceModel,
+    sourceResidual: finiteSelectedGuideSourceResidual,
+    resultOrigin: finiteSelectedGuideResultOriginTerms,
+    pair: finiteSelectedGuidePairCompatibility,
+    httpLibrary: finiteSelectedGuideApiLibraryTerms,
+    initialization: finiteSelectedGuideInitializationTerms })`, { relative, resolve, isAbsolute, builtinModules,
+      APPLICATION_ROLLBACK_READERS: [], rollbackProofContexts: new WeakMap() });
+}
+
+function selectedGuideSourceContext(actual) {
+  const canonicalText = deployLockSource.slice(deployLockSource.indexOf('  const canonical = node => {'),
+    deployLockSource.indexOf('\n  const addConfiguration =', deployLockSource.indexOf('  const canonical = node => {')));
+  const canonical = runInNewContext(`${canonicalText}; canonical`, { ts: actual.ts, locationLiterals: new Map() });
+  return { ...videoPairContext(actual), canonical, sourceHost: actual.sourceHost, resolveSource: actual.resolveSource };
+}
+
+test('selected guide supplementary writer input retains captured nodes and actual API and Drawer sources', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const narrow = actual.ts.createProgram([resolve(actual.projectRoot, 'apps/agent-worker/src/index.ts')],
+    actual.program.getCompilerOptions(), actual.sourceHost);
+  const captured = selectedGuideSourceContext({ ...actual, program: narrow });
+  assert.equal(narrow.getSourceFile(resolve(actual.projectRoot, 'apps/api/src/routes/agent.ts')), undefined);
+  assert.equal(narrow.getSourceFile(resolve(actual.projectRoot, 'apps/web/components/hermes/HermesAssistantDrawer.tsx')), undefined);
+  let extra;
+  try { extra = components.supplemental(actual.ts, captured); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getSourceFile().fileName ?? ''}:${error.node?.getText().slice(0, 80) ?? ''}`); }
+  assert.equal(extra.status, 'conditional');
+  assert.equal(extra.originalContext, captured);
+  assert.ok(extra.api.fileName.endsWith('apps/api/src/routes/agent.ts'));
+  assert.ok(extra.drawer.fileName.endsWith('apps/web/components/hermes/HermesAssistantDrawer.tsx'));
+  for (const source of narrow.getSourceFiles()) assert.equal(extra.program.getSourceFile(source.fileName), source);
+  assert.equal(extra.api.text, readFileSync(extra.api.fileName, 'utf8'));
+  assert.equal(extra.drawer.text, readFileSync(extra.drawer.fileName, 'utf8'));
+  assert.ok(extra.apiEntry.fileName.endsWith('apps/api/src/index.ts'));
+  assert.ok(extra.parserEntry.fileName.endsWith('apps/agent-worker/src/parser-acceptance-runner.ts'));
+  assert.ok(extra.outstanding.length > 0, 'supplemental input alone is never a production permit');
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous), decoder = components.decoder(actual.ts, extra, baseline);
+  assert.equal(components.fresh(actual.ts, extra, decoder, baseline).fresh, 'legacy');
+  assert.equal(components.handlers(actual.ts, extra, baseline).status, 'conditional');
+  for (const changed of [
+    { ...captured, checker: {} }, { ...captured, sourceHost: undefined },
+    { ...captured, sourceHost: { ...captured.sourceHost, fileExists: file => !file.endsWith('HermesAssistantDrawer.tsx') && captured.sourceHost.fileExists(file) } },
+  ]) assert.throws(() => components.supplemental(actual.ts, changed), error => error.reason === 'SELECTED_GUIDE_SUPPLEMENTARY_SOURCE_UNKNOWN');
+});
+
+test('selected guide decoder proves own-member absence without accepting null or a changed legacy parser', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const model = components.decoder(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.capable, true);
+  assert.equal(model.legacyParser.name.text, 'parseWorkspaceGuidePayload');
+  assert.equal(model.reader.name.text, 'readWorkspaceGuidePayloadWithSelectedImage');
+  const path = 'packages/domain/src/agent/workspace-guide-contract.ts';
+  for (const change of [
+    text => text.replace("!Object.hasOwn(presentation, 'selectedImageAssetId')", "!presentation.selectedImageAssetId"),
+    text => text.replace('return parseWorkspaceGuidePayload(value);', 'return parseWorkspaceGuidePayload({});'),
+    text => text.replace("['researchObjectId', 'versionId'])", "['researchObjectId', 'versionId', 'selectedImageAssetId'])"),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, change]]));
+    assert.throws(() => components.decoder(changed.ts, selectedGuideSourceContext(changed), selectedGuideSourceContext(previous)),
+      error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
+  }
+});
+
+test('selected guide fresh source follows actual HTTP and transitive task persistence callers', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, selectedGuideSourceContext(previous));
+  let model;
+  try { model = components.fresh(actual.ts, context, decoder, selectedGuideSourceContext(previous)); }
+  catch (error) { assert.fail(`${error.reason}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}:${error.node?.getText().slice(0, 120)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh, 'legacy');
+  assert.ok(model.origins.length > 0);
+  assert.ok(model.nonGuide.some(value => value.kind === 'presentation.generate'));
+  const path = 'apps/api/src/routes/agent.ts';
+  const writer = await videoIngressProgram(new Map([[path, text => text
+    .replace('listAgentTasks, parseWorkspaceGuidePayload,', 'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage,')
+    .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
+  const changedContext = selectedGuideSourceContext(writer);
+  const changedDecoder = components.decoder(writer.ts, changedContext, selectedGuideSourceContext(previous));
+  assert.equal(components.fresh(writer.ts, changedContext, changedDecoder, selectedGuideSourceContext(previous)).fresh, 'selected',
+    'The genuine writer overlay changes the birth family, never the legacy-absence premise');
+  for (const addition of [
+    "body.payload.context.presentation!.selectedImageAssetId = '00000000-0000-4000-8000-000000000001';",
+    "const afterValidation = body.payload.context.presentation!; Object.assign(afterValidation, { selectedImageAssetId: '00000000-0000-4000-8000-000000000001' });",
+    'const afterValidation = body.payload; unknownWriter(afterValidation);',
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, text => text.replace('const body = agentTaskBodySchema.parse(req.body);',
+      `const body = agentTaskBodySchema.parse(req.body); ${addition}`)]]));
+    const scope = selectedGuideSourceContext(changed);
+    const read = components.decoder(changed.ts, scope, selectedGuideSourceContext(previous));
+    assert.throws(() => components.fresh(changed.ts, scope, read, selectedGuideSourceContext(previous)),
+      error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
+  }
+});
+
+test('selected guide schema proof rejects a replaced or escaped actual Zod binding', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const file = 'apps/api/src/routes/agent.ts';
+  for (const change of [
+    text => text.replace("import { z } from 'zod';", "import { z } from './unowned-schema';"),
+    text => text.replace("import { z } from 'zod';", "import { z } from 'zod'; Object.assign(z, { object: unownedObject });"),
+    text => text.replace("import { z } from 'zod';", "import { z } from 'zod'; const escapedSchema = z; unowned(escapedSchema);"),
+  ]) {
+    const actual = await videoIngressProgram(new Map([[file, change]]));
+    const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, baseline);
+    assert.throws(() => components.fresh(actual.ts, context, decoder, baseline),
+      error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
+  }
+});
+
+test('selected guide fresh proof refuses changed actual persistence forwarders and rest-alias mutation', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous), file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace('return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);',
+      "input.kind = 'workspace.guide'; return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);"),
+    text => text.replace('return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);',
+      "Object.assign(input, { kind: 'workspace.guide' }); return persistAgentTaskCoreInTransaction(deps, tx, input, ctx);"),
+    text => text.replace('const { dispatch, beforePersist, ...persistenceInput } = input;',
+      "const { dispatch, beforePersist, ...persistenceInput } = input; persistenceInput.kind = 'workspace.guide';"),
+  ]) {
+    const actual = await videoIngressProgram(new Map([[file, change]]));
+    const context = selectedGuideSourceContext(actual), decoder = components.decoder(actual.ts, context, baseline);
+    assert.throws(() => components.fresh(actual.ts, context, decoder, baseline),
+      error => error.reason === 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN');
+  }
+});
+
+test('selected guide relocated byte reader retains actual bounds hash finally and all ordinary call arguments', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const model = components.relocation(actual.ts, selectedGuideSourceContext(actual), baseline);
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.retained.length > 0);
+  assert.ok(model.additionalCalls.every(call => call.getSourceFile().fileName.endsWith('workspace-guide.ts')));
+  const path = 'apps/agent-worker/src/presentation/generated-image-review.ts';
+  for (const change of [
+    text => text.replace('maxBytes = 10 * 1024 * 1024', 'maxBytes = 100 * 1024 * 1024'),
+    text => text.replace(".digest('hex') !== expectedHash", ".digest('hex') === expectedHash"),
+    text => text.replace('object.body.destroy();', 'void object.body;'),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[path, change]]));
+    assert.throws(() => components.relocation(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_BYTE_READER_CHANGED');
+  }
+  const escaped = await videoIngressProgram(new Map([['apps/agent-worker/src/presentation/handler.ts',
+    text => `${text}\nconst escapedByteReader = readPresentationInput;\n`]]));
+  assert.throws(() => components.relocation(escaped.ts, selectedGuideSourceContext(escaped), baseline),
+    error => error.reason === 'SELECTED_GUIDE_BYTE_READER_CHANGED');
+});
+
+test('selected guide workspace branch reduces to the complete old module without ordinary or builtin escape changes', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const context = selectedGuideSourceContext(actual), baseline = selectedGuideSourceContext(previous);
+  const decoder = components.decoder(actual.ts, context, baseline);
+  let model;
+  try { model = components.workspace(actual.ts, context, baseline, decoder); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.handlerCalls.length > 0);
+  assert.equal(model.builtinOmissions.length, 1);
+  assert.equal(model.builtinOmissions[0].specifier, 'node:util');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'apps/agent-worker/src/workspace-guide.ts';
+  for (const change of [
+    text => text.replace('if (payload.context.presentation?.selectedImageAssetId) {', 'if (payload.context.presentation?.versionId) {'),
+    text => text.replace('const INTENTS = new Set', 'const escaped = isDeepStrictEqual; unowned(escaped); const INTENTS = new Set'),
+    text => text.replace('workspace.guide 服务端任务上下文无效', 'changed ordinary task guard'),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const read = components.decoder(changed.ts, scope, baseline);
+    assert.throws(() => components.workspace(changed.ts, scope, baseline, read),
+      error => error.reason === 'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide Native ordinary projection preserves complete actual CAS terminal authority and parser runtime', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const context = selectedGuideSourceContext(actual), baseline = selectedGuideSourceContext(previous);
+  const decoder = components.decoder(actual.ts, context, baseline);
+  let model;
+  try { model = components.native(actual.ts, context, baseline, decoder); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.selectedRegions.length, 4); assert.equal(model.absent.size, 2);
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/agent/native-agent-execution.ts';
+  for (const change of [
+    text => text.replace('return payload.context.presentation?.selectedImageAssetId ? payload : undefined;', 'return payload.context.presentation ? payload : undefined;'),
+    text => text.replace('kind: task.kind, status: task.status,', 'kind: task.kind,'),
+    text => text.replace('function selectedGuide(', 'function escaped(task: unknown) { return selectedGuide(task); } function selectedGuide('),
+    text => text.replace("marker?.profile === 'paper-illustration' && task?.kind === 'workspace.guide') {", "marker?.profile === 'paper-illustration') {"),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const read = components.decoder(changed.ts, scope, baseline);
+    assert.throws(() => components.native(changed.ts, scope, baseline, read),
+      error => error.reason === 'SELECTED_GUIDE_NATIVE_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide byte relocation restores both entire modules and checks free bindings and selected-only extra callers', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = input => {
+    const context = selectedGuideSourceContext(input), decoder = components.decoder(input.ts, context, baseline);
+    const workspace = components.workspace(input.ts, context, baseline, decoder);
+    const relocation = components.relocation(input.ts, context, baseline);
+    return components.relocationResidual(input.ts, context, baseline, relocation, workspace);
+  };
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}/${error.stage ?? ''}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts,
+    previous.program.getSourceFile(resolve(previous.projectRoot, 'apps/agent-worker/src/presentation/generated-image-review.ts')).text));
+  assert.deepEqual(videoPairRuntime(actual.ts, model.handlerText), videoPairRuntime(previous.ts, model.relocation.oldSource.text));
+  for (const [file, change] of [
+    ['apps/agent-worker/src/presentation/generated-image-review.ts', text => text.replace('Saved image review does not match the persisted image', 'changed ordinary saved review error')],
+    ['apps/agent-worker/src/presentation/handler.ts', text => text.replace('Storyboard art correction checkpoint is invalid', 'changed ordinary art checkpoint error')],
+    ['apps/agent-worker/src/presentation/generated-image-review.ts', text => text.replace('export async function readPresentationInput(', 'const Buffer = unownedBuffer; export async function readPresentationInput(')],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide Native config projection binds both actual uses suppliers and legacy callback ordering', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.handlers(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.suppliers.length >= 2);
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(actual.ts, model.rollback.text));
+  const file = 'apps/agent-worker/src/index.ts';
+  for (const change of [
+    text => text.replace('const nativeAgent: NonNullable', 'let nativeAgent: NonNullable'),
+    text => text.replace('runtime: nativeAgentRuntimeFromEnv(process.env), semanticSearchFor:', 'runtime: nativeAgentRuntimeFromEnv({ ...process.env }), semanticSearchFor:'),
+    text => text.replace('const handlers = createHandlers(gateway, {', 'const handlers = createHandlers(gateway, { get videoSpool() { throw new Error("observable options read"); },'),
+    text => text + '\nconst escapedFactory = createHandlers;\n',
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => components.handlers(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED');
+  }
+});
+
+test('selected guide illustration binds closed ordinary and video constructors and exact paper images delegation', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.illustration(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 120)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.ordinaryCalls.length, 1);
+  assert.equal(model.replayCalls.length, 1);
+  assert.equal(model.constructors.length, 2);
+  for (const [file, change] of [
+    ['apps/agent-worker/src/presentation/handler.ts', text => text.replace('task: { id: task.id, executionAttempt: task.executionAttempt, result: latest.result }, sourceMap:',
+      '...payload, task: { id: task.id, executionAttempt: task.executionAttempt, result: latest.result }, sourceMap:')],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', text => text.replace('return source.images(args, result);', 'return source.images(result, args);')],
+    ['apps/agent-worker/src/native-agent/illustration-task.ts', text => text.replace(
+      'async function runNativeIllustrationTaskCore(input: NativeIllustrationTaskInput & { selectedImageAttachment?: ScienceReviewAttachment }) {',
+      'async function runNativeIllustrationTaskCore(input: NativeIllustrationTaskInput & { selectedImageAttachment?: ScienceReviewAttachment }) { opaqueInputWriter(input);')],
+    ['apps/agent-worker/src/native-agent/paper-tools.ts', text => text.replace('async images(args: unknown, result: unknown) {', 'async images(args: unknown, result: unknown) { observe(this);')],
+    ['apps/agent-worker/src/native-agent/host-task.ts', text => text.replace('const images = await input.paper.images(value.arguments, value.result);',
+      'observeFunctionIdentity(input.paper.images.name); const images = await input.paper.images(value.arguments, value.result);')],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => components.illustration(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED');
+  }
+});
+
+test('selected guide illustration restores the entire old module with no schema export or materializer remainder', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = input => {
+    const context = selectedGuideSourceContext(input);
+    const initialization = components.initialization(input.ts, context, baseline);
+    const illustration = components.illustration(input.ts, context, baseline);
+    return components.illustrationResidual(input.ts, context, baseline, illustration, initialization);
+  };
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.rollback.text));
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  for (const change of [
+    text => text.replace('type SelectedImageAuthorContext =', 'export { SELECTED_IMAGE_TOOLS }; type SelectedImageAuthorContext ='),
+    text => text.replace("return { status: 'illustration_context', settings: input.settings,", "return { status: 'changed_illustration_context', settings: input.settings,"),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_ILLUSTRATION_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide dormant declarations leave all three actual legacy modules and exports exact', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = input => {
+    const context = selectedGuideSourceContext(input), decoder = components.decoder(input.ts, context, baseline);
+    return components.dormant(input.ts, context, baseline, decoder);
+  };
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.removed.size, 5); assert.equal(model.projections.size, 3);
+  for (const value of model.projections.values()) assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text));
+  for (const [file, change] of [
+    ['packages/domain/src/assets/scene-image.ts', text => text.replace('Saved image review does not match the persisted image', 'changed ordinary saved image error')],
+    ['packages/domain/src/assets/scene-image.ts', text => text.replace('export async function requireSelectedImageSource(', 'const escapedWriteScope = requirePresentationWriteScope; export async function requireSelectedImageSource(')],
+    ['packages/domain/src/index.ts', text => text + '\nexport const untrackedSelectedValue = 1;\n'],
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_DORMANT_MODULE_UNKNOWN');
+  }
+});
+
+test('selected guide public reader preserves ordinary opaque data and quarantines unknown provenance on the same row', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const model = components.publicReader(actual.ts, selectedGuideSourceContext(actual), baseline);
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.getText()));
+  assert.deepEqual(videoPairRuntime(actual.ts, model.taskViewText), videoPairRuntime(previous.ts, model.previousTaskView.getText()));
+  const file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace('ordinary = true;', "if (Object.hasOwn(rawResult.selectedImageContext ?? {}, 'assetId')) throw new Error('ordinary extension denied'); ordinary = true;"),
+    text => text.replace('selectedReference = undefined; selectedDraft = undefined;', 'ordinary = true; selectedReference = undefined; selectedDraft = undefined;'),
+    text => text.replace('projectAgentTaskResult(task.result, task.kind, task)', 'projectAgentTaskResult(task.result, task.kind, otherTask)'),
+    text => text.replace('task.result !== rawResult', 'task.result === rawResult'),
+    text => text.replace('delete publicResult.audioAuditionGrant;', 'delete publicResult.ordinaryExtension;'),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => components.publicReader(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_PUBLIC_READER_UNKNOWN');
+  }
+});
+
+test('selected guide whole agent residual retains ordinary constructors retry and all original private filters', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const context = selectedGuideSourceContext(actual);
+  const decoder = components.decoder(actual.ts, context, baseline), reader = components.publicReader(actual.ts, context, baseline);
+  let model;
+  try { model = components.agent(actual.ts, context, baseline, decoder, reader); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 180)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace('tx ?? deps.prisma', 'deps.prisma'),
+    text => text.replace('AI Credit 不足（§2.4-7），请补充后再试', 'changed ordinary billing behavior'),
+    text => text.replace('kind: input.kind,\r\n        payload:', "kind: 'workspace.guide',\r\n        payload:"),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]])), scope = selectedGuideSourceContext(changed);
+    const changedDecoder = components.decoder(changed.ts, scope, baseline), changedReader = components.publicReader(changed.ts, scope, baseline);
+    assert.throws(() => components.agent(changed.ts, scope, baseline, changedDecoder, changedReader),
+      error => error.reason === 'SELECTED_GUIDE_AGENT_RESIDUAL_UNKNOWN');
+  }
+});
+
+test('selected guide ingestion projection supplies its exact persisted row without changing the original reader', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  const model = components.ingestion(actual.ts, selectedGuideSourceContext(actual), baseline);
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/ingestion/ingestion-service.ts';
+  for (const change of [
+    text => text.replace('task.agentTask ?? undefined);', 'otherTask ?? undefined);'),
+    text => text.replace("task.agentTask?.kind ?? ''", "task.agentTask?.kind ?? 'workspace.guide'"),
+    text => text.replace('artifact: true, agentTask: true, batch:', 'artifact: true, agentTask: false, batch:'),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => components.ingestion(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_INGESTION_READER_UNKNOWN');
+  }
+});
+
+test('selected guide new schema initializer is owned plain data and never an effect or cyclic value read', async () => {
+  const components = selectedGuideSourceComponents();
+  const actual = await videoIngressProgram(), previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.initialization(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}/${error.stage ?? ''}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}:${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.ok(model.pureInitializers.some(node => node.name.text === 'SELECTED_IMAGE_TOOLS'));
+  for (const path of ['apps/agent-worker/src/skills/media-direction.ts',
+    'apps/agent-worker/src/native-agent/illustration-task.ts', 'apps/agent-worker/src/presentation/chart-generator.ts'])
+    assert.ok(model.moved.has(path), `the actual eager-order frontier must include ${path}`);
+  assert.ok(model.ordering.some(value => value.entry === 'apps/agent-worker/src/index.ts'));
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  for (const change of [
+    text => text.replace('const SELECTED_IMAGE_TOOLS = [', 'const effect = globalThis.initializeSelected(); const SELECTED_IMAGE_TOOLS = ['),
+    text => text.replace('const SELECTED_IMAGE_TOOLS = [', "const unsafeRegex = new RegExp('(', 'u'); const SELECTED_IMAGE_TOOLS = ["),
+    text => text.replace(/(const SELECTED_IMAGE_TOOLS = )(\[[\s\S]*?\]);(\r?\ntype SelectedImageAuthorContext)/u, '$1$2.map(tool => unknown(tool));$3'),
+    text => text.replace(/(const SELECTED_IMAGE_TOOLS = )(\[[\s\S]*?\]);(\r?\ntype SelectedImageAuthorContext)/u, '$1initializeSelected($2);$3'),
+    text => text.replace("parameters: object({ kind: { type: 'string', enum: ['explanation', 'question'] }", "parameters: object({ __proto__: unownedPrototype, kind: { type: 'string', enum: ['explanation', 'question'] }"),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => components.initialization(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  }
+});
+
+test('selected guide High exact RegExp literal witness cannot obtain an initializer or full source proof', async () => {
+  const components = selectedGuideSourceComponents();
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const needle = "description: 'Read the actual selected saved image. This exact image is the revision target, not a style example. No other image can be selected here.'";
+  const actual = await videoIngressProgram(new Map([[file, text => {
+    assert.equal(text.split(needle).length, 2);
+    return text.replace(needle, 'description: /(/');
+  }]]));
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  assert.equal(actual.program.getSyntacticDiagnostics().length, 0, 'This exact spelling escapes TS5.5 syntactic diagnostics');
+  assert.throws(() => components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
+    error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+});
+
+test('selected guide High ordinary constructor witness has equal old and current public outputs after the restoration', async () => {
+  const components = selectedGuideSourceComponents(), file = 'apps/agent-worker/src/index.ts';
+  const change = text => {
+    const needle = 'return { echoed: true };';
+    assert.equal(text.split(needle).length, 2);
+    return text.replace(needle, "return { echoed: true, selectedImageReference: { note: 'ordinary legacy opaque field' } };");
+  };
+  const actual = await videoIngressProgram(new Map([[file, change]]));
+  const previous = await historicalVideoIngressProgram(new Map([[file, change]]), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  assert.equal(model.status, 'conditional');
+  const load = (input, names, globals = {}) => {
+    const source = input.program.getSourceFile(resolve(input.projectRoot, 'packages/domain/src/agent/agent.ts'));
+    const text = names.map(name => source.statements.find(node => node.name?.text === name).getText()).join('\n');
+    const exports = {};
+    runInNewContext(input.ts.transpileModule(text, { compilerOptions: { target: input.ts.ScriptTarget.ES2022, module: input.ts.ModuleKind.CommonJS } }).outputText,
+      { exports, ...globals });
+    return exports;
+  };
+  const nativeSource = actual.program.getSourceFile(resolve(actual.projectRoot, 'packages/domain/src/agent/native-agent-execution.ts'));
+  const nativeText = ['record', 'readNativeAgentExecution'].map(name => nativeSource.statements.find(node => node.name?.text === name
+    || actual.ts.isVariableStatement(node) && node.declarationList.declarations.some(value => value.name.text === name)).getText()).join('\n');
+  const native = {};
+  runInNewContext(actual.ts.transpileModule(nativeText, { compilerOptions: { target: actual.ts.ScriptTarget.ES2022, module: actual.ts.ModuleKind.CommonJS } }).outputText,
+    { exports: native });
+  const oldReader = load(previous, ['isJsonRecord', 'projectAgentTaskResult']);
+  const currentReader = load(actual, ['isJsonRecord', 'projectAgentTaskResult'], native);
+  const raw = { echoed: true, selectedImageReference: { note: 'ordinary legacy opaque field' } };
+  const row = { id: 'ordinary-task', sessionId: 'ordinary-session', kind: 'demo.echo', payload: {}, executionAttempt: 0, result: raw };
+  const before = oldReader.projectAgentTaskResult(raw, row.kind), after = currentReader.projectAgentTaskResult(raw, row.kind, row);
+  assert.equal(Object.hasOwn(before, 'selectedImageReference'), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(after)), JSON.parse(JSON.stringify(before)));
+});
+
+test('selected guide whole model preserves an arbitrary ordinary historical root through its actual retainers', async () => {
+  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason ?? error.message}/${error.stage ?? ''}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}:${error.node?.getText().slice(0, 130)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh.fresh, 'legacy');
+  assert.equal(model.projected.size, 11);
+  assert.ok(model.closure.declarations.size > 0);
+  const origin = model.origin;
+  assert.equal(origin.status, 'conditional');
+  assert.equal(origin.domain, 'authenticated-ordinary-opaque-json-root');
+  assert.equal(origin.node.getText(), 'task.result');
+  assert.ok(origin.transfers.some(value => value.current.name.text === 'markTaskProgressOnce'));
+  assert.ok(origin.transfers.some(value => value.current.name.text === 'compareNativeAgentCheckpoint'));
+  for (const [key, value] of model.projected)
+    assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
+  const file = 'apps/api/src/routes/agent.ts';
+  const writer = await videoIngressProgram(new Map([[file, text => text
+    .replace('listAgentTasks, parseWorkspaceGuidePayload,', 'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage,')
+    .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
+  assert.throws(() => components.sourceModel(writer.ts, selectedGuideSourceContext(writer), baseline),
+    error => error.reason === 'SELECTED_GUIDE_FAMILY_NOT_CLOSED');
+  // These are conditional source observations, not fabricated successful
+  // collector arrays. W changes HTTP emission while its actual retained
+  // backend (including all selected CP/CAS/paid-final consumers) stays exact R.
+  const backend = input => input.program.getSourceFiles().filter(source => !source.isDeclarationFile
+    && /^(?:packages|apps\/agent-worker)\//u.test(relative(input.projectRoot, source.fileName).replaceAll('\\', '/')))
+    .map(source => [relative(input.projectRoot, source.fileName), source.text]);
+  assert.deepEqual(backend(writer), backend(actual), 'W/R retains the complete real capable backend');
+  assert.throws(() => components.sourceModel(previous.ts, baseline, selectedGuideSourceContext(actual)),
+    error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
+  assert.throws(() => components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(actual)),
+    error => error.reason === 'SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL');
+  for (const supplied of [[], [['module:one', 'copied']]])
+    assert.equal(components.pair(actual.ts, supplied, [...supplied], actual.projectRoot, previous.projectRoot, []), false,
+      'No source-only/copy/custom-root result can acquire a production permit');
+});
+
+test('selected guide whole source closure rejects namespace observation and a selected function escaping its bound region', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const baseline = selectedGuideSourceContext(previous), file = 'apps/api/src/routes/agent.ts';
+  for (const change of [
+    text => "import * as selectedDomain from '@openscience/domain';\n" + text.replace('return { requestId: String(req.id),',
+      'void Object.keys(selectedDomain); return { requestId: String(req.id),'),
+    text => text.replace('return { requestId: String(req.id),', 'void requireSelectedImageSource; return { requestId: String(req.id),'),
+  ]) {
+    const changed = await videoIngressProgram(new Map([[file, change]]));
+    assert.throws(() => components.sourceModel(changed.ts, selectedGuideSourceContext(changed), baseline),
+      error => error.reason === 'SELECTED_GUIDE_DECLARATION_OR_ESCAPE_UNKNOWN',
+      'Both mutations must reach the actual bound-reference/namespace closure');
+  }
+});
+
+test('selected guide legacy retry cannot execute an added effect before its absence refusal', async () => {
+  const components = selectedGuideSourceComponents(), path = 'packages/domain/src/agent/agent.ts';
+  const previous = await historicalVideoIngressProgram(new Map(), '39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d');
+  const changed = await videoIngressProgram(new Map([[path, text => text.replace(
+    /(function canRecoverSelectedGuideFinal\(task: AgentTaskRetrySnapshot\): boolean \{\r?\n  try \{)/u,
+    '$1\n    globalThis.observeLegacyRetry();')]]));
+  assert.throws(() => components.sourceModel(changed.ts, selectedGuideSourceContext(changed), selectedGuideSourceContext(previous)),
+    error => error.reason === 'SELECTED_GUIDE_LEGACY_GUIDE_RETRY_UNKNOWN');
+});
+
+test('selected guide supplemental HTTP library identity requires the actual locked importer and same installed package', () => {
+  const components = selectedGuideSourceComponents();
+  const importer = readFileSync(new URL('../../apps/api/package.json', import.meta.url), 'utf8');
+  const lock = readFileSync(new URL('../../pnpm-lock.yaml', import.meta.url), 'utf8');
+  const pinned = JSON.parse(importer).dependencies.zod;
+  const make = (root, { packageVersion = pinned, lockText = lock, missing = false, dependency = pinned, nearVersion, cachePath } = {}) => {
+    const files = new Map([[resolve(root, 'apps/api/package.json'), JSON.stringify({ ...JSON.parse(importer), dependencies: { zod: dependency } })],
+      [resolve(root, 'pnpm-lock.yaml'), lockText]]);
+    if (!missing) files.set(resolve(root, 'apps/api/node_modules/zod/package.json'), JSON.stringify({ name: 'zod', version: packageVersion, main: './index.cjs' }));
+    if (nearVersion) files.set(resolve(root, 'apps/api/src/routes/node_modules/zod/package.json'), JSON.stringify({ name: 'zod', version: nearVersion }));
+    return { root: resolve(root), sourceHost: { fileExists: path => files.has(path), readFile: path => files.get(path),
+      realpath: path => cachePath ?? path } };
+  };
+  // These controlled filesystem records test the boundary, never provide a
+  // successful DEFAULT collection, execute Zod, or mint deployment authority.
+  const actual = make('/candidate'), previous = make('/previous');
+  assert.equal(components.httpLibrary(actual, previous).status, 'conditional');
+  for (const bad of [{ packageVersion: '0.0.0' }, { missing: true }, { lockText: `${lock}\nchanged` }, { dependency: `^${pinned}` },
+    { nearVersion: '0.0.0' }, { cachePath: '/unrelated-donor/zod/package.json' }])
+    assert.throws(() => components.httpLibrary(actual, make('/previous', bad)),
+      error => error.reason === 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
+});
 
 test('image producer partition uses the real initializer and preserves all consumer runtime', async () => {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
@@ -2047,6 +2630,53 @@ test('compatible ordinary rollback verifies both image Node runtimes and skips l
   });
   assert.equal(await operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
   assert.deepEqual(calls, ['lock', `openscience-agent-worker:${journal.candidateSha}`, `openscience-agent-worker:${journal.rollbackSha}`, 'reader-comparison']);
+});
+
+test('selected history cannot reuse a W over R journal as the earlier R over legacy transaction', async () => {
+  const extract = name => {
+    const body = deployLockSource.match(new RegExp(`(?:async )?function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
+    assert.ok(body, name); return body;
+  };
+  const legacy = 'a'.repeat(40), reader = 'b'.repeat(40), writer = 'c'.repeat(40);
+  for (const fixture of [
+    { journal: [reader, legacy, 'switching'], requested: [reader, legacy], accepted: true },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], accepted: true },
+    { journal: [writer, reader, 'published'], requested: [reader, legacy], accepted: false },
+    { journal: [writer, reader, 'published'], requested: [legacy, reader], accepted: false },
+    { journal: [writer, reader, 'prepared'], requested: [writer, reader], accepted: false },
+    { journal: [writer, reader, 'migrating'], requested: [writer, reader], accepted: false },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], mode: 0o644, accepted: false },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], uid: 1234, accepted: false },
+    { journal: [writer, reader, 'published'], requested: [writer, reader], missing: true, accepted: false },
+  ]) {
+    const journal = { schemaVersion: 1, candidateSha: fixture.journal[0], rollbackSha: fixture.journal[1], phase: fixture.journal[2], updatedAt: '2026-10-16T00:00:00.000Z' };
+    const original = JSON.stringify(journal), calls = [], journalPath = '/production/.deploy-transaction.json';
+    const operation = runInNewContext(`${extract('exactObjectKeys')}\n${extract('readTrustedJournal')}\n${extract('applicationRollbackPreflight')}; applicationRollbackPreflight`, {
+      SHA_PATTERN: /^[a-f0-9]{40}$/u, JOURNAL_PHASES: new Set(['prepared', 'migrating', 'switching', 'published']),
+      process: { platform: 'linux', arch: 'x64' },
+      async verifyProductionDeployLockOnHost() { calls.push('lock'); },
+      async lstat(path) { assert.equal(path, journalPath); if (fixture.missing) throw Object.assign(Error('missing'), { code: 'ENOENT' });
+        return { isFile: () => true, isSymbolicLink: () => false, nlink: 1, uid: fixture.uid ?? 0, mode: fixture.mode ?? 0o600 }; },
+      async realpath(path) { return path; }, async readFile(path) { assert.equal(path, journalPath); return original; },
+      async nativeCommand() { calls.push('image-inspect'); return rollbackImageMetadataFixture(); },
+      async verifyApplicationRollbackReaders(options) { calls.push('source-comparison');
+        assert.equal(options.candidateRoot, `/opt/openscience-releases/${fixture.requested[0]}`);
+        assert.equal(options.rollbackRoot, `/opt/openscience-releases/${fixture.requested[1]}`); },
+      async queryNativeWork() { assert.fail('journal refusal does not consult queue emptiness or discard history'); },
+      rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); }, console: { error() {} },
+    });
+    const request = { candidateSha: fixture.requested[0], rollbackSha: fixture.requested[1], journalPath, requiredUid: 0 };
+    if (fixture.accepted) {
+      assert.equal(await operation(request), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
+      assert.deepEqual(calls, ['lock', 'image-inspect', 'image-inspect', 'source-comparison']);
+    } else {
+      await assert.rejects(operation(request), error => fixture.missing ? error.code === 'ENOENT'
+        : fixture.mode || fixture.uid ? error.message === 'production deploy journal is unsafe'
+          : error.message === 'ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');
+      assert.deepEqual(calls, ['lock']);
+    }
+    assert.equal(JSON.stringify(journal), original);
+  }
 });
 
 test('different or missing image Node runtime is unknown even when reader source would match', async () => {
