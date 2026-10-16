@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { getCurrentUser, getFirstImageRun, getHermesResearchRun, listPresentationAssets,
   presentationAssetContentUrl, SESSION_CHANGED_EVENT, SESSION_INVALIDATED_EVENT,
-  type HermesResearchRun, type PresentationAsset } from '@/lib/api';
+  type HermesResearchRun, type PresentationAsset, type HermesImageReady } from '@/lib/api';
 
 /** Read the original operation only; recovery never submits or approves anything. */
-export function HermesFirstImageResult({ actorId, researchObjectId, versionId, guideTaskId, runId, guidePending = false }: {
+export function HermesFirstImageResult({ actorId, researchObjectId, versionId, guideTaskId, runId, guidePending = false, onImageReady }: {
   actorId: string; researchObjectId: string; versionId: string; guideTaskId: string; runId?: string; guidePending?: boolean;
+  onImageReady?(image: HermesImageReady): void;
 }) {
   const t = useTranslations('hermesConversation.firstImage');
   const scope = JSON.stringify([actorId, researchObjectId, versionId, guideTaskId, runId]);
@@ -57,14 +58,16 @@ export function HermesFirstImageResult({ actorId, researchObjectId, versionId, g
     };
   }, [actorId, researchObjectId, versionId, guideTaskId, runId, guidePending, scope, attempt]);
   const current = state.scope === scope ? state : undefined;
+  const readyCallback = useRef(onImageReady); readyCallback.current = onImageReady;
   const announcedAsset = useRef('');
   useEffect(() => {
     if (!current?.asset) return;
     const identity = `${scope}:${current.asset.id}`;
     if (announcedAsset.current === identity) return;
     announcedAsset.current = identity;
+    readyCallback.current?.({ actorId, researchObjectId, versionId, guideTaskId, assetId: current.asset.id, label: current.asset.label });
     window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId, versionId } }));
-  }, [current?.asset, scope, researchObjectId, versionId]);
+  }, [current?.asset, scope, actorId, researchObjectId, versionId, guideTaskId]);
   if (!current?.run && !current?.error) return null;
   const stopped = current?.run && ['failed', 'stopped'].includes(current.run.status);
   return <div className="hermes-conversation-change" aria-live="polite">

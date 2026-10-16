@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { StorageAdapter } from '@openscience/storage';
 import { nativeImageReviewPromptHash, parseStructuredJson, readNativeImageReviewDecision,
   type NativeImageReviewValidatedFinal, type ScienceReviewProviderResult, ILLUSTRATION_PLAN_REVIEW_MAX_PROMPT_CHARS } from '@openscience/ai-gateway';
 import { nativeImageReviewProvider } from '@openscience/domain';
@@ -8,6 +9,25 @@ import { storyboardSceneStyles, readStoredGeneratedImageReview as parseStoredGen
 import type { PresentationClaim } from './chart-generator';
 import { loadIllustrationStyleSkills } from './illustration-styles';
 import { automaticStyleReviewGuidance } from '../skills/installed-media-skills';
+
+export async function readPresentationInput(storage: StorageAdapter, objectKey: string, expectedHash: string, maxBytes = 10 * 1024 * 1024): Promise<Buffer> {
+  const object = await storage.getObject(objectKey);
+  const chunks: Buffer[] = []; let size = 0;
+  try {
+    if (object.size <= 0 || object.size > maxBytes) throw new Error('[blocked] presentation input size is invalid');
+    for await (const chunk of object.body) {
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += bytes.length;
+      if (size > object.size || size > maxBytes) throw new Error('[blocked] presentation input stream exceeded its bound');
+      chunks.push(bytes);
+    }
+  } finally { object.body.destroy(); }
+  const result = Buffer.concat(chunks);
+  if (result.length !== object.size || createHash('sha256').update(result).digest('hex') !== expectedHash) {
+    throw new Error('[blocked] presentation input content identity changed');
+  }
+  return result;
+}
 
 export function readStoredGeneratedImageReview(value: unknown, expected: ImageReviewIdentity, owningTaskResult?: unknown): GeneratedImageReview | undefined {
   try { return parseStoredGeneratedImageReview(value, expected, owningTaskResult); }

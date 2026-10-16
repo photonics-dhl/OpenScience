@@ -33,7 +33,7 @@ import { requireStyleReferenceImage } from '@openscience/domain';
 import { readStoredIllustrationIssues, reviewIllustrationStoryboard } from './illustration-review';
 import { clarifyIllustrationLabels, generateIllustrationStoryboard, type StoryboardScienceCheckpoint, type StoryboardScienceRejectionReceipt, type StoryboardScienceRejectedCandidate, type StoryboardArtRejection, type StoryboardPlanningPersistence } from './illustration-planner';
 import { hasSingleReviewedVisualSource, readVisualNarrativeSource, resolveVisualNarrativeSource } from '../scientific-writing-source';
-import { generatedImageReviewAttachment, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
+import { generatedImageReviewAttachment, readPresentationInput, readStoredGeneratedImageReview, reviewGeneratedImage } from './generated-image-review';
 
 
 type StoryboardPlan = Awaited<ReturnType<typeof generateStoryboard>> & { reviewFormat?: 2 };
@@ -552,25 +552,6 @@ async function requireSavedImageForReview(prisma: Pick<Prisma.TransactionClient,
     throw new Error('[blocked] Generated image review requires this task\'s unchanged saved draft');
   }
   return asset;
-}
-
-async function readPresentationInput(storage: NonNullable<Parameters<TaskHandler>[0]['storage']>, objectKey: string, expectedHash: string, maxBytes = 10 * 1024 * 1024): Promise<Buffer> {
-  const object = await storage.getObject(objectKey);
-  const chunks: Buffer[] = []; let size = 0;
-  try {
-    if (object.size <= 0 || object.size > maxBytes) throw new Error('[blocked] presentation input size is invalid');
-    for await (const chunk of object.body) {
-      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      size += bytes.length;
-      if (size > object.size || size > maxBytes) throw new Error('[blocked] presentation input stream exceeded its bound');
-      chunks.push(bytes);
-    }
-  } finally { object.body.destroy(); }
-  const result = Buffer.concat(chunks);
-  if (result.length !== object.size || createHash('sha256').update(result).digest('hex') !== expectedHash) {
-    throw new Error('[blocked] presentation input content identity changed');
-  }
-  return result;
 }
 
 async function readAudioAuditionOutput(result: AudioAuditionResult): Promise<Buffer> {

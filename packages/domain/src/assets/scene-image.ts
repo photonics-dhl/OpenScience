@@ -4,6 +4,8 @@ import { PresentationAssetError } from './errors';
 import { presentationStoryboardView, type StoryboardRequest } from './storyboard';
 import { nativeImageReviewProvider, nativeImageReviewMatches, readNativeImageReviewCheckpoint } from './native-image-review';
 import { requireNativeVideoStoryboard } from './video';
+import { requirePresentationWriteScope } from './presentation-asset';
+import { presentationClaimContent, presentationEvidenceIdentity, readReviewedPresentationEvidence, readVisualNarrativeSource } from './illustration-source';
 
 export interface SceneImageRequest { storyboardAssetId: string; sceneIndex: number; styleReferenceAssetId?: string; revisionAssetId?: string }
 export interface GeneratedImageReview {
@@ -222,6 +224,55 @@ export async function requireSceneImageParent(prisma: Pick<Prisma.TransactionCli
     sourceEvidenceIdentity: typeof provenance.sourceEvidenceIdentity === 'string' ? provenance.sourceEvidenceIdentity : undefined,
     identity: JSON.stringify({ contentHash: asset.contentHash, provenance: asset.provenance, ids }) };
 }
+
+/** Resolve the selected saved image; no recency, label, or client-supplied parent can choose its source. */
+export async function requireSelectedImageSource(tx: Prisma.TransactionClient, input: {
+  userId: string; researchObjectId: string; versionId: string; assetId: string;
+}) {
+  const version = await requirePresentationWriteScope(tx, input);
+  const image = await tx.presentationAsset.findUnique({ where: { id: input.assetId }, include: { sourceClaims: true } });
+  if (!image || image.deletedAt || image.kind !== 'image' || !['draft', 'approved'].includes(image.status)
+    || image.researchObjectId !== input.researchObjectId || image.versionId !== input.versionId
+    || !image.objectKey || !reviewHash(image.contentHash)) {
+    throw new PresentationAssetError('NOT_FOUND', 'Selected image is unavailable in this draft');
+  }
+  const sceneImage = presentationSceneImageView(image);
+  if (!sceneImage) throw new PresentationAssetError('VALIDATION_ERROR', 'This image has no source-bound scientific brief to revise');
+  const sourceClaimIds = image.sourceClaims.map(row => row.claimId).sort();
+  const parent = await requireSceneImageParent(tx, { ...input, sourceClaimIds, sceneImage });
+  const provenance = image.provenance as Record<string, unknown>;
+  const scene = parent?.view.document.scenes[sceneImage.sceneIndex];
+  if (!parent || provenance.parentIdentity !== parent.identity || !scene?.illustration) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Selected image scientific brief changed or is missing');
+  }
+  const claims = await tx.claimNode.findMany({ where: { id: { in: sourceClaimIds }, researchObjectId: input.researchObjectId,
+    versionId: input.versionId }, orderBy: { id: 'asc' } });
+  if (!sourceClaimIds.length || claims.length !== sourceClaimIds.length || claims.some(row => row.extractionStatus !== 'succeeded')) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Selected image source Claims are unavailable');
+  }
+  const lineage = new Map(claims.map(claim => {
+    const origin = claim.provenance as Record<string, unknown> | null;
+    return [claim.id, origin?.sourceTaskLineage ?? origin?.sourceTaskId];
+  }));
+  const evidence = await readReviewedPresentationEvidence(tx, { ...input, sourceClaimIds }, lineage);
+  const sourceEvidenceIdentity = presentationEvidenceIdentity(evidence);
+  if (parent.sourceEvidenceIdentity !== sourceEvidenceIdentity) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Selected image original evidence changed');
+  }
+  const source = await readVisualNarrativeSource(tx, { ...input, workspaceId: version.researchObject.workspaceId, sourceClaimIds });
+  const mimeType = provenance.contentType;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(String(mimeType))) {
+    throw new PresentationAssetError('VALIDATION_ERROR', 'Selected image format is unavailable');
+  }
+  return { binding: { researchObjectId: input.researchObjectId, versionId: input.versionId, assetId: image.id,
+    objectKey: image.objectKey, contentHash: image.contentHash, mimeType: mimeType as 'image/png' | 'image/jpeg' | 'image/webp',
+    storyboardAssetId: sceneImage.storyboardAssetId, parentIdentity: parent.identity, parentContentHash: parent.contentHash,
+    sceneIndex: sceneImage.sceneIndex, sourceClaimIds, sceneSourceClaimIds: [...scene.sourceClaimIds], sourceEvidenceIdentity,
+    claimContent: presentationClaimContent(claims), narrativeSourceIdentity: source.identity, sourceMapRef: source.reference },
+  illustration: scene.illustration, scene, settings: parent.view, claims, evidence, source };
+}
+export type SelectedImageSource = Awaited<ReturnType<typeof requireSelectedImageSource>>;
+export type SelectedImageBinding = SelectedImageSource['binding'];
 
 /**
  * Pay-once per scene: an approved image for the same (parent, sceneIndex) under the same parent

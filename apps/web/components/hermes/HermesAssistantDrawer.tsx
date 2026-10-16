@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { isExplicitFirstImageRequest } from '@openscience/domain/workspace-guide-contract';
+import { isExplicitFirstImageRequest, readWorkspaceSelectedImageDraft, readWorkspaceSelectedImageReference } from '@openscience/domain/workspace-guide-contract';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,12 +14,17 @@ import {
   ApiClientError,
   getAgentTask,
   getFirstImageRun,
+  getCurrentUser,
+  retryAgentTask,
+  presentationAssetContentUrl,
   listAgentTasks,
   listVersions,
   submitWorkspaceGuideTask,
   type AgentTaskView,
   type WorkspaceGuidePayload,
   type WorkspaceGuideResult,
+  type HermesImageContext,
+  type HermesImageReady,
 } from '@/lib/api';
 import { useHermesViewerId } from './useHermesViewerId';
 import { routeHermesLiteratureIntent, type RoutedHermesIntent } from '@/lib/hermes/literature-intent';
@@ -32,6 +37,8 @@ import { HermesFirstImageResult } from './HermesFirstImageResult';
 import type { SubmissionIntent } from '@/lib/hermes/presentation-action';
 import { getHermesDraftStorage, isFigurePlanValid, loadHermesGuideGoal, readHermesResearchRunDraft, saveHermesGuideGoal,
   currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission, type HermesDraftScope } from '@/lib/hermes/draft-state';
+import { loadPendingSelectedImageSubmission, savePendingSelectedImageSubmission, clearPendingSelectedImageSubmission,
+  type PendingSelectedImageSubmission } from '@/lib/hermes/draft-state';
 import type { HermesGuideSuggestion } from './hermes-guide';
 import { sameSdfRepresentation } from '@/lib/editor-state';
 import type { SdfCoreSnapshot } from '@/lib/api';
@@ -117,6 +124,9 @@ export interface HermesAssistantDrawerProps {
   onUndoDraftEdit?(): void;
   /** Optional caller-provided text to prefill and route through the same Hermes conversation. */
   initialGoal?: string;
+  imageContext?: HermesImageContext;
+  onImageReady?(image: HermesImageReady): void;
+  mediaVisible?: boolean;
   /** Exact already-submitted task to restore after a cross-route handoff. */
   initialTaskId?: string;
   /** Allow one fresh, caller-authorized handoff task to apply against its matching draft base. */
@@ -134,6 +144,72 @@ export interface HermesAssistantDrawerProps {
   onSourceCommand?(command: string): Promise<boolean>;
 }
 
+type GuidePresentationInput = { presentation?: WorkspaceGuidePayload['context']['presentation']; imageContext?: HermesImageContext; goal: string; actorId: string; mediaVisible?: boolean; originalImageAssetId?: string };
+export type GuidePresentationResolution = { presentation?: WorkspaceGuidePayload['context']['presentation']; question?: 'ambiguous' | 'missing' | 'conflicting' | 'scope' };
+/** This event comes from the exact successful first-image result, never from gallery order. */
+export function applyFirstImageReady(previous: HermesImageContext | undefined, ready: HermesImageReady,
+  scope: Pick<HermesImageContext, 'actorId' | 'researchObjectId' | 'versionId'>): HermesImageContext | undefined {
+  if (ready.actorId !== scope.actorId || ready.researchObjectId !== scope.researchObjectId || ready.versionId !== scope.versionId) return previous;
+  const current = previous?.actorId === scope.actorId && previous.researchObjectId === scope.researchObjectId && previous.versionId === scope.versionId ? previous : undefined;
+  if (current?.readyImage?.guideTaskId === ready.guideTaskId) return current;
+  return { ...scope, images: current?.images ?? [], selectedImageAssetId: ready.assetId,
+    pendingImageAssetId: current?.images.some(image => image.assetId === ready.assetId) ? undefined : ready.assetId,
+    readyImage: { guideTaskId: ready.guideTaskId, assetId: ready.assetId, label: ready.label } };
+}
+function legacyGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {
+  return { presentation: input.presentation ? { researchObjectId: input.presentation.researchObjectId,
+    ...(input.presentation.versionId !== undefined ? { versionId: input.presentation.versionId } : {}) } : undefined };
+}
+/** Actual production R emitter. W changes this binding only after the capable readers are deployed. */
+export function buildGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {
+  return legacyGuidePresentationContext(input);
+}
+/** Capable adjacent-writer implementation; not called by the production R emitter. */
+export function selectedGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {
+  const { presentation, imageContext, actorId } = input;
+  if (!imageContext) return legacyGuidePresentationContext(input);
+  if (!presentation?.versionId || imageContext.actorId !== actorId || imageContext.researchObjectId !== presentation.researchObjectId
+    || imageContext.versionId !== presentation.versionId) return { question: 'scope' };
+  const normalize = (text: string) => text.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase();
+  const goal = normalize(input.goal);
+  const readyName = imageContext.readyImage?.assetId === imageContext.pendingImageAssetId ? imageContext.readyImage : undefined;
+  const nameReferences = readyName && !imageContext.images.some(image => image.assetId === readyName.assetId)
+    ? [...imageContext.images, readyName] : imageContext.images;
+  const names = nameReferences.filter(image => normalize(image.label).length > 1 && goal.includes(normalize(image.label)));
+  if (input.mediaVisible === false && !names.length && !/(?:图|配图|插图|\bimage\b|\billustration\b)/iu.test(goal)) return legacyGuidePresentationContext(input);
+  const namedIds = [...new Set(names.filter(image => !names.some(other => normalize(other.label).length > normalize(image.label).length
+    && normalize(other.label).includes(normalize(image.label)))).map(image => image.assetId))];
+  const digit: Record<string, number> = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const ordinal = (text: string) => /^\d+$/u.test(text) ? Number(text) : text.includes('十')
+    ? (digit[text.split('十')[0]!] ?? 1) * 10 + (digit[text.split('十')[1]!] ?? 0) : digit[text];
+  const positions = [...goal.matchAll(/第\s*([\d一二两三四五六七八九十]+)\s*[张幅]/gu), ...goal.matchAll(/\b(?:image|illustration)\s*#?\s*(\d+)\b/gu)]
+    .map(match => ordinal(match[1]!));
+  if (positions.some(position => !position || !imageContext.images[position - 1])) return { question: 'missing' };
+  const ordinalIds = [...new Set(positions.map(position => imageContext.images[position! - 1]!.assetId))];
+  if (ordinalIds.length > 1 || ordinalIds.length === 1 && namedIds.length > 0 && !namedIds.includes(ordinalIds[0]!)) return { question: 'conflicting' };
+  const quoted = /[“"「]([^”"」]+)[”"」]\s*(?:这|那)?(?:一?[张幅])?(?:图|image|illustration)/u.exec(goal);
+  if (quoted && !nameReferences.some(image => normalize(image.label) === normalize(quoted[1]!))) return { question: 'missing' };
+  const deicticName = /(?:^|[，,。；;：:\n])([^，,。；;：:\n“”"「」]{0,100}?)\s*(?:这|那)(?:一?[张幅])图/u.exec(goal)?.[1]
+    ?.replace(/^(?:(?:请你|请|帮我|麻烦你|麻烦|我想要|我想|先|再|然后)\s*)+/u, '')
+    .replace(/^(?:把|将|(?:修改|调整|重绘|改)(?:一下)?)\s*/u, '').trim();
+  if (deicticName && !/^(?:刚(?:才)?|新)生成(?:的)?$/u.test(deicticName)
+    && !nameReferences.some(image => normalize(image.label) === deicticName)) return { question: 'missing' };
+  const englishName = /^(?:please\s+)?(?:modify|edit|change|adjust)\s+(?:the\s+)?([a-z][a-z\d_-]{1,80})\s+(?:image|illustration)\b/u.exec(goal)?.[1];
+  if (englishName && !/^(?:this|that|current|selected|original)$/u.test(englishName)
+    && !nameReferences.some(image => normalize(image.label) === englishName)) return { question: 'missing' };
+  if (!ordinalIds.length && namedIds.length > 1) return { question: 'ambiguous' };
+  const fresh = /(?:刚(?:才)?|新)生成(?:的)?(?:那|这)?(?:一?张)?图|\b(?:just|newly) generated (?:image|illustration)\b/u.test(goal);
+  const original = /原图|\boriginal (?:image|illustration)\b/u.test(goal);
+  if (fresh && original) return { question: 'conflicting' };
+  const relativeId = fresh ? imageContext.readyImage?.assetId : original ? input.originalImageAssetId : undefined;
+  if ((fresh || original) && !relativeId) return { question: 'missing' };
+  if (relativeId && [...ordinalIds, ...namedIds].some(id => id !== relativeId)) return { question: 'conflicting' };
+  const assetId = relativeId ?? ordinalIds[0] ?? namedIds[0] ?? imageContext.selectedImageAssetId;
+  if (!assetId || !imageContext.images.some(image => image.assetId === assetId)
+    && !(imageContext.readyImage?.assetId === assetId && imageContext.pendingImageAssetId === assetId)) return { question: 'missing' };
+  return { presentation: { researchObjectId: presentation.researchObjectId, versionId: presentation.versionId, selectedImageAssetId: assetId } };
+}
+
 export function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null {
   const value = task.result;
   if (!value || typeof value.summary !== 'string' || typeof value.needsMoreInformation !== 'boolean' || !Array.isArray(value.nextSteps)) return null;
@@ -145,6 +221,17 @@ export function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null
       && (candidate.targetId === undefined || typeof candidate.targetId === 'string');
   }).slice(0, 1);
   if (nextSteps.length !== value.nextSteps.length) return null;
+  if (value.selectedImageReference !== undefined || value.selectedImageDraft !== undefined) {
+    try {
+      const selectedImageReference = readWorkspaceSelectedImageReference(value.selectedImageReference);
+      const selectedImageDraft = value.selectedImageDraft === undefined ? undefined : readWorkspaceSelectedImageDraft(value.selectedImageDraft);
+      if (nextSteps.length || value.firstImageRun || value.presentationDraft || value.researchRunDraft || value.draftEdit || value.writingDraft
+        || selectedImageDraft && (value.needsMoreInformation || JSON.stringify(selectedImageDraft.source) !== JSON.stringify(selectedImageReference))
+        || task.researchObjectId && task.researchObjectId !== selectedImageReference.researchObjectId) return null;
+      return { summary: value.summary, nextSteps: [], needsMoreInformation: value.needsMoreInformation,
+        selectedImageReference, ...(selectedImageDraft ? { selectedImageDraft } : {}) };
+    } catch { return null; }
+  }
   if (value.firstImageRun !== undefined) {
     const run = value.firstImageRun as Record<string, unknown>;
     if (!run || typeof run !== 'object' || Object.keys(run).sort().join(',') !== 'runId,versionId'
@@ -226,6 +313,17 @@ export function resultFromTask(task: AgentTaskView): WorkspaceGuideResult | null
   return { summary: value.summary, nextSteps, needsMoreInformation: value.needsMoreInformation, ...(researchRunDraft ? { researchRunDraft } : {}), ...(presentationDraft ? { presentationDraft } : {}), ...(draftEdit ? { draftEdit } : {}), ...(writingDraft ? { writingDraft } : {}) };
 }
 
+export function selectedImageTaskMatchesSubmission(task: AgentTaskView, saved: PendingSelectedImageSubmission): boolean {
+  try {
+    const source = readWorkspaceSelectedImageReference(task.result?.selectedImageReference);
+    const expected = saved.payload.context.presentation;
+    if (!expected?.versionId || !expected.selectedImageAssetId) return false;
+    return task.id === saved.taskId && task.kind === 'workspace.guide' && task.sessionId === saved.sessionId
+      && (task.researchObjectId === undefined || task.researchObjectId === expected?.researchObjectId) && source.researchObjectId === expected?.researchObjectId
+      && source.versionId === expected.versionId && source.assetId === expected.selectedImageAssetId;
+  } catch { return false; }
+}
+
 function isWritingInstruction(value: string) {
   const normalized = value.trim().toLocaleLowerCase();
   const action = '(?:保存|存储|修改|改写|续写|扩写|精简|润色|翻译|调整|补充|重写|缩短|加长)';
@@ -274,7 +372,7 @@ export function HermesAssistantDrawer(props: HermesAssistantDrawerProps) {
 }
 
 function HermesAssistantDrawerContent({
-  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, editorRepresentation, sourceReview, onSourceCommand, onImageSubmitReady,
+  open, onOpenChange, locale, suggestion, dashboardContext, onTaskStateChange, route = 'dashboard', routeResearchObjectId, target = null, onDraftEdit, onUndoDraftEdit, initialGoal, imageContext, onImageReady, mediaVisible = true, initialTaskId, initialTaskAutoApply = false, onInitialTaskConsumed, taskRestoreReady = true, docked = false, embedded = false, pageOwnedAnchor = false, onPrepareVersion, editorRepresentation, sourceReview, onSourceCommand, onImageSubmitReady,
 }: HermesAssistantDrawerProps) {
   const t = useTranslations('dashboard.hermes');
   const [wide, setWide] = useState(false);
@@ -324,6 +422,10 @@ function HermesAssistantDrawerContent({
   const firstImageViewVersion = firstImageVersionBinding?.scope === versionScope ? firstImageVersionBinding.versionId
     : dashboardContext.presentation?.versionId || requestedVersion || resolvedGuideVersion;
   const currentImageVersion = useRef(firstImageViewVersion); currentImageVersion.current = firstImageViewVersion;
+  const selectedImageViewVersion = dashboardContext.presentation?.versionId || requestedVersion || resolvedGuideVersion;
+  const currentPresentationVersion = useRef(selectedImageViewVersion); currentPresentationVersion.current = selectedImageViewVersion;
+  const imageClarification = useRef<{ owner: string; goal: string; context?: HermesImageContext } | null>(null);
+  const selectedResultOwner = useRef('');
   const ownerRef = useRef(currentOwner); ownerRef.current = currentOwner;
   const sessionId = useRef<string | null>(null);
   const deletedSessions = useRef(new Set<string>());
@@ -355,6 +457,7 @@ function HermesAssistantDrawerContent({
   const [goal, setGoal] = useState('');
   const injectedGoal = useRef('');
   const [task, setTask] = useState<AgentTaskView | null>(null);
+  const currentTaskId = useRef(task?.id); currentTaskId.current = task?.id;
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -536,6 +639,17 @@ function HermesAssistantDrawerContent({
   const activeTask = task?.status === 'pending' || task?.status === 'running';
   const busy = submitting || activeTask || preparing;
   const result = useMemo(() => task?.status === 'succeeded' ? resultFromTask(task) : null, [task]);
+  const selectedResult = selectedResultOwner.current === currentOwner ? result : null;
+  const pinnedReference = selectedResult?.needsMoreInformation ? selectedResult.selectedImageReference : undefined;
+  const previewContext = pinnedReference && pinnedReference.researchObjectId === routeResearchObjectId && pinnedReference.versionId === selectedImageViewVersion
+    ? { ...(imageContext ?? { images: [{ assetId: pinnedReference.assetId, label: tc('selectedImage.original') }] }), actorId: viewerId,
+      researchObjectId: pinnedReference.researchObjectId, versionId: pinnedReference.versionId, selectedImageAssetId: pinnedReference.assetId } : imageContext;
+  const previewPresentation = selectedResultOwner.current === currentOwner && pendingPayload.current?.context.presentation?.selectedImageAssetId
+    ? pendingPayload.current.context.presentation : !isExplicitFirstImageRequest(currentFirstImageGoal(goal) ?? goal)
+      ? buildGuidePresentationContext({ presentation: dashboardContext.presentation, imageContext: previewContext, goal,
+        actorId: viewerId, mediaVisible: pinnedReference ? true : mediaVisible, originalImageAssetId: selectedResult?.selectedImageReference?.assetId }).presentation : undefined;
+  const previewImage = previewPresentation?.selectedImageAssetId ? imageContext?.images.find(image => image.assetId === previewPresentation.selectedImageAssetId)
+    ?? (imageContext?.readyImage?.assetId === previewPresentation.selectedImageAssetId ? imageContext.readyImage : undefined) : undefined;
   const runDraftHref = task && result?.researchRunDraft && task.researchObjectId === routeResearchObjectId
     && result.researchRunDraft.researchObjectId === routeResearchObjectId && route === 'research-object-edit'
     ? `/research-objects/${encodeURIComponent(routeResearchObjectId!)}/hermes?guideTask=${encodeURIComponent(task.id)}` : null;
@@ -589,6 +703,7 @@ function HermesAssistantDrawerContent({
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false); setWritingDraft(null); setWritingDirty(false);
     setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; offeredRepresentation.current = undefined; assertPrepared.current = null;
     sessionId.current = null; sessionKey.current = null; sessionCreation.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; writingSaveGoal.current = ''; latestWritingTask.current = null; displayOnlyWritingTasks.current.clear(); setActionBusy(false);
+    imageClarification.current = null; selectedResultOwner.current = '';
     deletedSessions.current.clear(); deletedTasks.current.clear(); suppressAutoRestore.current = false;
   }, [currentOwner]);
   useEffect(() => {
@@ -596,6 +711,15 @@ function HermesAssistantDrawerContent({
       const detail = (event as CustomEvent<{ researchObjectId?: string; kind?: string; resourceId?: string }>).detail;
       if (!detail || detail.researchObjectId !== routeResearchObjectId || !detail.resourceId || !['session', 'task'].includes(detail.kind ?? '')) return;
       const id = detail.resourceId;
+      try {
+        if (viewerId && routeResearchObjectId && selectedImageViewVersion) {
+          const scope = { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: selectedImageViewVersion };
+          const saved = loadPendingSelectedImageSubmission(draftStorage, scope);
+          if (saved && (detail.kind === 'session' ? saved.sessionId === id : saved.taskId === id)
+            && !clearPendingSelectedImageSubmission(draftStorage, scope, detail.kind === 'session'
+              ? { key: saved.key, removedSessionId: id } : { key: saved.key, taskId: id })) setError(tc('selectedImage.storageError'));
+        }
+      } catch { setError(tc('selectedImage.storageError')); }
       if (detail.kind === 'session') deletedSessions.current.add(id); else deletedTasks.current.add(id);
       const removesCurrent = detail.kind === 'session' ? sessionId.current === id || task?.sessionId === id : task?.id === id;
       if (detail.kind === 'task') {
@@ -615,7 +739,7 @@ function HermesAssistantDrawerContent({
     };
     window.addEventListener('research-content-removed', remove);
     return () => window.removeEventListener('research-content-removed', remove);
-  }, [routeResearchObjectId, task?.id, task?.sessionId, writingDraft?.taskId, tc]);
+  }, [routeResearchObjectId, task?.id, task?.sessionId, writingDraft?.taskId, tc, viewerId, selectedImageViewVersion, draftStorage]);
   useEffect(() => {
     setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
     offeredAction.current = null; assertPrepared.current = null;
@@ -629,10 +753,18 @@ function HermesAssistantDrawerContent({
     pendingPayload.current = null; taskKey.current = null; sessionId.current = null; sessionKey.current = null;
     setSentGoal(''); setTask(null); setError('');
   }, [firstImageViewVersion, submitting]);
+  useEffect(() => {
+    const pendingVersion = pendingPayload.current?.context.presentation?.selectedImageAssetId ? pendingPayload.current.context.presentation.versionId : undefined;
+    if (submittingRef.current || !pendingVersion || pendingVersion === selectedImageViewVersion) return;
+    pendingPayload.current = null; taskKey.current = null; sessionId.current = null; sessionKey.current = null;
+    imageClarification.current = null; selectedResultOwner.current = '';
+    setSentGoal(''); setTask(null); setError(tc('selectedImage.scopeChanged'));
+  }, [selectedImageViewVersion, submitting, tc]);
+  useEffect(() => { imageClarification.current = null; }, [currentOwner, selectedImageViewVersion]);
 
   useEffect(() => {
     if (!open) { injectedGoal.current = ''; return; }
-    if (pendingPayload.current?.executionIntent === 'first-image') return;
+    if (pendingPayload.current?.executionIntent === 'first-image' || pendingPayload.current?.context.presentation?.selectedImageAssetId) return;
     const next = initialGoal?.trim() ?? '';
     if (!next || injectedGoal.current === `${currentOwner}:${next}`) return;
     injectedGoal.current = `${currentOwner}:${next}`;
@@ -714,10 +846,15 @@ function HermesAssistantDrawerContent({
     const restore = () => {
       attempts += 1;
       let savedImage;
+      let savedSelected: PendingSelectedImageSubmission | null = null;
       try {
         savedImage = viewerId && routeResearchObjectId && firstImageViewVersion
           ? loadPendingFirstImageSubmission(draftStorage, { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: firstImageViewVersion }) : null;
       } catch { setError(tc('firstImage.storageError')); return; }
+      try {
+        if (viewerId && routeResearchObjectId && selectedImageViewVersion) savedSelected = loadPendingSelectedImageSubmission(draftStorage,
+          { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: selectedImageViewVersion });
+      } catch { setError(tc('selectedImage.storageError')); return; }
       if (savedImage && !savedImage.taskId && !initialTaskId) {
         // A same-instance unknown POST keeps its original in-memory payload and format.
         if (pendingPayload.current && savedImage.key === taskKey.current && savedImage.sessionId === sessionId.current
@@ -727,7 +864,12 @@ function HermesAssistantDrawerContent({
         setGoal(savedImage.payload.goal); setSentGoal(savedImage.payload.goal); setError(tc('firstImage.uncertain'));
         return;
       }
-      const exactTaskId = initialTaskId || savedImage?.taskId;
+      if (savedSelected && !savedSelected.taskId && !initialTaskId) {
+        selectedResultOwner.current = currentOwner;
+        sessionId.current = savedSelected.sessionId; taskKey.current = savedSelected.key; pendingPayload.current = savedSelected.payload;
+        setGoal(savedSelected.payload.goal); setSentGoal(savedSelected.payload.goal); setError(tc('selectedImage.uncertain')); return;
+      }
+      const exactTaskId = initialTaskId || savedSelected?.taskId || savedImage?.taskId;
       const loadTasks = initialTaskId
         ? Promise.all([getAgentTask('', initialTaskId), listAgentTasks()]).then(([{ task: exactTask }, { tasks }]) => ({
           tasks: [exactTask, ...tasks.filter((candidate) => candidate.id !== exactTask.id)],
@@ -749,7 +891,10 @@ function HermesAssistantDrawerContent({
           const restored = selectRestorableGuide(tasks, route, routeResearchObjectId, exactTaskId);
           if (restored) {
             clearLocalRepresentations();
-            if (savedImage) setSentGoal(savedImage.payload.goal);
+            if (savedSelected?.taskId === restored.id && !selectedImageTaskMatchesSubmission(restored, savedSelected)) throw new Error(tc('selectedImage.scopeChanged'));
+            if (savedSelected?.taskId === restored.id) setSentGoal(savedSelected.payload.goal);
+            else if (savedImage) setSentGoal(savedImage.payload.goal);
+            if (restored.result?.selectedImageReference) selectedResultOwner.current = currentOwner;
             if (restoredWriting && restored.id !== restoredWriting.id) displayOnlyWritingTasks.current.add(restored.id);
             sessionId.current = restored.sessionId;
             setRestoredTask(!(initialTaskAutoApply && restored.id === initialTaskId));
@@ -764,7 +909,7 @@ function HermesAssistantDrawerContent({
     };
     restore();
     return () => { cancelled = true; if (retryTimer) window.clearTimeout(retryTimer); };
-  }, [currentOwner, initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t, tc, viewerId, firstImageViewVersion, draftStorage]);
+  }, [currentOwner, initialTaskAutoApply, initialTaskId, open, route, routeResearchObjectId, task, taskRestoreReady, t, tc, viewerId, firstImageViewVersion, selectedImageViewVersion, draftStorage]);
 
   useEffect(() => {
     if (!activeTask || !task || error) return;
@@ -779,7 +924,7 @@ function HermesAssistantDrawerContent({
 
   const submitGoal = async (explicitGoal?: string) => {
     const savesWritingDraft = Boolean(writingSaveGoal.current);
-    const requestedGoal = writingSaveGoal.current || explicitGoal || goal.trim();
+    const requestedGoal = writingSaveGoal.current || explicitGoal || (pendingPayload.current?.context.presentation?.selectedImageAssetId ? pendingPayload.current.goal : goal.trim());
     const normalized = route === 'research-object-edit' && routeResearchObjectId && !taskKey.current && !pendingPayload.current
       ? currentFirstImageGoal(requestedGoal) ?? requestedGoal : requestedGoal;
     writingSaveGoal.current = '';
@@ -833,7 +978,27 @@ function HermesAssistantDrawerContent({
     }
     const owner = currentOwner;
     const entryVersion = currentImageVersion.current;
+    const entrySelectedVersion = currentPresentationVersion.current;
     const imageRequest = route === 'research-object-edit' && Boolean(routeResearchObjectId) && isExplicitFirstImageRequest(normalized);
+    const clarification = !imageRequest && imageClarification.current?.owner === owner ? imageClarification.current : null;
+    const clarificationReply = clarification && normalized.startsWith(clarification.goal)
+      ? normalized.slice(clarification.goal.length).trim() || normalized : normalized;
+    const pinned = selectedResultOwner.current === owner && result?.needsMoreInformation ? result.selectedImageReference : undefined;
+    const pinIsCurrent = !!pinned && pinned.researchObjectId === routeResearchObjectId && pinned.versionId === entrySelectedVersion;
+    const targetContext = clarification?.context ?? (pinIsCurrent ? { ...(imageContext ?? { images: [{ assetId: pinned.assetId, label: tc('selectedImage.original') }] }),
+      actorId: viewerId, researchObjectId: pinned.researchObjectId, versionId: pinned.versionId, selectedImageAssetId: pinned.assetId } : imageContext);
+    const resolution = pendingPayload.current || imageRequest ? {} : buildGuidePresentationContext({ presentation: dashboardContext.presentation,
+      imageContext: targetContext, goal: clarificationReply, actorId: viewerId, mediaVisible: pinIsCurrent || clarification ? true : mediaVisible,
+      originalImageAssetId: selectedResultOwner.current === owner ? result?.selectedImageReference?.assetId : undefined });
+    if (resolution.question) {
+      if (resolution.question === 'scope') { setError(tc('selectedImage.scope')); return; }
+      if (clarification) { setError(tc('selectedImage.unresolved')); return; }
+      imageClarification.current = { owner, goal: normalized, ...(targetContext ? { context: structuredClone(targetContext) } : {}) };
+      setTurns(previous => [...previous, { id: crypto.randomUUID(), user: normalized, summary: tc(`selectedImage.${resolution.question}`) }].slice(-12));
+      setGoal(normalized); setSentGoal(''); setLocalMessage(''); setError(''); return;
+    }
+    const submissionGoal = clarification ? `${clarification.goal}\n用户补充 / User clarification: ${clarificationReply}` : normalized;
+    if (submissionGoal.length > 2000) { imageClarification.current = null; setGoal(submissionGoal); setError(tc('selectedImage.tooLong')); return; }
     if (task && result) setTurns((previous) => previous.some((turn) => turn.id === task.id) ? previous : [...previous, { id: task.id, user: sentGoal, summary: result.summary }].slice(-12));
     setSentGoal(normalized); followTranscript.current = true;
     setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion(''); offeredAction.current = null; setLocalMessage(''); setPublicUrl('');
@@ -843,6 +1008,40 @@ function HermesAssistantDrawerContent({
     setSubmitting(true);
     setTask(null);
     try {
+      const selectedScope = viewerId && routeResearchObjectId && entrySelectedVersion
+        ? { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: entrySelectedVersion } : null;
+      const savedSelected = selectedScope ? loadPendingSelectedImageSubmission(draftStorage, selectedScope) : null;
+      if (savedSelected?.taskId) {
+        const viewer = await getCurrentUser({ fresh: true });
+        if (ownerRef.current !== owner || viewer.userId !== viewerId || currentPresentationVersion.current !== entrySelectedVersion) throw new Error(tc('selectedImage.scopeChanged'));
+        const { task: original } = await getAgentTask('', savedSelected.taskId);
+        if (ownerRef.current !== owner || currentPresentationVersion.current !== entrySelectedVersion) return;
+        if (!selectedImageTaskMatchesSubmission(original, savedSelected)) throw new Error(tc('selectedImage.scopeChanged'));
+        if (original.status === 'pending' || original.status === 'running') {
+          selectedResultOwner.current = owner; sessionId.current = savedSelected.sessionId; setSentGoal(savedSelected.payload.goal); setTask(original); return;
+        }
+        const resumeSelected = /^(?:继续|继续处理|重试|恢复|retry|resume|continue)$/iu.test(command);
+        if (original.status === 'failed') {
+          selectedResultOwner.current = owner; sessionId.current = savedSelected.sessionId; setSentGoal(savedSelected.payload.goal);
+          if (resumeSelected && original.canRetry) {
+            const viewer = await getCurrentUser({ fresh: true });
+            if (ownerRef.current !== owner || viewer.userId !== viewerId || currentPresentationVersion.current !== entrySelectedVersion) throw new Error(tc('selectedImage.scopeChanged'));
+            const retried = await retryAgentTask(original.id);
+            if (ownerRef.current !== owner || currentPresentationVersion.current !== entrySelectedVersion) return;
+            if (!selectedImageTaskMatchesSubmission(retried.task, savedSelected)) throw new Error(tc('selectedImage.scopeChanged'));
+            setTask(retried.task); setGoal(''); return;
+          }
+          setTask(original); setError(tc('selectedImage.recoveryBlocked')); return;
+        }
+        if (resumeSelected || normalized === savedSelected.payload.goal) {
+          selectedResultOwner.current = owner; sessionId.current = savedSelected.sessionId; setSentGoal(savedSelected.payload.goal); setTask(original); setGoal(''); return;
+        }
+        if (!clearPendingSelectedImageSubmission(draftStorage, selectedScope!, { key: savedSelected.key, taskId: savedSelected.taskId })) throw new Error(tc('selectedImage.storageError'));
+      } else if (savedSelected && !pendingPayload.current) {
+        selectedResultOwner.current = owner; sessionId.current = savedSelected.sessionId; taskKey.current = savedSelected.key; pendingPayload.current = savedSelected.payload;
+        setGoal(savedSelected.payload.goal); setSentGoal(savedSelected.payload.goal);
+        if (normalized !== savedSelected.payload.goal) throw new Error(tc('selectedImage.uncertain'));
+      }
       if (imageRequest && viewerId && routeResearchObjectId && entryVersion && !pendingPayload.current) {
         const saved = loadPendingFirstImageSubmission(draftStorage, { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: entryVersion });
         if (saved?.taskId) {
@@ -862,7 +1061,7 @@ function HermesAssistantDrawerContent({
           setGoal(saved.payload.goal); setSentGoal(saved.payload.goal); throw new Error(tc('firstImage.uncertain'));
         }
       }
-      const routed = await createDrawerLiteratureIntent({
+      const routed = resolution.presentation?.selectedImageAssetId || pendingPayload.current?.context.presentation?.selectedImageAssetId ? null : await createDrawerLiteratureIntent({
         createIdempotencyKey: () => crypto.randomUUID(),
         goal: normalized,
         routeResearchObjectId: route === 'research-object-edit' ? routeResearchObjectId ?? null : null,
@@ -873,6 +1072,10 @@ function HermesAssistantDrawerContent({
         return;
       }
       if (imageRequest && currentImageVersion.current !== entryVersion) throw new Error(tc('firstImage.scopeChanged'));
+      if (resolution.presentation?.selectedImageAssetId || pendingPayload.current?.context.presentation?.selectedImageAssetId) {
+        const viewer = await getCurrentUser({ fresh: true });
+        if (ownerRef.current !== owner || viewer.userId !== viewerId || currentPresentationVersion.current !== entrySelectedVersion) throw new Error(tc('selectedImage.scopeChanged'));
+      }
       const guideSessionId = await ensureGuideSession(normalized);
       if (ownerRef.current !== owner) return;
       if (imageRequest && currentImageVersion.current !== entryVersion) throw new Error(tc('firstImage.scopeChanged'));
@@ -890,14 +1093,14 @@ function HermesAssistantDrawerContent({
       }
       const freshPayload = !pendingPayload.current;
       pendingPayload.current ??= {
-        goal: normalized, locale, route, target,
+        goal: submissionGoal, locale, route, target,
         ...(firstImageVersion ? { executionIntent: 'first-image' as const } : {}),
         context: {
           tasks: dashboardContext.tasks,
           researchObjects: dashboardContext.researchObjects,
           ...(firstImageVersion ? { presentation: { researchObjectId: routeResearchObjectId!, versionId: firstImageVersion } }
-            : dashboardContext.presentation ? { presentation: dashboardContext.presentation } : {}),
-          ...(!firstImageVersion && dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
+            : resolution.presentation ? { presentation: resolution.presentation } : {}),
+          ...(!firstImageVersion && !resolution.presentation?.selectedImageAssetId && dashboardContext.editorDraft ? { editorDraft: dashboardContext.editorDraft } : {}),
           ...(dashboardContext.writingSource ? { writingSource: dashboardContext.writingSource } : {}),
           ...(route === 'research-object-edit' && (dashboardContext.researchRunSource ?? dashboardContext.writingSource) ? {
             researchRunSource: dashboardContext.researchRunSource ?? dashboardContext.writingSource,
@@ -909,6 +1112,11 @@ function HermesAssistantDrawerContent({
           } } : {}),
         },
       };
+      if (pendingPayload.current.context.presentation?.selectedImageAssetId) {
+        pendingPayload.current = structuredClone(pendingPayload.current);
+        imageClarification.current = null; selectedResultOwner.current = owner;
+        setGoal(pendingPayload.current.goal);
+      }
       if (freshPayload) pendingRepresentation.current = editorRepresentation
         ? { owner, payload: pendingPayload.current, core: structuredClone(editorRepresentation) } : undefined;
       submittedDraft.current = pendingPayload.current.context.editorDraft;
@@ -927,11 +1135,24 @@ function HermesAssistantDrawerContent({
       if (imageScope) { goalTouched.current = true; setGoal(submission.payload.goal); }
       if (imageScope && !savePendingFirstImageSubmission(draftStorage, imageScope,
         { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload })) throw new Error(tc('firstImage.storageError'));
+      const selectedSubmissionScope = submission.payload.context.presentation?.selectedImageAssetId && viewerId && routeResearchObjectId
+        ? { userId: viewerId, researchObjectId: routeResearchObjectId, versionId: submission.payload.context.presentation.versionId! } : null;
+      if (selectedSubmissionScope) {
+        const viewer = await getCurrentUser({ fresh: true });
+        if (ownerRef.current !== owner || viewer.userId !== viewerId || currentPresentationVersion.current !== selectedSubmissionScope.versionId) throw new Error(tc('selectedImage.scopeChanged'));
+        if (!savePendingSelectedImageSubmission(draftStorage, selectedSubmissionScope,
+          { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload })) throw new Error(tc('selectedImage.storageError'));
+      }
       const response = await submitWorkspaceGuideTask(submission);
       if (ownerRef.current !== owner) return;
       if (imageScope && !savePendingFirstImageSubmission(draftStorage, imageScope,
         { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload, taskId: response.task.id }))
         throw new Error(tc('firstImage.storageError'));
+      if (selectedSubmissionScope) {
+        const known = { sessionId: submission.sessionId, key: submission.idempotencyKey, payload: submission.payload, taskId: response.task.id };
+        if (!savePendingSelectedImageSubmission(draftStorage, selectedSubmissionScope, known)) throw new Error(tc('selectedImage.storageError'));
+        if (!selectedImageTaskMatchesSubmission(response.task, known) || currentPresentationVersion.current !== selectedSubmissionScope.versionId) throw new Error(tc('selectedImage.scopeChanged'));
+      }
       if (!imageVersionIsCurrent()) return;
       const localCore = readLocalEditorRepresentation(pendingRepresentation.current, owner, { payload: submission.payload });
       submittedRepresentation.current = localCore && pendingRepresentation.current
@@ -1037,11 +1258,24 @@ function HermesAssistantDrawerContent({
           {publicationVersion && routeResearchObjectId && <ResearchPublicationPanel key={`${routeResearchObjectId}:${publicationVersion}`} researchObjectId={routeResearchObjectId} selectedVersionId={publicationVersion} embedded conversation onConfirmationChange={registerAction} beforePublish={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onPublished={(url) => { setPublicUrl(url); setLocalMessage(tc('published')); }} />}
           {mediaReviewVersion && routeResearchObjectId && <HermesMediaReview key={`${routeResearchObjectId}:${mediaReviewVersion}`} researchObjectId={routeResearchObjectId} versionId={mediaReviewVersion} onConfirmationChange={registerAction} beforeReview={() => { if (!actionScopeIsCurrent()) throw new Error(tc('draftChanged')); }} onReviewed={() => window.dispatchEvent(new CustomEvent('hermes-media-updated', { detail: { researchObjectId: routeResearchObjectId, versionId: mediaReviewVersion } }))} />}
           {route === 'research-object-edit' && routeResearchObjectId && viewerId && firstImageViewVersion
+            && !task?.result?.selectedImageReference
             && task?.researchObjectId === routeResearchObjectId && (result?.firstImageRun || !result)
             && (!result?.firstImageRun || result.firstImageRun.versionId === firstImageViewVersion) && <HermesFirstImageResult
               key={`${currentOwner}:${firstImageViewVersion}:${task.id}`} actorId={viewerId} researchObjectId={routeResearchObjectId}
               versionId={firstImageViewVersion} guideTaskId={task.id} runId={result?.firstImageRun?.runId}
-              guidePending={task.status === 'pending' || task.status === 'running'} />}
+              guidePending={task.status === 'pending' || task.status === 'running'} onImageReady={ready => {
+                if (ownerRef.current !== currentOwner || currentTaskId.current !== ready.guideTaskId || ready.actorId !== viewerId
+                  || ready.researchObjectId !== routeResearchObjectId || ready.versionId !== currentImageVersion.current) return;
+                onImageReady?.(ready);
+              }} />}
+          {selectedResult?.selectedImageReference && <div className="hermes-message hermes-message-assistant" data-hermes-source-image={selectedResult.selectedImageReference.assetId}>
+            <Link href={presentationAssetContentUrl(selectedResult.selectedImageReference.researchObjectId, selectedResult.selectedImageReference.versionId, selectedResult.selectedImageReference.assetId)} target="_blank" rel="noreferrer">{tc('selectedImage.original')}</Link>
+            {selectedResult.selectedImageDraft && <details><summary>{tc('selectedImage.proposal')}</summary>
+              <ScientificText as="p" hideSourceMarkers>{selectedResult.selectedImageDraft.document.scenes[0]!.illustration!.message}</ScientificText>
+              <ScientificText as="p" hideSourceMarkers>{selectedResult.selectedImageDraft.document.scenes[0]!.illustration!.composition}</ScientificText>
+              <ScientificText as="p" hideSourceMarkers>{selectedResult.selectedImageDraft.document.scenes[0]!.illustration!.treatment}</ScientificText>
+            </details>}
+          </div>}
           {localMessage && <p className="hermes-message hermes-message-assistant" role="status">{localMessage}</p>}
           {publicUrl && <Link className="hermes-conversation-link" href={publicUrl}>{tw('openPublic')} →</Link>}
           {literatureIntent && <div className="hermes-conversation-acquisition">
@@ -1054,6 +1288,9 @@ function HermesAssistantDrawerContent({
         </div>
 
         <form className="hermes-conversation-composer" onSubmit={event => { event.preventDefault(); void submitGoal(); }} ref={composer}>
+          {previewPresentation?.selectedImageAssetId && previewPresentation.versionId && <p className="hermes-conversation-status" role="status" data-hermes-image-reference={previewPresentation.selectedImageAssetId}>
+            {tc('selectedImage.target')}{' '}<Link href={presentationAssetContentUrl(previewPresentation.researchObjectId, previewPresentation.versionId, previewPresentation.selectedImageAssetId)} target="_blank" rel="noreferrer"><ScientificText as="span" hideSourceMarkers>{previewImage?.label ?? tc('selectedImage.original')}</ScientificText></Link>
+          </p>}
           <label className="sr-only" htmlFor="hermes-guide-goal">{tc('inputLabel')}</label>
           <textarea id="hermes-guide-goal" rows={2} maxLength={2000}
             disabled={busy || actionBusy || Boolean(pendingPayload.current)}

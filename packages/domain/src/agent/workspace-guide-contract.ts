@@ -1,4 +1,47 @@
 import type { SourceLocator } from '../research-intelligence/types';
+import type { StoryboardDocument } from '../assets/storyboard';
+import type { SelectedImageBinding } from '../assets/scene-image';
+
+export interface WorkspaceSelectedImageDraft {
+  status: 'private-proposal';
+  source: Pick<SelectedImageBinding, 'researchObjectId' | 'versionId' | 'assetId' | 'contentHash' | 'storyboardAssetId' | 'parentContentHash' | 'sceneIndex'> & { sourceClaimIds: string[] };
+  document: StoryboardDocument;
+}
+export function workspaceSelectedImageDraftSource(binding: SelectedImageBinding): WorkspaceSelectedImageDraft['source'] {
+  return { researchObjectId: binding.researchObjectId, versionId: binding.versionId, assetId: binding.assetId, contentHash: binding.contentHash,
+    storyboardAssetId: binding.storyboardAssetId, parentContentHash: binding.parentContentHash, sceneIndex: binding.sceneIndex, sourceClaimIds: [...binding.sceneSourceClaimIds] };
+}
+export function readWorkspaceSelectedImageDraft(value: unknown): WorkspaceSelectedImageDraft {
+  const draft = value as Record<string, unknown> | null;
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft) || draft.status !== 'private-proposal'
+    || !hasOnlyKeys(draft, ['status', 'source', 'document'])) throw new Error('Invalid private selected-image proposal');
+  const source = readWorkspaceSelectedImageReference(draft.source);
+  // Browser-safe projection reader. Scientific materialization and the complete
+  // storyboard parser remain on the server; importing them here pulls Node/S3 into the client.
+  const document = draft.document as Record<string, unknown> | null;
+  const scene = Array.isArray(document?.scenes) && document.scenes.length === 1 ? document.scenes[0] as Record<string, unknown> : undefined;
+  const illustration = scene?.illustration as Record<string, unknown> | undefined;
+  if (!document || typeof document !== 'object' || Array.isArray(document) || document.schemaVersion !== 1 && document.schemaVersion !== 2
+    || !shortString(document.title, 500) || !scene || typeof scene !== 'object' || !shortString(scene.title, 500)
+    || !Array.isArray(scene.sourceClaimIds) || !scene.sourceClaimIds.length || !scene.sourceClaimIds.every(id => typeof id === 'string' && source.sourceClaimIds.includes(id))
+    || !illustration || typeof illustration !== 'object' || Array.isArray(illustration) || illustration.schemaVersion !== 1 && illustration.schemaVersion !== 2
+    || typeof illustration.message !== 'string' || !illustration.message.trim()) throw new Error('Selected-image proposal requires one scientific illustration');
+  return { status: 'private-proposal', source, document: document as unknown as StoryboardDocument };
+}
+export function readWorkspaceSelectedImageReference(value: unknown): WorkspaceSelectedImageDraft['source'] {
+  const source = value as Record<string, unknown> | null;
+  if (!source || typeof source !== 'object' || Array.isArray(source)
+    || Object.keys(source).length !== 8 || !hasOnlyKeys(source, ['researchObjectId', 'versionId', 'assetId', 'contentHash', 'storyboardAssetId', 'parentContentHash', 'sceneIndex', 'sourceClaimIds'])
+    || !['researchObjectId', 'versionId'].every(key => shortString(source[key], 100))
+    || !uuid(source.assetId) || !uuid(source.storyboardAssetId)
+    || ![source.contentHash, source.parentContentHash].every(hash => typeof hash === 'string' && /^[a-f0-9]{64}$/u.test(hash))
+    || !Number.isSafeInteger(source.sceneIndex) || Number(source.sceneIndex) < 0
+    || !Array.isArray(source.sourceClaimIds) || !source.sourceClaimIds.length
+    || !source.sourceClaimIds.every(id => shortString(id, 100)) || new Set(source.sourceClaimIds).size !== source.sourceClaimIds.length) {
+    throw new Error('Invalid selected-image reference');
+  }
+  return structuredClone(source) as unknown as WorkspaceSelectedImageDraft['source'];
+}
 
 export interface WorkspaceGuidePayload extends Record<string, unknown> {
   goal: string;
@@ -10,7 +53,7 @@ export interface WorkspaceGuidePayload extends Record<string, unknown> {
   context: {
     tasks: Array<{ id: string; researchObjectId: string; state: string }>;
     researchObjects: Array<{ id: string; title: string; status: string }>;
-    presentation?: { researchObjectId: string; versionId?: string };
+    presentation?: { researchObjectId: string; versionId?: string; selectedImageAssetId?: string };
     editorDraft?: WorkspaceEditorDraft;
     writingDraft?: WorkspaceWritingDraftInput;
     writingSource?: { ingestionTaskId: string };
@@ -190,4 +233,24 @@ export function parseWorkspaceGuidePayload(value: unknown): WorkspaceGuidePayloa
       ...(researchRunSource ? { researchRunSource } : {}),
     },
   };
+}
+
+/** Stored-reader stage only. The live HTTP writer retains the legacy strict parser above. */
+export function readWorkspaceGuidePayloadWithSelectedImage(value: unknown): WorkspaceGuidePayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return parseWorkspaceGuidePayload(value);
+  const payload = value as Record<string, unknown>;
+  const context = payload.context;
+  if (!context || typeof context !== 'object' || Array.isArray(context)) return parseWorkspaceGuidePayload(value);
+  const presentation = (context as Record<string, unknown>).presentation;
+  if (!presentation || typeof presentation !== 'object' || Array.isArray(presentation)
+    || !Object.hasOwn(presentation, 'selectedImageAssetId')) return parseWorkspaceGuidePayload(value);
+  const candidate = presentation as Record<string, unknown>;
+  if (!hasOnlyKeys(candidate, ['researchObjectId', 'versionId', 'selectedImageAssetId'])
+    || !uuid(candidate.selectedImageAssetId) || !shortString(candidate.researchObjectId, 100)
+    || !shortString(candidate.versionId, 100) || payload.route !== 'research-object-edit'
+    || payload.executionIntent !== undefined) throw new Error('Invalid selected-image guide scope');
+  const parsed = parseWorkspaceGuidePayload({ ...payload, context: { ...context,
+    presentation: { researchObjectId: candidate.researchObjectId, versionId: candidate.versionId } } });
+  return { ...parsed, context: { ...parsed.context, presentation: {
+    ...parsed.context.presentation!, selectedImageAssetId: candidate.selectedImageAssetId } } };
 }

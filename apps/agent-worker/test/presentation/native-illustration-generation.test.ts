@@ -2,14 +2,16 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
-import { createAgentSession, submitAgentTask, markTaskProgress } from '../../../../packages/domain/src/agent/agent';
+import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, getAgentTask, listAgentTasks, retryAgentTask } from '../../../../packages/domain/src/agent/agent';
 import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration, recoverCompletedHermesSceneImageResults } from '../../../../packages/domain/src/agent/research-run';
-import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint } from '@openscience/domain';
+import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint, requireSceneImageParent } from '@openscience/domain';
+import { workspaceGuideHandler } from '../../src/workspace-guide';
 import { AiGateway, AnthropicCompatProvider } from '@openscience/ai-gateway';
 import { createPresentationGenerationHandler, requireIllustrationReviewSubmission } from '../../src/presentation/handler';
-import { createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../../src/index';
+import { createHandlers, createPollOnce, recoverProcessingQueue, type WorkerDeps } from '../../src/index';
 import * as nativeHost from '../../src/native-agent/host-task';
 import * as scenePlanning from '../../src/presentation/scene-image';
+import * as selectedImageSource from '../../../../packages/domain/src/assets/scene-image';
 import { SynclipVideoTimingError } from '../../src/presentation/synclip-video-spool';
 import type { runHostedNativeTask } from '../../src/native-agent/host-task';
 
@@ -35,6 +37,10 @@ vi.mock('../../src/native-agent/host-task', () => ({ runHostedNativeTask: async 
       await input.authorize();
       const result = await input.paper.call(tool.function.name, JSON.parse(tool.function.arguments), sequence++, tool.id);
       messages.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(result) });
+      if (tool.function.name === 'paper_image_view') {
+        const images = await input.paper.images!(JSON.parse(tool.function.arguments), result);
+        messages.push({ role: 'user', content: images.content });
+      }
     }
   }
   throw new Error('Fixture did not finish');
@@ -152,9 +158,263 @@ async function fixture(automaticRun = false, nativeVideo = false) {
   const task = () => ({ id: owner.id, payload, executionAttempt: owner.executionAttempt, retryCount: 0 });
   const resume = vi.spyOn(gateway, 'resumeImageFromCompletedResult');
   const canResume = vi.spyOn(gateway, 'canResumeImageFromCompletedResult');
-  return { deps, db, owner, task, handler, fetcher, oldPlan, oldReview, generate, resume, canResume, submit, putObject,
+  return { deps, db, owner, task, handler, fetcher, gateway, oldPlan, oldReview, generate, resume, canResume, submit, putObject,
     useLocalVideoScene: (index: number) => { localVideoScene = index; }, transactionError: () => transactionError };
 }
+
+async function selectedGuideFixture() {
+  const f = await fixture();
+  const plan = await f.handler(f.deps as never, f.task() as never);
+  await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result: plan });
+  f.db.presentationAssets[0].status = 'approved';
+  const sceneImage = { storyboardAssetId: f.owner.id, sceneIndex: 0 };
+  const parent = await requireSceneImageParent(f.deps.prisma, { researchObjectId: id(3), versionId: id(4), sourceClaimIds: [id(5)], sceneImage });
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
+  const image = { id: id(50), researchObjectId: id(3), versionId: id(4), kind: 'image', status: 'draft', deletedAt: null,
+    contentHash: sha(bytes), objectKey: 'private/selected.png', provenance: { subtype: 'storyboard_scene_image', contentType: 'image/png', sceneImage, parentIdentity: parent!.identity } };
+  await f.putObject(image.objectKey, bytes); f.db.presentationAssets.push(image);
+  f.db.presentationAssetClaims.push({ presentationAssetId: image.id, claimId: id(5) });
+  const session = await createAgentSession(f.deps as never, { userId: id(1), researchObjectId: id(3), kind: 'workspace.guide' });
+  const payload = { goal: 'Clarify the left connecting line', locale: 'en', route: 'research-object-edit', target: null,
+    context: { tasks: [], researchObjects: [], presentation: { researchObjectId: id(3), versionId: id(4), selectedImageAssetId: image.id } } };
+  const task = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: session.id, kind: 'workspace.guide', payload, idempotencyKey: 'selected-guide', dispatch: false });
+  const claimed = await claimAgentTask(f.deps as never, task.id);
+  f.fetcher.mockClear();
+  const selectedResponses = [responses[0], ['selected-view', 'paper_image_view', {}], ...responses.slice(1)] as const;
+  f.fetcher.mockImplementation(async () => {
+    const step = selectedResponses[f.fetcher.mock.calls.length - 1];
+    return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+      : [{ type: 'text', text: '{"reviewToolCallId":"review"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
+  });
+  const run = (executionAttempt = claimed!.executionAttempt) => workspaceGuideHandler(f.gateway, f.deps as never, { id: task.id, payload, executionAttempt },
+    { gateway: f.gateway, inboxRoot: '/unused-test-socket', renderPages: async () => [] });
+  const runThroughFactory = () => createHandlers(f.gateway, { nativeAgentInboxRoot: '/unused-test-socket',
+    parserCascade: { renderPages: async () => ({ pages: [] }) } as never })['workspace.guide']!(f.deps as never,
+    { id: task.id, payload, executionAttempt: claimed!.executionAttempt, retryCount: 0 });
+  return { ...f, image, bytes, guide: task, run, runThroughFactory };
+}
+
+describe('selected-image Native guide', () => {
+  it('uses the actual existing Worker factory Native configuration', async () => {
+    const f = await selectedGuideFixture();
+    expect(await f.runThroughFactory()).toMatchObject({ selectedImageDraft: { source: { assetId: f.image.id } } });
+    expect(f.fetcher).toHaveBeenCalledTimes(6);
+  });
+  it('reads exact saved PNG and original brief through real Native history and returns a private proposal, not an image', async () => {
+    const f = await selectedGuideFixture();
+    const result = await f.run();
+    expect(result.selectedImageDraft).toMatchObject({ status: 'private-proposal', source: { assetId: f.image.id, contentHash: f.image.contentHash },
+      document: { scenes: [{ illustration: { message: 'A supported connection' } }] } });
+    const owner = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+    expect(readNativeAgentExecution(owner.result)?.checkpoint?.state).toBe('completed');
+    expect(owner.result.selectedImageContext.assetId).toBe(f.image.id);
+    expect(f.fetcher).toHaveBeenCalledTimes(6);
+    expect(JSON.stringify(f.fetcher.mock.calls)).toContain(f.bytes.toString('base64'));
+    expect(f.db.presentationAssets).toHaveLength(2);
+    expect(f.generate).not.toHaveBeenCalled(); expect(f.oldPlan).not.toHaveBeenCalled();
+    const beforeAdoption = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    expect(beforeAdoption.result?.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(beforeAdoption.result).toHaveProperty('selectedImageReference.assetId', f.image.id);
+    expect(beforeAdoption.result).not.toHaveProperty('selectedImageContext');
+    expect(beforeAdoption.result).not.toHaveProperty('selectedImageReply');
+    await markTaskProgress(f.deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    expect(owner.status).toBe('succeeded');
+    const adopted = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    expect(adopted.result?.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(adopted.result).not.toHaveProperty('selectedImageContext');
+    expect(adopted.result).not.toHaveProperty('selectedImageReply');
+  });
+  it.each(['deleted', 'content', 'bytes', 'evidence', 'viewer'])('stops changed %s before any new model call', async change => {
+    const f = await selectedGuideFixture();
+    if (change === 'deleted') f.image.deletedAt = new Date() as never;
+    if (change === 'content') f.image.contentHash = 'f'.repeat(64);
+    if (change === 'bytes') await f.putObject(f.image.objectKey, Buffer.from('substituted bytes'));
+    if (change === 'evidence') f.db.evidenceRecords[0].exactQuote = 'Another source';
+    if (change === 'viewer') f.db.memberships[0].role = 'viewer';
+    await expect(f.run()).rejects.toThrow();
+    expect(f.fetcher).not.toHaveBeenCalled();
+    expect(f.db.presentationAssets).toHaveLength(2); expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['question', 'explanation'] as const)('returns a bounded %s only after real image and original context reads', async kind => {
+    const f = await selectedGuideFixture();
+    const text = kind === 'question' ? 'Which of the two left-hand connecting lines should change?' : 'The connecting line represents the source-supported relation between the two regions.';
+    const steps = [responses[0], ['selected-view', 'paper_image_view', {}], ['reply', 'paper_selected_image_reply', { kind, text }]] as const;
+    f.fetcher.mockImplementation(async () => {
+      const step = steps[f.fetcher.mock.calls.length - 1];
+      return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+        : [{ type: 'text', text: '{"replyToolCallId":"reply"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
+    });
+    const result = await f.run();
+    expect(result).toMatchObject({ summary: text, needsMoreInformation: kind === 'question', nextSteps: [] });
+    expect(result.selectedImageDraft).toBeUndefined();
+    await markTaskProgress(f.deps as never, { taskId: f.guide.id, expectedExecutionAttempt: 1, status: 'succeeded', result });
+    const publicTask = await getAgentTask(f.deps as never, { userId: id(1), taskId: f.guide.id });
+    expect(publicTask.result).toMatchObject({ summary: text, selectedImageReference: { assetId: f.image.id } });
+    expect(publicTask.result).not.toHaveProperty('selectedImageContext');
+    expect(publicTask.result).not.toHaveProperty('selectedImageReply');
+    expect(f.fetcher).toHaveBeenCalledTimes(4); expect(f.db.presentationAssets).toHaveLength(2);
+  });
+  it('refuses a text-only plan that never actually views the selected PNG', async () => {
+    const f = await selectedGuideFixture();
+    f.fetcher.mockImplementation(async () => {
+      const step = responses[f.fetcher.mock.calls.length - 1];
+      return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+        : [{ type: 'text', text: '{"reviewToolCallId":"review"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
+    });
+    await expect(f.run()).rejects.toThrow();
+    const owner = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+    expect(owner.result.selectedImageDraft).toBeUndefined();
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it('allows Native to re-inspect the same exact saved image without losing a valid explanation', async () => {
+    const f = await selectedGuideFixture();
+    const text = 'The second look confirms that the left-hand line is the connection described by the original brief.';
+    const steps = [responses[0], ['selected-view-1', 'paper_image_view', {}], ['selected-view-2', 'paper_image_view', {}],
+      ['reply', 'paper_selected_image_reply', { kind: 'explanation', text }]] as const;
+    f.fetcher.mockImplementation(async () => {
+      const step = steps[f.fetcher.mock.calls.length - 1];
+      return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+        : [{ type: 'text', text: '{"replyToolCallId":"reply"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
+    });
+    expect(await f.run()).toMatchObject({ summary: text, needsMoreInformation: false });
+    expect(f.fetcher).toHaveBeenCalledTimes(5); expect(f.db.presentationAssets).toHaveLength(2);
+  });
+  it.each([1, 2])('refuses a substituted image in OS view %i even when the selected view receipt is correct', async viewNumber => {
+    const f = await selectedGuideFixture();
+    if (viewNumber === 2) {
+      const steps = [responses[0], ['selected-view-1', 'paper_image_view', {}], ['selected-view-2', 'paper_image_view', {}],
+        ['reply', 'paper_selected_image_reply', { kind: 'explanation', text: 'A source-grounded connection.' }]] as const;
+      f.fetcher.mockImplementation(async () => {
+        const step = steps[f.fetcher.mock.calls.length - 1];
+        return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
+          : [{ type: 'text', text: '{"replyToolCallId":"reply"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
+      });
+    }
+    const original = nativeHost.runHostedNativeTask;
+    const replacement = Buffer.from(f.bytes); replacement[replacement.length - 1] ^= 1;
+    let views = 0;
+    const spy = vi.spyOn(nativeHost, 'runHostedNativeTask').mockImplementationOnce(input => original({ ...input, paper: { ...input.paper,
+      images: async (args, receipt) => {
+        const result = await input.paper.images!(args, receipt);
+        if (++views !== viewNumber) return result;
+        return { content: result.content.map(block => block.type === 'image_url'
+          ? { ...block, image_url: { url: `data:image/png;base64,${replacement.toString('base64')}` } } : block) };
+      } } }));
+    try { await expect(f.run()).rejects.toThrow(); } finally { spy.mockRestore(); }
+    const owner = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+    expect(owner.result.selectedImageDraft).toBeUndefined();
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it('retains the paid final history across revoked authority and resumes that same task without another model call', async () => {
+    const f = await selectedGuideFixture(); const original = f.fetcher.getMockImplementation()!;
+    f.fetcher.mockImplementation(async (...args) => {
+      const response = await original(...args);
+      if (f.fetcher.mock.calls.length === 6) f.db.memberships[0].role = 'viewer';
+      return response;
+    });
+    const failure = await f.run().catch(error => error);
+    expect(failure).toBeInstanceOf(Error);
+    const owner = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+    expect(readNativeAgentExecution(owner.result)?.checkpoint?.state).toBe('completed');
+    expect(owner.result.selectedImageDraft).toBeUndefined();
+    await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: 1, status: 'failed', error: failure.message });
+    const saved = structuredClone({ payload: owner.payload, sessionId: owner.sessionId, idempotencyKey: owner.idempotencyKey, result: owner.result, ledger: f.db.usageLedger });
+    const root = f.deps.prisma, realSource = selectedImageSource.requireSelectedImageSource;
+    const binder = vi.spyOn(selectedImageSource, 'requireSelectedImageSource').mockImplementation((...args) => realSource(...args));
+    type Tx = Parameters<typeof realSource>[0];
+    const transactionClients: Tx[] = [], transact = root.$transaction.bind(root);
+    let insideTransaction = false, reads = 0;
+    const transactions = vi.spyOn(root, '$transaction').mockImplementation((async (work: (tx: Tx) => Promise<unknown>,
+      options?: Parameters<typeof root.$transaction>[1]) => transact(async tx => {
+        transactionClients.push(tx); insideTransaction = true;
+        try { return await work(tx); } finally { insideTransaction = false; }
+      }, options)) as never);
+    Object.defineProperty(f.deps, 'prisma', { configurable: true, get: () => {
+      reads += 1;
+      if (insideTransaction) throw new Error('Selected retry must use its explicit transaction');
+      return root;
+    } });
+    try {
+      expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(false);
+      expect(reads).toBe(2); expect(binder.mock.calls[0]![0]).toBe(root);
+      await expect(retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).rejects.toThrow();
+      expect(binder.mock.calls[1]![0]).toBe(transactionClients[0]);
+      f.db.memberships[0].role = 'author'; reads = 0;
+      expect((await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).canRetry).toBe(true);
+      expect(reads).toBe(2); expect(binder.mock.calls[2]![0]).toBe(root); reads = 0;
+      expect((await listAgentTasks(f.deps as never, { userId: id(1) })).find(task => task.id === owner.id)?.canRetry).toBe(true);
+      expect(reads).toBe(2); expect(binder.mock.calls[3]![0]).toBe(root);
+      await retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+      expect(binder.mock.calls[4]![0]).toBe(transactionClients[1]);
+      expect(transactionClients).toHaveLength(2);
+      expect(transactionClients.every(tx => tx !== root)).toBe(true);
+      expect(transactions.mock.calls.map(call => call[1])).toEqual([
+        { isolationLevel: 'Serializable' }, { isolationLevel: 'Serializable' },
+      ]);
+      expect(binder.mock.calls.map(call => call[1])).toEqual(Array.from({ length: 5 }, () => ({
+        userId: id(1), researchObjectId: id(3), versionId: id(4), assetId: f.image.id,
+      })));
+    } finally {
+      binder.mockRestore(); transactions.mockRestore();
+      Object.defineProperty(f.deps, 'prisma', { configurable: true, writable: true, value: root });
+    }
+    const claimed = await claimAgentTask(f.deps as never, owner.id);
+    expect(claimed!.executionAttempt).toBe(2);
+    const resumed = f.db.agentTasks.find(row => row.id === owner.id)!;
+    expect({ payload: resumed.payload, sessionId: resumed.sessionId, idempotencyKey: resumed.idempotencyKey, result: resumed.result, ledger: f.db.usageLedger }).toEqual(saved);
+    const result = await f.run(claimed!.executionAttempt);
+    expect(result).toHaveProperty('selectedImageDraft');
+    await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: claimed!.executionAttempt, status: 'succeeded', result });
+    const publicTask = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+    expect(publicTask.status).toBe('succeeded');
+    expect(publicTask.result?.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(publicTask.result).toHaveProperty('selectedImageReference.assetId', f.image.id);
+    expect(publicTask.result).not.toHaveProperty('selectedImageContext');
+    expect(publicTask.result).not.toHaveProperty('selectedImageReply');
+    const completed = f.db.agentTasks.find(row => row.id === owner.id)!;
+    expect(completed.result.nativeAgentExecution).toEqual(saved.result.nativeAgentExecution);
+    expect(completed.result.selectedImageContext).toEqual(saved.result.selectedImageContext);
+    expect(f.db.usageLedger).toEqual(saved.ledger);
+    expect(f.fetcher).toHaveBeenCalledTimes(6);
+    expect(f.db.usageLedger.filter(row => Number(row.delta) === -1)).toHaveLength(2);
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['viewer', 'started', 'no-checkpoint', 'wrong-task', 'wrong-source', 'wrong-target', 'tools-final', 'source-changed', 'ordinary-guide', 'session', 'budget'])(
+    'denies paid selected retry with %s without changing the paid history or charging again', async change => {
+      const f = await selectedGuideFixture(); const original = f.fetcher.getMockImplementation()!;
+      f.fetcher.mockImplementation(async (...args) => {
+        const response = await original(...args);
+        if (f.fetcher.mock.calls.length === 6) f.db.memberships[0].role = 'viewer';
+        return response;
+      });
+      const failure = await f.run().catch(error => error); expect(failure).toBeInstanceOf(Error);
+      const owner = f.db.agentTasks.find(row => row.id === f.guide.id)!;
+      await markTaskProgress(f.deps as never, { taskId: owner.id, expectedExecutionAttempt: 1, status: 'failed', error: failure.message });
+      if (change !== 'viewer') f.db.memberships[0].role = 'author';
+      const cp = owner.result.nativeAgentExecution.checkpoint;
+      if (change === 'started') { cp.state = 'started'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls; }
+      if (change === 'no-checkpoint') delete owner.result.nativeAgentExecution.checkpoint;
+      if (change === 'wrong-task') cp.taskId = id(99);
+      if (change === 'wrong-source') cp.sourceMapHash = 'f'.repeat(64);
+      if (change === 'wrong-target') cp.target.model = 'Another model';
+      if (change === 'tools-final') cp.hasToolCalls = true;
+      if (change === 'source-changed') f.db.presentationAssets.find(row => row.id === f.image.id)!.contentHash = 'f'.repeat(64);
+      if (change === 'ordinary-guide') delete owner.payload.context.presentation.selectedImageAssetId;
+      if (change === 'session') f.db.agentSessions.find(row => row.id === owner.sessionId)!.kind = 'sdf.extract';
+      if (change === 'budget') owner.retryCount = 1;
+      const saved = structuredClone({ result: owner.result, payload: owner.payload, ledger: f.db.usageLedger });
+      const publicTask = await getAgentTask(f.deps as never, { userId: id(1), taskId: owner.id });
+      expect(publicTask.canRetry).toBe(false);
+      if (change === 'wrong-target') {
+        expect(publicTask.result).not.toHaveProperty('selectedImageReference');
+        expect(publicTask.result).not.toHaveProperty('selectedImageContext');
+        expect(publicTask.result).not.toHaveProperty('selectedImageReply');
+      }
+      await expect(retryAgentTask(f.deps as never, { userId: id(1), taskId: owner.id })).rejects.toThrow();
+      expect({ result: owner.result, payload: owner.payload, ledger: f.db.usageLedger }).toEqual(saved);
+      expect(f.fetcher).toHaveBeenCalledTimes(6); expect(f.generate).not.toHaveBeenCalled();
+    });
+});
 
 async function failedNativeImage() {
   const f = await fixture(true);
