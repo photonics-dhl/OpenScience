@@ -1531,6 +1531,15 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     const fn = (scope, name) => one(walk(scope, value => ts.isFunctionDeclaration(value) && value.name?.text === name), `FUNCTION_${name}_UNKNOWN`);
     const materializer = fn(illustration, 'createNativeIllustrationMaterializer');
     const live = fn(illustration, 'runNativeIllustrationTask'), replay = fn(illustration, 'replayNativeVideoPlan');
+    if (illustration.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'runNativeIllustrationTaskCore')) {
+      // Shared finite analysis uses this actual Program/checker/root, not a
+      // projected old Program or a successful collector authority/context.
+      const entry = finiteSelectedGuideIllustrationWitness(ts, { program, checker, root: sourceRoot });
+      // Do not erase the selected caller to make the old two-owner proof pass.
+      // Its output guard alone cannot exclude saved native-video tool families.
+      // Until that state/caller obligation closes, no materializer edge is granted.
+      fail('SELECTED_VIDEO_SAVED_STATE_UNPROVEN', entry.profile);
+    }
     const hostFactory = fn(host, 'runHostedNativeTask'), sessionFactory = fn(sessionFile, 'createNativeAgentSession');
     const storeFactory = fn(storeFile, 'createNativeTaskStore');
     const enclosing = node => {
@@ -7641,7 +7650,7 @@ function finiteSelectedGuideHandlerTerms(ts, context, rollbackContext) {
       'legacy guide branch absence before fourth argument is removed', 'complete remaining module runtime equality'] };
 }
 
-function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
+function finiteSelectedGuideIllustrationWitness(ts, context) {
   const fail = node => { throw { reason: 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', node }; };
   const need = (condition, node) => { if (!condition) fail(node); };
   const nodes = (scope, predicate, skipNested = false) => {
@@ -7654,7 +7663,11 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
   const one = (values, node) => { need(values.length === 1, node); return values[0]; };
   const source = (ctx, file) => { const value = ctx.program.getSourceFile(resolve(ctx.root, file)); need(value && !value.isDeclarationFile, value); return value; };
   const fn = (parsed, name) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), parsed);
-  const variable = (scope, name) => one(nodes(scope, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name), scope);
+  const variable = (scope, name) => {
+    const declaration = one(nodes(scope, node => ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name), scope);
+    need(ts.isVariableDeclarationList(declaration.parent) && declaration.parent.flags & ts.NodeFlags.Const
+      && declaration.parent.declarations.length === 1 && declaration.initializer, declaration); return declaration;
+  };
   const symbol = node => { let value = ts.isIdentifier(node) && ts.isShorthandPropertyAssignment(node.parent)
     ? context.checker.getShorthandAssignmentValueSymbol(node.parent) : context.checker.getSymbolAtLocation(node);
     if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
@@ -7662,14 +7675,19 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
   const key = node => ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : undefined;
   const member = (raw, base, name) => { const node = unwrap(raw); return node && ts.isPropertyAccessExpression(node)
     && node.name.text === name && ts.isIdentifier(unwrap(node.expression)) && symbol(unwrap(node.expression)) === base; };
-  const equal = (left, right) => JSON.stringify(context.canonical(left)) === JSON.stringify(rollbackContext.canonical(right));
+  const printer = ts.createPrinter({ removeComments: true });
+  const equalBody = (left, right) => printer.printNode(ts.EmitHint.Unspecified, left, left.getSourceFile())
+    === printer.printNode(ts.EmitHint.Unspecified, right, right.getSourceFile());
   const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
-  const current = source(context, file), previous = source(rollbackContext, file);
+  const current = source(context, file);
   const wrapper = fn(current, 'runNativeIllustrationTask'), core = fn(current, 'runNativeIllustrationTaskCore');
   const selected = fn(current, 'runNativeSelectedImageGuideTask'), replay = fn(current, 'replayNativeVideoPlan');
   const materializer = fn(current, 'createNativeIllustrationMaterializer'), profile = fn(current, 'nativeIllustrationToolProfile');
-  const oldRun = fn(previous, 'runNativeIllustrationTask'), oldProfile = fn(previous, 'nativeIllustrationToolProfile');
-  need(equal(profile, oldProfile), profile);
+  // These are actual declarations and checker symbols, never reconstructed nodes.
+  for (const declaration of [wrapper, selected, core, replay, materializer]) need(declaration.parameters.length === 1
+    && ts.isIdentifier(declaration.parameters[0].name) && declaration.parameters[0].name.text === 'input'
+    && !declaration.parameters[0].dotDotDotToken && !declaration.parameters[0].initializer
+    && !declaration.parameters[0].questionToken, declaration);
   const profileReturns = nodes(profile.body, ts.isReturnStatement, true);
   need(profileReturns.length && profileReturns.every(node => ts.isObjectLiteralExpression(node.expression)
     && node.expression.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
@@ -7694,7 +7712,7 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
     return result;
   }`, ts.ScriptTarget.ES2022, true);
   need(wrapper.parameters.length === 1 && ts.isIdentifier(wrapper.parameters[0].name) && wrapper.parameters[0].name.text === 'input'
-    && equal(wrapper.body, wrapperGrammar.statements[0].body), wrapper);
+    && equalBody(wrapper.body, wrapperGrammar.statements[0].body), wrapper);
   const handler = source(context, 'apps/agent-worker/src/presentation/handler.ts');
   for (const calls of [ordinaryCalls, replayCalls]) {
     need(calls.length === 1 && calls[0].getSourceFile() === handler, calls[0]);
@@ -7706,6 +7724,27 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
     || (call.pos > selected.pos && call.end < selected.end)), core);
   const wrapperCall = one(coreCalls.filter(call => call.pos > wrapper.pos && call.end < wrapper.end), wrapper);
   need(ts.isIdentifier(wrapperCall.arguments[0]) && symbol(wrapperCall.arguments[0]) === symbol(wrapper.parameters[0].name), wrapperCall);
+  // The second core caller is retained, with its real await/result boundary.
+  // Merely counting it would miss input effects or a substituted return value.
+  const selectedGrammar = ts.createSourceFile('selected-native-wrapper.ts', `async function selected(input: unknown) {
+    if (input.settings.output !== 'image' || input.settings.narrativeSceneLimit !== 1) stopped();
+    generatedImageReviewAttachment(input.selectedImageAttachment.bytes, input.selectedImage.binding.contentHash, input.selectedImage.binding.mimeType);
+    const result = await runNativeIllustrationTaskCore(input);
+    if (result.reply !== undefined) return { kind: 'reply' as const, reply: result.reply, promptHash: result.promptHash,
+      provider: result.provider!, model: result.model!, responseHash: result.responseHash! };
+    return { ...result, kind: 'proposal' as const };
+  }`, ts.ScriptTarget.ES2022, true);
+  need(equalBody(selected.body, selectedGrammar.statements[0].body), selected);
+  const selectedCoreCall = one(coreCalls.filter(call => call.pos > selected.pos && call.end < selected.end), selected);
+  need(ts.isIdentifier(selectedCoreCall.arguments[0]) && symbol(selectedCoreCall.arguments[0]) === symbol(selected.parameters[0].name), selectedCoreCall);
+  const selectedCalls = references(selected);
+  need(selectedCalls.length === 1 && selectedCalls[0].getSourceFile() === source(context, 'apps/agent-worker/src/workspace-guide.ts'), selected);
+  for (const call of [...ordinaryCalls, ...selectedCalls]) {
+    need(ts.isAwaitExpression(call.parent), call);
+    const object = unwrap(call.arguments[0]);
+    need(ts.isObjectLiteralExpression(object) && object.properties.every(property => (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property))
+      && key(property.name) && key(property.name) !== '__proto__'), object);
+  }
   const constructors = references(materializer);
   need(constructors.length === 2, materializer);
   const coreInput = symbol(core.parameters[0].name), replayInput = symbol(replay.parameters[0].name);
@@ -7746,12 +7785,10 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
   need(ts.isCallExpression(result.initializer) && member(result.initializer.expression, symbol(materializerVariable.name), 'finish'), result);
   const profileBinding = one(nodes(core, node => ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)
     && ts.isIdentifier(node.initializer) && symbol(node.initializer) === symbol(variable(core, 'profile').name)), core);
-  const sourceTools = variable(core, 'sourceTools'), originalBinding = one(nodes(oldRun, node => ts.isVariableDeclaration(node)
-    && ts.isObjectBindingPattern(node.name) && ts.isIdentifier(node.initializer) && node.initializer.text === 'profile'), oldRun);
+  const sourceTools = variable(core, 'sourceTools');
   need(ts.isConditionalExpression(sourceTools.initializer) && member(sourceTools.initializer.whenFalse, symbol(variable(core, 'profile').name), 'sourceTools'), sourceTools);
   const fieldNames = binding => binding.name.elements.map(element => { need(!element.dotDotDotToken && !element.initializer && !element.propertyName && ts.isIdentifier(element.name), element); return element.name.text; });
-  const originalFields = fieldNames(originalBinding), fields = fieldNames(profileBinding);
-  need(originalFields.filter(name => name !== 'sourceTools').join(',') === fields.join(','), profileBinding);
+  const fields = fieldNames(profileBinding);
   const inputs = new Set([coreInput, replayInput, symbol(materializer.parameters[0].name), symbol(wrapper.parameters[0].name)]);
   const falseValue = raw => {
     const node = unwrap(raw);
@@ -7762,6 +7799,23 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
   need(falseValue(sourceTools.initializer.condition), sourceTools);
   const paper = variable(core, 'paper');
   need(ts.isObjectLiteralExpression(paper.initializer), paper);
+  const dispatch = one(paper.initializer.properties.filter(node => ts.isPropertyAssignment(node) && key(node.name) === 'call'), paper);
+  need(ts.isArrowFunction(dispatch.initializer) && ts.isBlock(dispatch.initializer.body)
+    && dispatch.initializer.parameters.length === 4 && dispatch.initializer.parameters.every(parameter => ts.isIdentifier(parameter.name)
+      && !parameter.dotDotDotToken && !parameter.initializer), dispatch);
+  const dispatchParameters = dispatch.initializer.parameters.map(parameter => symbol(parameter.name));
+  const returnedDispatch = one(dispatch.initializer.body.statements.filter(ts.isReturnStatement), dispatch);
+  const dispatchValue = unwrap(returnedDispatch.expression);
+  need(ts.isConditionalExpression(dispatchValue), returnedDispatch);
+  const condition = unwrap(dispatchValue.condition);
+  need(ts.isCallExpression(condition) && member(condition.expression, dispatchParameters[0], 'startsWith')
+    && condition.arguments.length === 1 && ts.isStringLiteral(condition.arguments[0])
+    && condition.arguments[0].text === 'paper_illustration_', condition);
+  const delegatedCall = (raw, target, indices) => { const call = unwrap(raw); return ts.isCallExpression(call)
+    && member(call.expression, symbol(target.name), 'call') && call.arguments.length === indices.length
+    && call.arguments.every((arg, index) => ts.isIdentifier(unwrap(arg)) && symbol(unwrap(arg)) === dispatchParameters[indices[index]]); };
+  need(delegatedCall(dispatchValue.whenTrue, materializerVariable, [0, 1, 2, 3])
+    && delegatedCall(dispatchValue.whenFalse, variable(core, 'source'), [0, 1]), returnedDispatch);
   const images = one(paper.initializer.properties.filter(node => ts.isPropertyAssignment(node) && key(node.name) === 'images'), paper);
   need(ts.isArrowFunction(images.initializer) && images.initializer.parameters.length === 2 && ts.isBlock(images.initializer.body), images);
   const sourceVariable = variable(core, 'source');
@@ -7793,6 +7847,30 @@ function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
   need(ts.isCallExpression(delegated.expression) && member(delegated.expression.expression, symbol(sourceVariable.name), 'images')
     && delegated.expression.arguments.length === 2 && delegated.expression.arguments.every((arg, index) =>
       ts.isIdentifier(arg) && symbol(arg) === symbol(images.initializer.parameters[index].name)), delegated);
+  // Ordinary absence is a conditional view only. The selected entry remains a
+  // real caller: saved tool histories can select nativeVideo even for image output.
+  return { status: 'conditional', source: current, wrapper, selected, core, replay, profile, materializer,
+    ordinaryCalls, replayCalls, constructors, coreCalls, wrapperCall, selectedCoreCall, selectedCalls, handler, paper, images, sourceVariable,
+    profileBinding, sourceTools, fields, fieldNames, falseValue, wrapperGrammar,
+    need, nodes, one, readSource: source, fn, symbol, unwrap, key,
+    outstanding: ['selected saved-state L/H/A family and complete caller/result authority',
+      'original successful collector full residual/runtime/dependency equality'] };
+}
+
+function finiteSelectedGuideIllustrationTerms(ts, context, rollbackContext) {
+  const witness = finiteSelectedGuideIllustrationWitness(ts, context);
+  const { source: current, wrapper, selected, core, replay, profile, materializer, ordinaryCalls, replayCalls, constructors,
+    profileBinding, sourceTools, fields, fieldNames, falseValue, wrapperGrammar, images,
+    need, nodes, one, readSource: source, fn, symbol, unwrap, key } = witness;
+  const equal = (left, right) => JSON.stringify(context.canonical(left)) === JSON.stringify(rollbackContext.canonical(right));
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts', previous = source(rollbackContext, file);
+  const oldRun = fn(previous, 'runNativeIllustrationTask'), oldProfile = fn(previous, 'nativeIllustrationToolProfile');
+  need(equal(profile, oldProfile), profile);
+  need(equal(wrapper.body, wrapperGrammar.statements[0].body), wrapper);
+  const originalBinding = one(nodes(oldRun, node => ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)
+    && ts.isIdentifier(node.initializer) && node.initializer.text === 'profile'), oldRun);
+  const originalFields = fieldNames(originalBinding);
+  need(originalFields.filter(name => name !== 'sourceTools').join(',') === fields.join(','), profileBinding);
   const removed = new Set([wrapper, selected, sourceTools.parent.parent, images]);
   const emptySpread = node => {
     if (!ts.isSpreadAssignment(node) && !ts.isSpreadElement(node)) return false;

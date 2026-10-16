@@ -1666,6 +1666,7 @@ function selectedGuideSourceComponents() {
     relocation: finiteSelectedGuideRelocationTerms, relocationResidual: finiteSelectedGuideRelocationResidualTerms,
     workspace: finiteSelectedGuideWorkspaceTerms, native: finiteSelectedGuideNativeTerms, handlers: finiteSelectedGuideHandlerTerms,
     illustration: finiteSelectedGuideIllustrationTerms, illustrationResidual: finiteSelectedGuideIllustrationResidualTerms,
+    illustrationWitness: finiteSelectedGuideIllustrationWitness,
     dormant: finiteSelectedGuideDormantModuleTerms, ingestion: finiteSelectedGuideIngestionReaderTerms, publicReader: finiteSelectedGuidePublicReaderTerms,
     agent: finiteSelectedGuideAgentResidualTerms,
     sourceModel: finiteSelectedGuideSourceModel,
@@ -3238,30 +3239,74 @@ test('current host message alias rejects changed history and suppliers using act
   });
 });
 
-test('current candidate source keeps the legacy video helper conservative', async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram();
-  const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
-  assert.equal(host.text, readFileSync(host.fileName, 'utf8'));
-  const illustration=program.getSourceFile(resolve(projectRoot,'apps/agent-worker/src/native-agent/illustration-task.ts'));
-  const factory=illustration.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='createNativeIllustrationMaterializer');
-  assert.ok(factory);
-  const checker=program.getTypeChecker(), target=checker.getSymbolAtLocation(factory.name), callers=[];
-  const visit=node=>{
-    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&checker.getSymbolAtLocation(node.expression)===target){
-      let owner=node.parent;while(owner&&!(ts.isFunctionLike(owner)&&owner.body))owner=owner.parent;
-      callers.push(owner);
-    }
-    ts.forEachChild(node,visit);
-  };visit(illustration);
-  assert.deepEqual(callers.map(node=>node?.name?.text).sort(),['replayNativeVideoPlan','runNativeIllustrationTaskCore']);
-  assert.ok(!callers.some(node=>node.name?.text==='runNativeIllustrationTask'),
-    'the actual materializer is in the new core, outside the old helper live/replay ownership premise');
-  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
-  assert.equal(result.status, 'unknown');
-  assert.equal(result.reason, 'EXTRA_MATERIALIZER_CALLER');
-  assert.ok(!result.proven.includes('materializer-host'));
-  assert.ok(!result.proven.includes('host-before-session'));
-  assert.equal(result.releaseCompatible, false);
+test('current and exact capable video ingress stop at the bound selected saved-state frontier', async () => {
+  // Actual597's original prover/fixture established EXTRA_MATERIALIZER_CALLER.
+  // This changed contract checks the newly factored ACTUAL entry witness only;
+  // it never upgrades the remaining selected-state family to a successful edge.
+  const components = selectedGuideSourceComponents();
+  for (const sourceRef of [undefined, '5979840b31d6aa02e5350b0e63c8c2c8b049b133']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const entry = components.illustrationWitness(input.ts, videoPairContext(input));
+    const file = input.program.getSourceFile(resolve(input.projectRoot, 'apps/agent-worker/src/native-agent/illustration-task.ts'));
+    assert.ok(entry.source === file, 'witness source must be the exact actual SourceFile');
+    assert.ok(entry.core.getSourceFile() === file, 'core must belong to the exact actual SourceFile');
+    assert.ok(entry.wrapper.getSourceFile() === file, 'wrapper must belong to the exact actual SourceFile');
+    assert.deepEqual([...entry.constructors].map(call => {
+      let owner = call.parent; while (owner && !(input.ts.isFunctionLike(owner) && owner.body)) owner = owner.parent;
+      return owner?.name?.text;
+    }).sort(), ['replayNativeVideoPlan', 'runNativeIllustrationTaskCore']);
+    assert.equal(entry.coreCalls.length, 2);
+    assert.equal(entry.ordinaryCalls.length, 1);
+    assert.equal(entry.selectedCalls.length, 1);
+    assert.ok(entry.selectedCoreCall.arguments[0].getSourceFile() === file, 'selected argument must belong to the exact actual SourceFile');
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown');
+    assert.equal(result.reason, 'SELECTED_VIDEO_SAVED_STATE_UNPROVEN');
+    assert.equal(result.at.file, 'apps/agent-worker/src/native-agent/illustration-task.ts');
+    assert.equal(result.at.line, file.getLineAndCharacterOfPosition(entry.profile.getStart()).line + 1);
+    assert.ok(!result.proven.includes('materializer-host'));
+    assert.ok(!result.proven.includes('host-before-session'));
+    assert.equal(result.releaseCompatible, false);
+  }
+});
+
+test('actual video wrapper witness refuses changed ownership input and paper delegation', async t => {
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const ordinary = "export async function runNativeIllustrationTask(input: NativeIllustrationTaskInput) {\n  if (input.selectedImage) stopped();\n  const result = await runNativeIllustrationTaskCore(input);\n  if ('reply' in result) stopped();\n  return result;\n}";
+  const selectedPrefix = "if (input.settings.output !== 'image' || input.settings.narrativeSceneLimit !== 1) stopped();";
+  const cases = [
+    ['missing-wrapper-guard', ordinary, ordinary.replace('if (input.selectedImage) stopped();', '')],
+    ['inverted-wrapper-guard', ordinary, ordinary.replace('if (input.selectedImage)', 'if (!input.selectedImage)')],
+    ['nonterminal-wrapper-guard', ordinary, ordinary.replace('if (input.selectedImage) stopped();', 'if (input.selectedImage) observe();')],
+    ['unawaited-wrapper-core', ordinary, ordinary.replace('await runNativeIllustrationTaskCore(input)', 'runNativeIllustrationTaskCore(input)')],
+    ['substituted-wrapper-result', ordinary, ordinary.replace('return result;', 'return otherResult;')],
+    ['extra-core-caller', ordinary, ordinary + '\nasync function extra(input: NativeIllustrationTaskInput) { return runNativeIllustrationTaskCore(input); }'],
+    ['opaque-core-alias', ordinary, ordinary + '\nconst escapedCore = runNativeIllustrationTaskCore;'],
+    ['selected-input-escape', selectedPrefix, selectedPrefix + '\n  opaqueInputWriter(input);'],
+    ['selected-input-mutation', selectedPrefix, selectedPrefix + '\n  input.selectedImage = otherSelected;'],
+    ['rest-core-input', 'async function runNativeIllustrationTaskCore(input:', 'async function runNativeIllustrationTaskCore(...input:'],
+    ['second-source-initializer', 'const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools, input.semanticSearch);',
+      'const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools, input.semanticSearch), leaked = opaque(input);'],
+    ['substituted-materializer', 'const materializer = createNativeIllustrationMaterializer({ ...input, savedState:',
+      'const materializer = otherMaterializer({ ...input, savedState:'],
+    ['substituted-paper-materializer', 'materializer.call(name, args, sequence!, callId!)', 'otherMaterializer.call(name, args, sequence!, callId!)'],
+    ['substituted-paper-source', ': source.call(name, args);', ': source.images(name, args);'],
+    ['substituted-paper-images', 'return source.images(args, result);', 'return source.images(result, args);'],
+  ];
+  const components = selectedGuideSourceComponents();
+  for (const [name, before, after] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[file, text => {
+      text = text.replaceAll('\r\n', '\n'); assert.ok(text.includes(before), name); return text.replace(before, after);
+    }]]));
+    let refusal;
+    try { components.illustrationWitness(input.ts, videoPairContext(input)); }
+    catch (error) { refusal = { reason: error.reason, at: error.node?.getSourceFile?.().fileName }; }
+    assert.equal(refusal?.reason, 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', name);
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.reason, 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', name);
+    assert.ok(!result.proven.includes('materializer-host'), name);
+    assert.equal(result.releaseCompatible, false, name);
+  });
 });
 
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
