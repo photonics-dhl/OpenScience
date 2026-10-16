@@ -27,7 +27,7 @@ R10已完成，复用其CI、归档和双位置reader证据，不重复退役。
 
 资金测算补证（方案、未启用）：根一次只读usage确认527供应商点，网页活动500与订阅27均有11月1日到期风险，账户仅金额/流水匹配未证完整身份；不能承诺覆盖首个30天或下月。原High922接受先将试运营截至北京时间10月31日、支出≤200S/另留100S的情景，储备同样可能到期；1S=100P及free/pro/team100/1000/3000月授仅资金覆盖后模板，不凭活动余额售永久权益。原High946审过的单次RR READ ONLY聚合已实际返回，High952独核10section/24rows：11人全free，3admin/7普通verified/1invited；旧正余额3876、负0/global500无level，本UTC月月授0只快照。普通7–8人按free100P仅条件测算7–8S，不授邀请账户权限、不把gift100上限当全发目标。862任务外层终态不清Host/UNKNOWN；唯一voice submitted有ID但DB费用null，与既有同ID1S分开对账，不补零或重复扣。旧3876不转P/S、不清或双兑现；未有完整G/U/H责任上界不得启用新预算。LTX2.5网页促销价不等项目ltx23/admin API价格，采购人民币成本仍未知；旧ai_credit不自动换为P/S。原报告十节取代九节30天假设，运行身份与结果只见CURRENT。
 
-最新P1授权：优先已得供应商费用在音频下载/存储失败前的可靠回写、同ID幂等与旧积分过渡。实际Worker完成query后先download/put再save，原费用可能只留内存；Domain状态转移与旧reader兼容须按真实调用链验证，由原voice owner在独立窄窗实施、同High/必要测试，不能改冻结CI候选或补写历史生产账。Admin须分列旧AI Credit、新P、供应商余额/到期、已花/预留/UNKNOWN；原费用/权益不猜换算。LTX API资格/有效价及最高收费、活动额度API归属/expiry继续官方只读核实，尚无新付费或生产激活。
+最新P1授权：优先已得供应商费用在音频下载/存储失败前的可靠回写、同ID幂等与旧积分过渡。实际Worker完成query后先download/put再save，原费用可能只留内存；Domain状态转移与旧reader兼容须按真实调用链验证，原voice owner已在独立四路径窗完成已知费用先保存/同阶段缺值补填；真实Worker5RED→21PASS、Domain2RED→43PASS/43filtered，原sameVoiceHigh完整SourceGO后root收取，精确候选见CURRENT。正式compiled/PG/type/lint/实际pair尚未验证；本费用后继按最新人类暂不生产、不改冻结WAV发布候选、不补历史生产账。原08:19GET完整费用未留存，不能倒推其有1；后续实际同ID1S与DB缺费仍分列。Admin须分列旧AI Credit、新P、供应商余额/到期、已花/预留/UNKNOWN；原费用/权益不猜换算。LTX API资格/有效价及最高收费、活动额度API归属/expiry继续官方只读核实，尚无新付费或生产激活。
 
 2026-10-16用户已明确业务规则，原same High892完成有限方案审查、剩余新增问题0/0/0；此前人工收款跨订单重复兑换问题已补入。这里记录待实施范围，不授予代码、迁移或生产操作；原R01–R13、资源维护与媒体HOLD不因此关闭。来源为原七问说明第八节和同一维护High回执，运行状态仍只在CURRENT维护。
 
