@@ -908,6 +908,103 @@ async function retainedVoiceWriterProgram(changes = new Map(), options = {}) {
   return videoIngressProgram(changes, { ...options, ...releasedVoiceWriterSource });
 }
 
+const voiceFeeWriterSource = { sourceRef: '44c278912a9aa6852d49e7f784f4392452b566df', trackedSourceOnly: true };
+const voiceFeeRollbackSource = { sourceRef: '052a9115fa485a4fc613dfe353a1904202c84697', trackedSourceOnly: true };
+
+test('voice fee writer source projects actual 44 to actual 052 without collector authority', async () => {
+  const methods = voicePairSourceComponents();
+  const actual = await videoIngressProgram(new Map(), voiceFeeWriterSource);
+  const previous = await videoIngressProgram(new Map(), voiceFeeRollbackSource);
+  const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+  const currentEntries = voiceSourceEntries(actual), previousEntries = voiceSourceEntries(previous);
+  let model;
+  try { model = methods.formatWriter(actual.ts, context, videoPairContext(previous), currentEntries, previousEntries); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 120) ?? ''}`); }
+  assert.equal(model.phase, 'format-writer');
+  assert.equal(model.projected.size, 2);
+  assert.deepEqual([...model.projected.keys()].sort(), ['apps/agent-worker/src/voice.ts', 'packages/domain/src/agent/voice.ts']);
+  for (const [path, value] of model.projected) assert.deepEqual(videoPairRuntime(actual.ts, value.text),
+    videoPairRuntime(previous.ts, previous.program.getSourceFile(resolve(previous.projectRoot, path)).text), path);
+  for (const roots of [[], methods.defaultRoots]) assert.equal(methods.pair(actual.ts, currentEntries, previousEntries,
+    actual.projectRoot, previous.projectRoot, roots), false, 'source-only Git Programs cannot replace private successful collector provenance');
+});
+
+test('voice fee writer rejects unproved fee flow and retained reader changes', async t => {
+  const methods = voicePairSourceComponents(), worker = 'apps/agent-worker/src/voice.ts', domain = 'packages/domain/src/agent/voice.ts';
+  const previous = await videoIngressProgram(new Map(), voiceFeeRollbackSource);
+  const cas = text => text.replace('result: voiceResultEquals(task.result) }, data: { result: result as unknown as Prisma.InputJsonObject }',
+    'result: voiceResultEquals(null) }, data: { result: result as unknown as Prisma.InputJsonObject }');
+  const cases = [
+    ['zero-skipping fee guard', worker, text => text.replace('if (output.coins_used !== undefined)', 'if (output.coins_used)'), 'FEE_WORKER_FLOW_CHANGED'],
+    ['missing fee defaulted to zero', worker, text => text.replace('providerId: checkpoint.providerId, credits: output.coins_used', 'providerId: checkpoint.providerId, credits: output.coins_used ?? 0'), 'FEE_WORKER_CALL_CHANGED'],
+    ['fee save uses other dependencies', worker, text => text.replace("saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted'", "saveHermesVoiceCheckpoint(workerDeps, originalIdentity, { phase: 'submitted'"), 'FEE_WORKER_CALL_CHANGED'],
+    ['fee save uses current identity', worker, text => text.replace("saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted'", "saveHermesVoiceCheckpoint(deps, execution.identity, { phase: 'submitted'"), 'FEE_WORKER_CALL_CHANGED'],
+    ['fee save substitutes provider ID', worker, text => text.replace('providerId: checkpoint.providerId, credits: output.coins_used', "providerId: 'substituted-provider', credits: output.coins_used"), 'FEE_WORKER_CALL_CHANGED'],
+    ['fee save callee shadow', worker, text => text.replace('  const wait = options.wait ??', '  const saveHermesVoiceCheckpoint = async () => ({} as any);\n  const wait = options.wait ??'), 'FEE_WORKER_BINDING_CHANGED'],
+    ['unawaited fee save', worker, text => text.replace("await saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted'", "void saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted'"), 'FEE_WORKER_FLOW_CHANGED'],
+    ['fee save after download', worker, text => {
+      const prelude = /          if \(output\.coins_used !== undefined\) \{\r?\n            await saveHermesVoiceCheckpoint\(deps, originalIdentity, \{ phase: 'submitted',\r?\n              providerId: checkpoint\.providerId, credits: output\.coins_used \}\);\r?\n          \}\r?\n/u;
+      const block = text.match(prelude)?.[0]; assert.ok(block, 'actual fee prelude must exist');
+      return text.replace(prelude, '').replace('          if (audio.bytes.length >', `${block}          if (audio.bytes.length >`);
+    }, 'FEE_WORKER_FLOW_CHANGED'],
+    ['swallowed fee save failure', worker, text => text.replace("await saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted',", "try { await saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted',")
+      .replace('providerId: checkpoint.providerId, credits: output.coins_used });', 'providerId: checkpoint.providerId, credits: output.coins_used }); } catch {}'), 'FEE_WORKER_FLOW_CHANGED'],
+    ['known submitted fee may be overwritten', domain, text => text.replace('prior.credits === undefined && next.credits !== undefined', 'next.credits !== undefined'), 'FEE_DOMAIN_CHANGED'],
+    ['candidate receipt CAS changed', domain, cas, 'FEE_DOMAIN_RESIDUAL_CHANGED'],
+    ['both readers expand the fee contract', domain, text => text.replace('value >= 0 && value <= 1)', 'value >= 0 && value <= 2)'), 'FEE_READER_CONTRACT_CHANGED', true],
+    ['both readers lose the receipt CAS', domain, cas, 'FEE_READER_CONTRACT_CHANGED', true],
+    ['both readers reopen failed checkpoints', domain, text => text.replace("(prior.phase === 'completed' || prior.phase === 'failed')", "prior.phase === 'completed'"), 'FEE_READER_CONTRACT_CHANGED', true],
+    ['both readers prohibit ASR failed refund zero', domain, text => text.replace('    if (isDeepStrictEqual(prior, next)) return prior;',
+      "    if (isDeepStrictEqual(prior, next)) return prior;\n    if (prior.phase === 'submitted' && update.phase === 'failed' && prior.credits !== undefined && update.credits !== prior.credits) blocked('Changed failed fee');"), 'FEE_READER_CONTRACT_CHANGED', true],
+  ];
+  for (const [name, path, mutate, reason, both] of cases) await t.test(name, async () => {
+    const actual = await videoIngressProgram(new Map([[path, mutate]]), voiceFeeWriterSource);
+    const rollback = both ? await videoIngressProgram(new Map([[path, mutate]]), voiceFeeRollbackSource) : previous;
+    const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+    assert.throws(() => methods.formatWriter(actual.ts, context, videoPairContext(rollback), voiceSourceEntries(actual), voiceSourceEntries(rollback)),
+      error => error.reason === `VOICE_WAV_${reason}`, name);
+  });
+  const actual = await videoIngressProgram(new Map(), voiceFeeWriterSource);
+  const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+  const currentEntries = voiceSourceEntries(actual), previousEntries = voiceSourceEntries(previous);
+  for (const path of [worker, domain]) assert.throws(() => methods.formatWriter(actual.ts, context, videoPairContext(previous),
+    currentEntries.map(([key, value]) => [key, key === `module:${path}` ? ['forged-fee-runtime'] : value]), previousEntries),
+  error => error.reason === 'VOICE_WAV_SOURCE_ENTRY_UNBOUND', path);
+  assert.throws(() => methods.formatWriter(actual.ts, context, videoPairContext(previous),
+    [...currentEntries, ['module:packages/new/src/fee-proof.ts', []]], previousEntries),
+  error => error.reason === 'VOICE_WAV_RESIDUAL_ENTRY_CHANGED');
+});
+
+test('voice fee writer rejects unreachable reader validation in both actual Git roots', async () => {
+  const methods = voicePairSourceComponents(), path = 'packages/domain/src/agent/voice.ts';
+  const mutation = new Map([[path, text => text.replace('  if (!hasHermesVoiceCheckpoint(result)) return undefined;',
+    '  return (result as any).hermesVoiceCheckpoint;')]]);
+  const actual = await videoIngressProgram(mutation, voiceFeeWriterSource);
+  const previous = await videoIngressProgram(mutation, voiceFeeRollbackSource);
+  const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+  let model, rejection;
+  try { model = methods.formatWriter(actual.ts, context, videoPairContext(previous), voiceSourceEntries(actual), voiceSourceEntries(previous)); }
+  catch (error) { rejection = error; }
+  assert.ok(rejection, `both-root unreachable reader validation was accepted as ${model?.phase}`);
+  assert.equal(rejection.reason, 'VOICE_WAV_FEE_READER_CONTRACT_CHANGED');
+});
+
+test('voice fee writer rejects a dead receipt transaction in both actual Git roots', async () => {
+  const methods = voicePairSourceComponents(), path = 'packages/domain/src/agent/voice.ts';
+  const mutation = new Map([[path, text => text.replace('  const checkpoint = await deps.prisma.$transaction(async tx => {',
+    '  const checkpoint = await (false ? deps.prisma.$transaction(async tx => {')
+    .replace(/(\}, \{ isolationLevel: 'ReadCommitted', timeout: 20_000 \}\));(\r?\n  if \(checkpoint.audio\))/u,
+      '$1 : Promise.resolve({} as HermesVoiceCheckpoint));$2')]]);
+  const actual = await videoIngressProgram(mutation, voiceFeeWriterSource);
+  const previous = await videoIngressProgram(mutation, voiceFeeRollbackSource);
+  const context = { ...videoPairContext(actual), canonical: node => videoPairRuntime(actual.ts, node.getText()) };
+  let model, rejection;
+  try { model = methods.formatWriter(actual.ts, context, videoPairContext(previous), voiceSourceEntries(actual), voiceSourceEntries(previous)); }
+  catch (error) { rejection = error; }
+  assert.ok(rejection, `both-root dead receipt transaction was accepted as ${model?.phase}`);
+  assert.equal(rejection.reason, 'VOICE_WAV_FEE_READER_CONTRACT_CHANGED');
+});
+
 test('voice WAV writer source projects actual W to the published WAV reader without collector authority', async () => {
   const methods = voicePairSourceComponents(), actual = await videoIngressProgram(new Map(), releasedVoiceWavWriterSource);
   const previous = await videoIngressProgram(new Map(), releasedVoiceFormatReaderSource);

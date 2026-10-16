@@ -5991,14 +5991,135 @@ function finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous) 
     need(!ast.parseDiagnostics.length && typeof (context.canonical ?? left.canonical) === 'function', 'SOURCE_ENTRY_UNBOUND');
     return (context.canonical ?? left.canonical)(ast);
   };
-  for (const key of new Set([...a.keys(), ...b.keys()])) need(a.has(key) && b.has(key)
-    && (key === 'module:' + workerPath || JSON.stringify(a.get(key)) === JSON.stringify(b.get(key))), 'RESIDUAL_ENTRY_CHANGED');
+  // Bind the original collected entries before examining a permitted producer
+  // transformation. Projected text never becomes a successful collector array.
   for (const context of [left, right]) for (const path of [gatewayPath, voicePath, workerPath]) {
     const terms = context === left ? a : b;
     need(terms.has('module:' + path) && JSON.stringify(canonicalSource(context, file(context, path).text))
       === JSON.stringify(terms.get('module:' + path)), 'SOURCE_ENTRY_UNBOUND');
   }
   const projections = new Map(), outputReferences = new Map();
+  const feeVariant = JSON.stringify(a.get('module:' + voicePath)) !== JSON.stringify(b.get('module:' + voicePath));
+  if (feeVariant) {
+    const voice = file(left, voicePath), oldVoice = file(right, voicePath);
+    const save = fn(voice, 'saveHermesVoiceCheckpoint'), oldSave = fn(oldVoice, 'saveHermesVoiceCheckpoint');
+    // Parse tagged SQL templates through the original runtime canonical rather
+    // than scanning their interpolated text as a flat token stream.
+    const matchesSaveBody = (node, text) => JSON.stringify(canonicalSource(right,
+      `async function checkpointContract(deps, identity, update) ${node.getText()}`)) === JSON.stringify(canonicalSource(right,
+      `async function checkpointContract(deps, identity, update) ${text}`));
+    const declaration = (scope, name, reason) => one(nodes(scope, ts.isVariableDeclaration)
+      .filter(node => ts.isIdentifier(node.name) && node.name.text === name), reason);
+    const oldGuardText = "if ((prior.phase === 'completed' || prior.phase === 'failed') || (update.phase === 'submitted' && prior.phase !== 'submitting') || (update.phase !== 'submitted' && prior.phase !== 'submitted')) blocked('语音回执终态不可覆盖');";
+    // Equal two-root bodies alone cannot establish the old value/transition
+    // contract: the same broken validator or CAS on both sides must still fail.
+    for (const context of [left, right]) {
+      const source = file(context, voicePath), receipt = fn(source, 'readHermesVoiceCheckpoint');
+      const credit = declaration(source, 'credit', 'FEE_READER_CONTRACT_CHANGED'), arrow = credit.initializer;
+      need(credit.parent.flags & ts.NodeFlags.Const && ts.isArrowFunction(arrow) && !arrow.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+        && arrow.parameters.length === 1 && same(arrow.parameters[0].name, 'value') && !arrow.parameters[0].initializer && !arrow.parameters[0].dotDotDotToken
+        && same(arrow.body, "value === undefined || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1)"), 'FEE_READER_CONTRACT_CHANGED', credit);
+      need(receipt.parameters.length === 1 && same(receipt.parameters[0].name, 'result') && !receipt.parameters[0].initializer && !receipt.parameters[0].dotDotDotToken
+        && receipt.body.statements.length === 7
+        && same(receipt.body.statements[0], 'if (!hasHermesVoiceCheckpoint(result)) return undefined;')
+        && same(receipt.body.statements[2], String.raw`if (!record(cp) || !keysAllowed(cp, ['identity', 'request', 'phase', 'providerId', 'credits', 'transcript', 'audio'])
+    || !record(cp.identity) || !keysAllowed(cp.identity, ['taskId', 'sessionId', 'userId', 'researchObjectId', 'kind', 'executionAttempt'])
+    || !['taskId', 'sessionId', 'userId'].every(key => nonempty(cp.identity && (cp.identity as Record<string, unknown>)[key]))
+    || !nonempty(cp.identity.kind) || !isHermesVoiceTaskKind(cp.identity.kind)
+    || !(cp.identity.researchObjectId === null || nonempty(cp.identity.researchObjectId))
+    || !Number.isSafeInteger(cp.identity.executionAttempt) || Number(cp.identity.executionAttempt) < 1
+    || !['submitting', 'submitted', 'completed', 'failed'].includes(String(cp.phase)) || !credit(cp.credits)
+    || (cp.providerId !== undefined && (!nonempty(cp.providerId) || cp.providerId.length > 512 || /[\s\p{Cc}]/u.test(cp.providerId)))
+    || (cp.phase !== 'submitting' && !nonempty(cp.providerId))
+    || (cp.phase === 'submitting' && (cp.providerId !== undefined || cp.credits !== undefined))
+    || (cp.phase !== 'completed' && (cp.transcript !== undefined || cp.audio !== undefined))) blocked('私有语音回执无效');`), 'FEE_READER_CONTRACT_CHANGED', receipt.body.statements[2]);
+      const cp = declaration(receipt, 'cp', 'FEE_READER_CONTRACT_CHANGED');
+      const creditCall = one(nodes(receipt.body.statements[2], ts.isCallExpression).filter(call => same(call, 'credit(cp.credits)')), 'FEE_READER_CONTRACT_CHANGED');
+      need(symbol(context, creditCall.expression) === symbol(context, credit.name)
+        && symbol(context, creditCall.arguments[0].expression) === symbol(context, cp.name), 'FEE_READER_CONTRACT_CHANGED', creditCall);
+      for (const scope of [arrow, receipt]) for (const use of nodes(scope, ts.isIdentifier)) {
+        if (use.text === 'value' && inside(use, arrow)) need(symbol(context, use) === symbol(context, arrow.parameters[0].name), 'FEE_READER_CONTRACT_CHANGED', use);
+        if (['undefined', 'Number', 'String'].includes(use.text)) need(!(symbol(context, use)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile), 'FEE_READER_CONTRACT_CHANGED', use);
+      }
+    }
+    need(oldSave.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword) && !oldSave.asteriskToken
+      && oldSave.parameters.length === 3 && oldSave.parameters.every((parameter, index) => same(parameter.name, ['deps', 'identity', 'update'][index])
+      && !parameter.initializer && !parameter.dotDotDotToken) && oldSave.body.statements.length === 3, 'FEE_READER_CONTRACT_CHANGED', oldSave);
+    const oldTransaction = one(nodes(oldSave, ts.isCallExpression).filter(call => same(call.expression, 'deps.prisma.$transaction')), 'FEE_READER_CONTRACT_CHANGED');
+    const checkpoint = declaration(oldSave, 'checkpoint', 'FEE_READER_CONTRACT_CHANGED');
+    // Finding a correct callback inside a dead conditional is insufficient: it
+    // must be the direct awaited initializer on the original cleanup/return path.
+    need(checkpoint.parent.flags & ts.NodeFlags.Const && checkpoint.parent.declarations.length === 1
+      && checkpoint.parent.parent === oldSave.body.statements[0] && ts.isVariableStatement(checkpoint.parent.parent)
+      && ts.isAwaitExpression(checkpoint.initializer) && checkpoint.initializer.expression === oldTransaction
+      && oldTransaction.arguments.length === 2 && same(oldTransaction.arguments[1], "{ isolationLevel: 'ReadCommitted', timeout: 20_000 }")
+      && same(oldSave.body.statements[1], 'if (checkpoint.audio) await rememberDiscardedTaskResult(deps.prisma, identity.taskId, { [HERMES_VOICE_RECEIPT_KEY]: checkpoint });')
+      && same(oldSave.body.statements[2], 'return checkpoint;'), 'FEE_READER_CONTRACT_CHANGED', checkpoint);
+    const cleanup = one(nodes(oldSave.body.statements[1], ts.isCallExpression), 'FEE_READER_CONTRACT_CHANGED');
+    need(symbol(right, oldTransaction.expression.expression.expression) === symbol(right, oldSave.parameters[0].name)
+      && symbol(right, cleanup.arguments[0].expression) === symbol(right, oldSave.parameters[0].name)
+      && symbol(right, cleanup.arguments[1].expression) === symbol(right, oldSave.parameters[1].name)
+      && symbol(right, cleanup.expression) === symbol(right, fn(file(right, 'packages/domain/src/trash/trash.ts'), 'rememberDiscardedTaskResult').name),
+    'FEE_READER_CONTRACT_CHANGED', cleanup);
+    for (const use of [oldSave.body.statements[1].expression.expression, cleanup.arguments[2].properties[0].initializer,
+      oldSave.body.statements[2].expression]) need(symbol(right, use) === symbol(right, checkpoint.name), 'FEE_READER_CONTRACT_CHANGED', use);
+    const action = oldTransaction.arguments[0];
+    need(ts.isArrowFunction(action) && action.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+      && action.parameters.length === 1 && same(action.parameters[0].name, 'tx') && !action.parameters[0].initializer && !action.parameters[0].dotDotDotToken
+      && matchesSaveBody(action.body, `{
+    await lockTrashReferences(tx);
+    await tx.$queryRaw\`SELECT id FROM agent_tasks WHERE id = \${identity.taskId}::uuid FOR UPDATE\`;
+    const task = await tx.agentTask.findUnique({ where: { id: identity.taskId } });
+    const prior = readHermesVoiceCheckpoint(task?.result);
+    if (!task || !prior || !isDeepStrictEqual(prior.identity, identity) || task.kind !== identity.kind
+      || task.sessionId !== identity.sessionId || !isDeepStrictEqual(task.payload, prior.request)) blocked('原语音付费请求身份不匹配');
+    const next: HermesVoiceCheckpoint = { ...prior, ...update };
+    if (isDeepStrictEqual(prior, next)) return prior;
+    if ((prior.phase === 'completed' || prior.phase === 'failed')
+      || (update.phase === 'submitted' && prior.phase !== 'submitting')
+      || (update.phase !== 'submitted' && prior.phase !== 'submitted')) blocked('语音回执终态不可覆盖');
+    const result = { ...(record(task.result) ? task.result : {}), [HERMES_VOICE_RECEIPT_KEY]: next };
+    readHermesVoiceCheckpoint(result);
+    const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
+    const ro = session?.researchObjectId ? await tx.researchObject.findUnique({ where: { id: session.researchObjectId } }) : null;
+    if (task.deletedAt || session?.deletedAt || ro?.deletedAt) {
+      await tx.$executeRaw\`SELECT set_config('openscience.trash_mutation', 'on', true)\`;
+    }
+    const changed = await tx.agentTask.updateMany({ where: { id: task.id, kind: task.kind, sessionId: task.sessionId,
+      result: voiceResultEquals(task.result) }, data: { result: result as unknown as Prisma.InputJsonObject } });
+    if (changed.count !== 1) blocked('语音回执已由其他执行更新');
+    return next;
+  }`), 'FEE_READER_CONTRACT_CHANGED', action);
+    const fill = declaration(save, 'fillsSubmittedCredits', 'FEE_DOMAIN_CHANGED');
+    const statement = fill.parent.parent;
+    const guard = one(nodes(save, ts.isIfStatement).filter(node => nodes(node.expression, ts.isIdentifier)
+      .some(use => use.text === 'fillsSubmittedCredits')), 'FEE_DOMAIN_CHANGED');
+    need(fill.parent.flags & ts.NodeFlags.Const && fill.parent.declarations.length === 1
+      && same(fill.initializer, "prior.phase === 'submitted' && next.phase === 'submitted' && prior.credits === undefined && next.credits !== undefined && isDeepStrictEqual(next, { ...prior, credits: next.credits })")
+      && same(guard, "if (!fillsSubmittedCredits && ((prior.phase === 'completed' || prior.phase === 'failed') || (update.phase === 'submitted' && prior.phase !== 'submitting') || (update.phase !== 'submitted' && prior.phase !== 'submitted'))) blocked('语音回执终态不可覆盖');")
+      && statement.parent === guard.parent && ts.isBlock(guard.parent)
+      && guard.parent.statements[guard.parent.statements.indexOf(statement) + 1] === guard, 'FEE_DOMAIN_CHANGED');
+    const prior = declaration(save, 'prior', 'FEE_DOMAIN_CHANGED'), next = declaration(save, 'next', 'FEE_DOMAIN_CHANGED');
+    need(same(prior.initializer, 'readHermesVoiceCheckpoint(task?.result)') && same(next.initializer, '{ ...prior, ...update }')
+      && symbol(left, prior.initializer.expression) === symbol(left, fn(voice, 'readHermesVoiceCheckpoint').name), 'FEE_DOMAIN_CHANGED');
+    const imports = voice.statements.filter(node => ts.isImportDeclaration(node) && node.moduleSpecifier.text === 'node:util');
+    const equality = one(imports.flatMap(node => node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)
+      ? node.importClause.namedBindings.elements.filter(value => (value.propertyName ?? value.name).text === 'isDeepStrictEqual') : []), 'FEE_DOMAIN_CHANGED');
+    for (const use of nodes(fill.initializer, ts.isIdentifier)) {
+      if (use.text === 'prior' || use.text === 'next') need(symbol(left, use) === symbol(left, (use.text === 'prior' ? prior : next).name), 'FEE_DOMAIN_CHANGED');
+      if (use.text === 'isDeepStrictEqual') need(left.checker.getSymbolAtLocation(use) === left.checker.getSymbolAtLocation(equality.name), 'FEE_DOMAIN_CHANGED');
+      if (use.text === 'undefined') need(!(symbol(left, use)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile), 'FEE_DOMAIN_CHANGED');
+    }
+    for (const use of nodes(guard.expression, ts.isIdentifier).filter(node => node.text === 'fillsSubmittedCredits'))
+      need(symbol(left, use) === symbol(left, fill.name), 'FEE_DOMAIN_CHANGED');
+    const projected = edit(voice, [{ node: statement, text: '' }, { node: guard, text: oldGuardText }]);
+    need(JSON.stringify(canonicalSource(left, projected)) === JSON.stringify(b.get('module:' + voicePath)), 'FEE_DOMAIN_RESIDUAL_CHANGED');
+    projections.set(voicePath, { source: voice, text: projected });
+  }
+  for (const key of new Set([...a.keys(), ...b.keys()])) {
+    const value = key === 'module:' + voicePath && projections.has(voicePath) ? canonicalSource(left, projections.get(voicePath).text) : a.get(key);
+    need(a.has(key) && b.has(key) && (key === 'module:' + workerPath || JSON.stringify(value) === JSON.stringify(b.get(key))), 'RESIDUAL_ENTRY_CHANGED');
+  }
   const runtimeFiles = context => context.modules ? [...context.modules.values()].filter(source => !source.isDeclarationFile)
     : context.program.getSourceFiles().filter(source => {
       const path = relative(context.root, source.fileName).replaceAll('\\', '/');
@@ -6033,6 +6154,37 @@ function finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous) 
     const writing = context === left;
     const downloadName = writing ? 'downloadHermesVoiceAudio' : 'downloadSynclipAudio';
     const downloadSymbol = symbol(context, fn(file(context, gatewayPath), downloadName).name);
+    let feeSave, feeStatement;
+    if (writing && feeVariant) {
+      feeSave = one(nodes(factory, ts.isCallExpression).filter(call => ts.isIdentifier(call.expression)
+        && call.expression.text === 'saveHermesVoiceCheckpoint' && call.arguments[2] && ts.isObjectLiteralExpression(call.arguments[2])
+        && call.arguments[2].properties.some(property => ts.isPropertyAssignment(property) && same(property.name, 'phase')
+          && same(property.initializer, "'submitted'"))), 'FEE_WORKER_CALL_CHANGED');
+      need(same(feeSave, "saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'submitted', providerId: checkpoint.providerId, credits: output.coins_used })"), 'FEE_WORKER_CALL_CHANGED');
+      need(symbol(context, feeSave.expression) === saveSymbol, 'FEE_WORKER_BINDING_CHANGED');
+      const expression = feeSave.parent, statement = expression.parent, branch = statement.parent;
+      feeStatement = branch.parent;
+      need(ts.isAwaitExpression(expression) && ts.isExpressionStatement(statement) && ts.isBlock(branch)
+        && branch.statements.length === 1 && branch.statements[0] === statement
+        && ts.isIfStatement(feeStatement) && feeStatement.thenStatement === branch && !feeStatement.elseStatement
+        && same(feeStatement.expression, 'output.coins_used !== undefined'), 'FEE_WORKER_FLOW_CHANGED');
+      const block = feeStatement.parent, typeBranch = block.parent, completedBlock = typeBranch.parent;
+      need(ts.isBlock(block) && block.statements[1] === feeStatement
+        && same(block.statements[0], "if (!('url_expires_at' in output)) throw new Error('[blocked] VOICE_RESPONSE_INVALID');")
+        && ts.isIfStatement(typeBranch) && typeBranch.elseStatement === block && same(typeBranch.expression, "output.output.type === 'text'")
+        && ts.isBlock(completedBlock) && ts.isIfStatement(completedBlock.parent)
+        && completedBlock.parent.thenStatement === completedBlock && same(completedBlock.parent.expression, "output.status === 'completed'"), 'FEE_WORKER_FLOW_CHANGED');
+      const local = name => one(nodes(factory, ts.isVariableDeclaration).filter(node => ts.isIdentifier(node.name) && node.name.text === name), 'FEE_WORKER_BINDING_CHANGED');
+      const deps = local('deps'), identity = local('originalIdentity'), checkpoint = local('checkpoint'), output = local('output'), audio = local('audio');
+      need(audio.parent.parent === block.statements[2] && audio.parent.parent.parent === block, 'FEE_WORKER_FLOW_CHANGED');
+      const update = feeSave.arguments[2];
+      for (const [use, declaration] of [[feeSave.arguments[0], deps], [feeSave.arguments[1], identity],
+        [update.properties[1].initializer.expression, checkpoint], [update.properties[2].initializer.expression, output],
+        [feeStatement.expression.left.expression, output], [typeBranch.expression.left.expression.expression, output],
+        [completedBlock.parent.expression.left.expression, output]])
+        need(ts.isIdentifier(use) && symbol(context, use) === symbol(context, declaration.name), 'FEE_WORKER_BINDING_CHANGED', use);
+      need(!(symbol(context, feeStatement.expression.right)?.declarations ?? []).some(node => !node.getSourceFile().isDeclarationFile), 'FEE_WORKER_BINDING_CHANGED');
+    }
     let factoryCalls = 0, saveCalls = 0;
     for (const source of runtimeFiles(context)) for (const use of nodes(source, ts.isIdentifier)) {
       const selected = symbol(context, use);
@@ -6047,14 +6199,15 @@ function finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous) 
           need(inside(call, factory) && call.arguments.length === 3 && same(call.arguments[1], 'originalIdentity'), 'SAVE_IDENTITY_CHANGED', call);
           const update = call.arguments[2]; need(ts.isObjectLiteralExpression(update), 'SAVE_INPUT_CHANGED', update);
           const phase = one(update.properties.filter(value => ts.isPropertyAssignment(value) && value.name.getText() === 'phase'), 'SAVE_PHASE_CHANGED');
-          need(ts.isStringLiteral(phase.initializer) && ['failed', 'completed'].includes(phase.initializer.text), 'SAVE_PHASE_CHANGED', update);
+          need(ts.isStringLiteral(phase.initializer) && (['failed', 'completed'].includes(phase.initializer.text)
+            || call === feeSave && phase.initializer.text === 'submitted'), 'SAVE_PHASE_CHANGED', update);
         } else {
           need(same(call, "saveHermesVoiceCheckpoint(deps, prepared.identity, { phase: 'submitted', ...received })"), 'SAVE_INPUT_CHANGED', call);
         }
         saveCalls++;
       }
     }
-    need(factoryCalls === 1 && saveCalls === 4, 'PRODUCER_OR_SAVE_INVENTORY_CHANGED');
+    need(factoryCalls === 1 && saveCalls === (feeSave ? 5 : 4), 'PRODUCER_OR_SAVE_INVENTORY_CHANGED');
     const download = one(nodes(factory, ts.isCallExpression).filter(call => same(call,
       `(options.downloadAudio ?? ${downloadName})(output)`)), 'RECOVERY_DOWNLOAD_CHANGED');
     const fallback = download.expression.expression;
@@ -6176,6 +6329,7 @@ function finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous) 
       const importNode = one(nodes(worker, ts.isImportSpecifier).filter(node => symbol(context, node.name) === downloadSymbol), 'DOWNLOAD_IMPORT_CHANGED');
       need(!importNode.propertyName && importNode.name.text === 'downloadHermesVoiceAudio', 'DOWNLOAD_IMPORT_CHANGED');
       projections.set(workerPath, { source: worker, text: edit(worker, [
+        ...(feeStatement ? [{ node: feeStatement, text: '' }] : []),
         { node: importNode.name, text: 'downloadSynclipAudio' }, { node: fallback.right, text: 'downloadSynclipAudio' },
         { node: key.initializer, text: '`derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.mp3`' },
         { node: put.arguments[2].properties[0].initializer, text: "'audio/mpeg'" },
@@ -6492,10 +6646,11 @@ function finiteVoiceFormatWriterSourceModel(ts, left, right, current, previous) 
         || ts.isImportSpecifier(node.parent) || ts.isExportSpecifier(node.parent), 'OUTPUT_CAPABILITY_ESCAPE', node);
     }
   }
-  const model = projections.get(workerPath);
-  need(model && JSON.stringify(canonicalSource(left, model.text)) === JSON.stringify(b.get('module:' + workerPath)), 'PROJECTED_RUNTIME_CHANGED');
+  need(projections.has(workerPath), 'PROJECTED_RUNTIME_CHANGED');
+  for (const [path, model] of projections)
+    need(JSON.stringify(canonicalSource(left, model.text)) === JSON.stringify(b.get('module:' + path)), 'PROJECTED_RUNTIME_CHANGED');
   return { phase: 'format-writer', domain: 'wav-and-retained-mp3', projected: projections,
-    rollbackModules: new Map([[workerPath, file(right, workerPath)]]) };
+    rollbackModules: new Map([...projections.keys()].map(path => [path, file(right, path)])) };
 }
 
 function finiteVoicePairCompatibility(ts, current, previous, candidateRoot, rollbackRoot, roots) {
