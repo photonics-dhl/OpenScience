@@ -107,6 +107,13 @@
 }
 
 .mathSurface[data-read-only] { cursor: auto; }
+.mathSurface > p { margin: 0; }
+.mathSurface[data-sdf-format='plain'] > p { white-space: pre-wrap; }
+.mathSurface[data-sdf-format='markdown'] :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 0.85em; }
+.mathSurface ul { list-style: disc; padding-left: 1.4em; }
+.mathSurface ol { list-style: decimal; padding-left: 1.4em; }
+.mathSurface li + li { margin-top: 0.3em; }
+.mathSurface a { color: var(--craft-accent, #125d66); text-decoration: underline; text-underline-offset: 3px; }
 
 .readingCore {
   max-width: none;

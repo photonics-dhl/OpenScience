@@ -46,11 +46,14 @@ import {
   type ArtifactReference,
   type IngestionTaskDetail,
   type SdfCore,
+  type SdfCoreSnapshot,
   type VersionSummary,
 } from '../../../../lib/api';
 import { startIngestionReviewPolling } from '../../../../lib/ingestion-review-polling';
 import {
   clearDraft,
+  canEditSdfCore,
+  canRestoreBrowserDraft,
   editorReducer,
   emptyCore,
   loadDraft,
@@ -82,7 +85,7 @@ import {
 import type { Locale } from '../../../../i18n/locale';
 import styles from './workbench.module.css';
 
-type FieldKey = keyof Omit<SdfCore, 'schemaVersion'>;
+type FieldKey = SdfField;
 type EditorDraft = WorkspaceGuidePayload['context']['editorDraft'];
 type PreparedVersion = { versionId: string; assertCurrent(): void };
 type PrepareVersionIntent = { signature: string; idempotencyKey: string; promise?: Promise<PreparedVersion> };
@@ -101,7 +104,7 @@ type IngestionProposal = {
 };
 
 const HERMES_DIFF_SIDES: Array<'left' | 'top'> = ['left', 'top'];
-const aggregateCoreText = (core: SdfCore) => SDF_FIELDS.map((field) => core[field].trim()).filter(Boolean).join('\n\n');
+const aggregateCoreText = (core: SdfCore) => SDF_FIELDS.map((field) => typeof core[field] === 'string' ? core[field].trim() : '').filter(Boolean).join('\n\n');
 type EditorView = 'contribution' | 'content' | 'media' | 'materials';
 type EditorPageProps = { params: { id: string }; searchParams?: { ingestionTask?: string | string[]; hermesTask?: string | string[]; history?: string | string[]; stage?: string | string[]; view?: string | string[] } };
 
@@ -306,8 +309,12 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const hermesStage = useOptionalHermesWorkspaceStage();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoredExtraction = useRef(false);
-  const serverCore = useRef<SdfCore>(emptyCore());
+  const serverCore = useRef<SdfCoreSnapshot>(emptyCore());
   const serverVersion = useRef(1);
+  const contentReadOnly = !canEditSdfCore(state.core) || !canEditSdfCore(serverCore.current);
+  function currentCoreIsWritable() {
+    return canEditSdfCore(currentCore.current) && canEditSdfCore(serverCore.current);
+  }
   const confirmedReanalysisIntent = useRef<{ sourceTaskId: string; sourceAgentTaskId: string; idempotencyKey: string } | null>(null);
 
   // 加载 RO + SDF + 版本；来源 query 由下方同步/轮询处理，不重新初始化工作台或草稿。
@@ -325,10 +332,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         serverVersion.current = ro.researchObject.version;
         // 草稿恢复（§18.3）
         const draft = loadDraft(roId);
-        if (draft && Date.now() - draft.savedAt < 24 * 3600 * 1000) {
+        if (canRestoreBrowserDraft(core, draft)) {
           setDraftPrompt(true);
           dispatch({ type: 'init', core: draft.core, version: ro.researchObject.version, dirty: SDF_FIELDS.some((field) => draft.core[field] !== core[field]) });
         } else {
+          setDraftPrompt(false);
           dispatch({ type: 'init', core, version: ro.researchObject.version });
         }
         const restored = await loadResearchMaterials(roId);
@@ -350,7 +358,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => { setSelectedIngestionTaskId(ingestionTaskId); }, [ingestionTaskId]);
 
   useEffect(() => {
-    if (!editorLoaded || draftPrompt || !selectedIngestionTaskId) {
+    if (!editorLoaded || contentReadOnly || draftPrompt || !selectedIngestionTaskId) {
       setIngestionProposal(null);
       setConfirmedReanalysisSource(null);
       setIngestionLoading(false);
@@ -441,9 +449,10 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       onError: (cause) => setIngestionMessage(cause instanceof Error ? cause.message : t('ingestionUnavailable')),
       onSettled: () => setIngestionLoading(false),
     });
-  }, [draftPrompt, editorLoaded, ingestionTasks, roId, selectedIngestionTaskId, state.version, t]);
+  }, [contentReadOnly, draftPrompt, editorLoaded, ingestionTasks, roId, selectedIngestionTaskId, state.version, t]);
 
   function editIngestionProposal(field: SdfField, value: string) {
+    if (!currentCoreIsWritable()) return;
     setIngestionProposal((current) => {
       if (!current) return current;
       const next = { ...current, core: { ...current.core, [field]: value }, touched: [...new Set([...current.touched, field])] };
@@ -452,7 +461,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     });
   }
 
-  function syncEditorServerState(authoritativeCore: SdfCore, version: number, editorCore: SdfCore = authoritativeCore) {
+  function syncEditorServerState(authoritativeCore: SdfCoreSnapshot, version: number, editorCore: SdfCoreSnapshot = authoritativeCore) {
+    // Never let an old editable proposal replace a new/unknown authoritative snapshot.
+    if (!canEditSdfCore(authoritativeCore)) editorCore = authoritativeCore;
     serverCore.current = authoritativeCore;
     serverVersion.current = version;
     currentCore.current = editorCore;
@@ -465,6 +476,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   async function confirmIngestionProposal() {
+    if (!currentCoreIsWritable()) throw new Error(t('snapshotReadOnly'));
     if (!ingestionProposal || confirmingIngestion) return;
     const frozen = confirmationIntent ?? ingestionProposal;
     setConfirmationIntent(frozen);
@@ -584,6 +596,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   async function refreshLegacyProposal() {
+    if (!currentCoreIsWritable()) throw new Error(t('snapshotReadOnly'));
     if (!ingestionProposal?.detail.task.agentTaskId || ingestionProposal.hermesRunId || refreshingLegacyIngestion || !isRefreshableIngestionAnalysis(ingestionProposal.detail.task)) return;
     setRefreshingLegacyIngestion(true);
     setIngestionMessage(null);
@@ -611,6 +624,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   async function createConfirmedReanalysisDraft() {
+    if (!currentCoreIsWritable()) throw new Error(t('snapshotReadOnly'));
     const source = ingestionTasks.find((task) => task.id === selectedIngestionTaskId);
     if (!source?.confirmation || confirmedReanalysisSource?.taskId !== source.id || reanalyzingConfirmedIngestion) return;
     const sourceAgentTaskId = confirmedReanalysisSource.agentTaskId;
@@ -661,7 +675,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         if (serverVersion.current === versionBeforeWait) return;
       }
     }
-    if (!editorLoaded || ingestionWriteBlocked.current) return;
+    if (!editorLoaded || ingestionWriteBlocked.current || !currentCoreIsWritable()) return;
     const frozenCore = { ...currentCore.current };
     if (SDF_FIELDS.every((field) => frozenCore[field] === serverCore.current[field])) return;
     const baseVersion = serverVersion.current;
@@ -698,7 +712,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      if (!state.dirty) return;
+      if (!state.dirty || !currentCoreIsWritable()) return;
       saveDraft(roId, state.core);
       void saveCurrentDraftToServer();
     }, 1000);
@@ -707,7 +721,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   // 刷新后恢复同一个已计费任务或尚未完成的逐字段 review。
   useEffect(() => {
-    if (!editorLoaded || restoredExtraction.current) return;
+    if (!editorLoaded || contentReadOnly || restoredExtraction.current) return;
     restoredExtraction.current = true;
     const checkpoint = loadExtractReviewState(window.localStorage, roId);
     if (!checkpoint) return;
@@ -727,7 +741,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
       manuscriptText,
       sourceCore: state.core,
     });
-  }, [editorLoaded, roId, state.core, t]);
+  }, [contentReadOnly, editorLoaded, roId, state.core, t]);
 
   // 单一串行轮询 owner：每次 await 完成后才安排下一次，避免重叠 GET 与重复完成回调。
   useEffect(() => {
@@ -820,7 +834,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => () => hermesStage?.setRouteState('idle'), [hermesStage]);
 
   function editField(field: FieldKey, value: string) {
-    if (historyRestoring.current) return;
+    if (historyRestoring.current || !currentCoreIsWritable()) return;
     currentCore.current = { ...currentCore.current, [field]: value };
     saveDraft(roId, currentCore.current);
     dispatch({ type: 'edit_field', field, value });
@@ -831,10 +845,11 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   useEffect(() => { if (state.dirty) setNeedsConfirmation(true); }, [state.dirty]);
   const editorDraft: NonNullable<WorkspaceGuidePayload['context']['editorDraft']> = {
     researchObjectId: roId, scope: draftScope, version: state.version,
-    core: { problem: draftCore.problem, insight: draftCore.insight, method: draftCore.method, results: draftCore.results, limitations: draftCore.limitations, reproducibility: draftCore.reproducibility },
+    core: Object.fromEntries(SDF_FIELDS.map(field => [field, typeof draftCore[field] === 'string' ? draftCore[field] : ''])) as Omit<SdfCore, 'schemaVersion'>,
   };
   function applyHermesEdit(edit: NonNullable<WorkspaceGuideResult['draftEdit']>, replace = false) {
     const changed = SDF_FIELDS.filter((field) => typeof edit.changes[field] === 'string');
+    if (!currentCoreIsWritable()) return { applied: 0, conflicts: changed.length };
     if (!editorLoaded || historyOpenRef.current || historyRestoring.current || confirmingIngestion || confirmationIntent || writingDraft.current || edit.base.researchObjectId !== roId || edit.base.scope !== draftScope || edit.base.version !== state.version) return { applied: 0, conflicts: changed.length };
     const applied: typeof edit.changes = {};
     const base = { ...editorDraft, core: { ...editorDraft.core } };
@@ -850,6 +865,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     return { applied: Object.keys(applied).length, conflicts };
   }
   function undoHermesEdit() {
+    if (!currentCoreIsWritable()) return;
     const last = lastHermesEdit.current;
     if (!last || last.base.scope !== draftScope || last.base.version !== state.version) return;
     for (const field of SDF_FIELDS) if (last.changes[field] !== undefined && draftCore[field] === last.changes[field]) {
@@ -872,6 +888,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function applySuggestion(id: string, value: string) {
+    if (!currentCoreIsWritable()) return;
     const revised = suggestionReducer(suggestions, { type: 'revise', id, suggestion: value });
     const applied = suggestionReducer(revised, { type: 'apply', id });
     dispatchSuggestions({ type: 'revise', id, suggestion: value });
@@ -908,6 +925,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
   /** P1D-3：AI 提取（§9.3 异步长任务 + §18.3 轮询进度）。提取只产出建议，不写 SDF（§9.2）。 */
   async function handleExtract() {
+    if (!currentCoreIsWritable()) { setExtractError(t('snapshotReadOnly')); return; }
     const manuscriptText = aggregateCoreText(state.core);
     const checkpoint = loadExtractReviewState(window.localStorage, roId);
     const recovery = recoverableExtraction;
@@ -974,6 +992,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   const prepareVersion = useCallback(async (expected: EditorDraft): Promise<PreparedVersion> => {
+    if (!currentCoreIsWritable()) throw new Error(t('snapshotReadOnly'));
     if (historyOpenRef.current || historyRestoring.current) throw new Error(th('busyDraft'));
     if (!expected) throw new Error(tw('versionMismatch'));
     if (expected.researchObjectId !== roId || expected.scope !== 'sdf') throw new Error(tw('versionMismatch'));
@@ -1015,7 +1034,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     const frozenArtifacts = [...currentArtifacts.current];
     const baseVersion = serverVersion.current;
     const assertCurrent = () => {
-      const coreIsCurrent = expected.researchObjectId === roId
+      const coreIsCurrent = currentCoreIsWritable() && expected.researchObjectId === roId
         && expected.scope === 'sdf'
         && SDF_FIELDS.every((field) => currentCore.current[field] === frozenCore[field]);
       const currentArtifactList = currentArtifacts.current;
@@ -1107,6 +1126,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   }
 
   function discardDraft() {
+    if (!currentCoreIsWritable()) return;
     clearDraft(roId);
     setErrorMsg(null);
     setServerSaveState('saved');
@@ -1162,7 +1182,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
     } catch (cause) { setErrorMsg(cause instanceof Error ? cause.message : String(cause)); }
   }
 
-  const sourceReviewPanel = ingestionTasks.length > 0 ? (<details ref={sourceReviewRef} key={ingestionReviewActive ? 'pending-source' : 'saved-sources'} className={styles.hermesSourceReview} open={ingestionReviewActive || undefined}>
+  const sourceReviewPanel = !contentReadOnly && ingestionTasks.length > 0 ? (<details ref={sourceReviewRef} key={ingestionReviewActive ? 'pending-source' : 'saved-sources'} className={styles.hermesSourceReview} open={ingestionReviewActive || undefined}>
               <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-os-vermilion-ink">{tw('sourceReview')}</summary>
               <section className="mb-6 border-y border-os-rule-paper bg-white px-4 py-5 text-os-ink" aria-labelledby="ingestion-proposal-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1276,8 +1296,9 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
         outline={null}
         main={
           <div className={styles.document}>
+            {contentReadOnly ? <p className={styles.notice} role="status" data-sdf-snapshot-read-only="true">{t('snapshotReadOnly')}</p> : null}
             {(activeView === 'contribution' || draftPrompt || historyMessage || errorMsg) ? <section className={styles.leadSection} aria-label={tw('contribution')}>
-              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} readFirst /> : null}
+              {activeView === 'contribution' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={contentReadOnly || ingestionReviewActive} fields={['insight']} headingLabels={{ insight: tw('coreContribution') }} readFirst /> : null}
               {draftPrompt && (
               <div className={styles.notice}>
                 <span>{t('draftFound')}</span>
@@ -1314,7 +1335,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
             <section className={`${styles.contentSection} ${activeView !== 'content' && activeView !== 'materials' ? styles.viewPanelHidden : ''}`} id="workbench-content" data-workbench-section="content" aria-hidden={activeView === 'content' || activeView === 'materials' ? undefined : true}>
 
             {activeView === 'content' && ingestionReviewActive && <button type="button" className={styles.secondaryButton} onClick={() => { setHermesOpen(true); if (sourceReviewRef.current) sourceReviewRef.current.open = true; }}>{th('reviewInHermes')}</button>}
-            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={ingestionReviewActive} readFirst chapterNavigation /> : null}
+            {activeView === 'content' ? <CoreEditor core={state.core} onEdit={editField} activeField={activeField} onSelectField={setActiveField} readOnly={contentReadOnly || ingestionReviewActive} readFirst chapterNavigation /> : null}
 
             {activeView === 'content' && readingRecord && snapshotReady ? <WorkbenchClaimReader key={`${readingRecord.versionId}:${contentRefresh}`} record={readingRecord} /> : null}
 
@@ -1332,7 +1353,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
 
               </div>
             </section>
-            {!ingestionReviewActive && (extracting || extractError || missingFields.length > 0 || suggestions.some((suggestion) => suggestion.status === 'pending')) ? <details className={styles.subDisclosure}>
+            {!contentReadOnly && !ingestionReviewActive && (extracting || extractError || missingFields.length > 0 || suggestions.some((suggestion) => suggestion.status === 'pending')) ? <details className={styles.subDisclosure}>
               <summary><span>{tw('pendingSuggestions')}</span></summary>
               <div className={styles.disclosureBody}>
                 <HermesAnchor id="hermes-diff" sides={HERMES_DIFF_SIDES}>
@@ -1409,7 +1430,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
               initialTaskAutoApply={hermesHandoffAuthorized}
               onInitialTaskConsumed={consumeHermesHandoff}
               taskRestoreReady={editorLoaded && hermesHandoffResolved}
-              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded ? { editorDraft } : {}), ...(selectedIngestionTaskId ? { writingSource: { ingestionTaskId: selectedIngestionTaskId } } : {}) }}
+              dashboardContext={{ tasks: [], researchObjects: [{ id: roId, title: objectMeta.title, status: 'draft' }], ...(versions[0] ? { presentation: { researchObjectId: roId, versionId: versions[0].versionId } } : {}), ...(editorLoaded && !contentReadOnly ? { editorDraft } : {}), ...(selectedIngestionTaskId && !contentReadOnly ? { writingSource: { ingestionTaskId: selectedIngestionTaskId } } : {}) }}
               onDraftEdit={applyHermesEdit}
               onPrepareVersion={prepareVersion}
               onUndoDraftEdit={undoHermesEdit}

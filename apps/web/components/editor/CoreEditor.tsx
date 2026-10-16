@@ -6,14 +6,17 @@ import { useTranslations } from 'next-intl';
 import { HermesAnchor } from '@/components/hermes/HermesAnchor';
 import { useOptionalHermesWorkspaceStage } from '@/components/hermes/HermesWorkspaceStageContext';
 import { hasExplicitMath, ScientificText, withoutInternalSourceMarkers } from '@/components/content/ScientificText';
+import { SdfFieldContent } from '@/components/content/SdfFieldContent';
+import { canEditSdfCore } from '@/lib/editor-state';
+import type { SdfField } from '@openscience/sdf-schema';
 import type { HermesAnchorId } from '@/lib/hermes/anchor-registry';
-import type { SdfCore } from '../../lib/api';
+import type { SdfCoreSnapshot } from '../../lib/api';
 import styles from './editor.module.css';
 
-const FIELDS: Array<keyof Omit<SdfCore, 'schemaVersion'>> = [
+const FIELDS: SdfField[] = [
   'problem', 'insight', 'method', 'results', 'limitations', 'reproducibility',
 ];
-const HERMES_FIELD_ANCHORS: Record<keyof Omit<SdfCore, 'schemaVersion'>, HermesAnchorId> = {
+const HERMES_FIELD_ANCHORS: Record<SdfField, HermesAnchorId> = {
   problem: 'sdf-problem',
   insight: 'sdf-insight',
   method: 'sdf-method',
@@ -24,7 +27,7 @@ const HERMES_FIELD_ANCHORS: Record<keyof Omit<SdfCore, 'schemaVersion'>, HermesA
 
 function ProseTextarea({ autoFocus = false, field, label, value, placeholder, onBlur, onChange, onFocus }: {
   autoFocus?: boolean;
-  field: keyof Omit<SdfCore, 'schemaVersion'>;
+  field: SdfField;
   label: string;
   value: string;
   placeholder: string;
@@ -72,29 +75,31 @@ function ProseTextarea({ autoFocus = false, field, label, value, placeholder, on
   );
 }
 
-export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly = false, fields, headingLabels, readFirst = false, chapterNavigation = false }: {
-  core: SdfCore;
-  onEdit: (field: keyof Omit<SdfCore, 'schemaVersion'>, value: string) => void;
-  activeField: keyof Omit<SdfCore, 'schemaVersion'> | null;
-  onSelectField: (field: keyof Omit<SdfCore, 'schemaVersion'>) => void;
+export default function CoreEditor({ core, onEdit, activeField, onSelectField, readOnly: requestedReadOnly = false, fields, headingLabels, readFirst = false, chapterNavigation = false }: {
+  core: SdfCoreSnapshot;
+  onEdit: (field: SdfField, value: string) => void;
+  activeField: SdfField | null;
+  onSelectField: (field: SdfField) => void;
   readOnly?: boolean;
-  fields?: Array<keyof Omit<SdfCore, 'schemaVersion'>>;
-  headingLabels?: Partial<Record<keyof Omit<SdfCore, 'schemaVersion'>, string>>;
+  fields?: SdfField[];
+  headingLabels?: Partial<Record<SdfField, string>>;
   readFirst?: boolean;
   chapterNavigation?: boolean;
 }) {
   const t = useTranslations('editor');
+  const readOnly = requestedReadOnly || !canEditSdfCore(core);
   const visibleFields = fields?.length ? fields : FIELDS;
   const current = activeField && visibleFields.includes(activeField)
     ? activeField
     : visibleFields[0] ?? 'problem';
   const hermesStage = useOptionalHermesWorkspaceStage();
-  const [editingField, setEditingField] = useState<keyof Omit<SdfCore, 'schemaVersion'> | null>(null);
+  const [editingField, setEditingField] = useState<SdfField | null>(null);
   const showChapters = readFirst && chapterNavigation;
   const Heading = showChapters ? 'h3' : 'h2';
-  const fieldLabel = (field: keyof Omit<SdfCore, 'schemaVersion'>) => headingLabels?.[field] ?? t(readFirst ? `reading.fields.${field}` : field);
+  const fieldLabel = (field: SdfField) => headingLabels?.[field] ?? t(readFirst ? `reading.fields.${field}` : field);
 
-  function beginEditing(field: keyof Omit<SdfCore, 'schemaVersion'>) {
+  function beginEditing(field: SdfField) {
+    if (readOnly) return;
     setEditingField(field);
     onSelectField(field);
     window.requestAnimationFrame(() => document.getElementById(`sdf-field-${field}`)?.focus());
@@ -144,7 +149,7 @@ export default function CoreEditor({ core, onEdit, activeField, onSelectField, r
               {readOnly ? <span>{fieldLabel(field)}</span> : <button className={styles.sectionEdit} type="button" onClick={() => beginEditing(field)}>{fieldLabel(field)}</button>}
             </h2>}
             <HermesAnchor id={HERMES_FIELD_ANCHORS[field]}>
-              {readOnly || (readFirst && editingField !== field) ? <ScientificText hideSourceMarkers as="p" className={styles.mathSurface} data-reading-role="reading" data-read-only={readOnly ? 'true' : undefined}>{core[field] || t(`hints.${field}`)}</ScientificText> : hasExplicitMath(core[field]) && editingField !== field ? (
+              {readOnly || (readFirst && editingField !== field) ? <SdfFieldContent core={core} field={field} fallback={t(`hints.${field}`)} className={styles.mathSurface} data-reading-role="reading" data-read-only={readOnly ? 'true' : undefined} /> : hasExplicitMath(core[field]) && editingField !== field ? (
                 <ScientificText
                   hideSourceMarkers
                   aria-label={`${t(field)} · ${t('coreEdit')}`}

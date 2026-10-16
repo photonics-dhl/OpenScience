@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 
+vi.mock('next/navigation', () => ({ usePathname: () => '/research-objects/ro/edit' }));
+
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => ({
     outline: 'Outline',
@@ -23,6 +25,7 @@ vi.mock('next-intl', () => ({
 
 import EditorLayout from '../components/editor/EditorLayout';
 import CoreEditor from '../components/editor/CoreEditor';
+import { SdfFieldContent } from '../components/content/SdfFieldContent';
 import ArtifactUploader from '../components/editor/ArtifactUploader';
 import { ArtifactRow } from '../components/research/ArtifactRow';
 import { ArtifactViewer } from '../components/research/ArtifactViewer';
@@ -195,6 +198,35 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(markup.match(/data-read-only="true"/g)).toHaveLength(6);
     expect(markup).not.toContain('<button');
     expect(markup).not.toContain('<textarea');
+  });
+
+  it('reads explicit formatted snapshots without exposing a fresh edit surface', () => {
+    const core = { schemaVersion: '0.2.0', problem: 'Question', insight: '**Finding** and *qualification*\n\n- First\n- Second\n\n[Source](https://example.org) $E=mc^2$ [S12]', method: '**Literal method**', results: '', limitations: '', reproducibility: '', fieldFormats: { insight: 'markdown' as const } };
+    const markup = renderToStaticMarkup(createElement(CoreEditor, { core, activeField: 'insight', onEdit: vi.fn(), onSelectField: vi.fn(), readFirst: true }));
+    const semantic = markup.replace(/<\/?span\b[^>]*>/g, '');
+    expect(semantic).toContain('<strong>Finding</strong>');
+    expect(semantic).toContain('<em>qualification</em>');
+    expect(semantic).toContain('<li>First</li>');
+    expect(markup).toContain('href="https://example.org"');
+    expect(markup).toContain('class="katex"');
+    expect(markup).not.toContain('[S12]');
+    expect(markup).toContain('**Literal method**');
+    expect(markup).not.toContain('<textarea');
+    expect(markup).not.toContain('<button');
+  });
+
+  it('leaves legacy same-map markup literal and neutralizes invalid or unsafe new content', () => {
+    const body = '**Finding** <script>bad()</script> ![hidden](https://example.org/x.png) [unsafe](javascript:alert(1))';
+    const legacy = { schemaVersion: '0.1.0', problem: '', insight: body, method: '', results: '', limitations: '', reproducibility: '', fieldFormats: { insight: 'markdown' } };
+    const plain = renderToStaticMarkup(createElement(SdfFieldContent, { core: legacy, field: 'insight' }));
+    expect(plain).toContain('**Finding**');
+    expect(plain).not.toContain('<strong>');
+    const formatted = renderToStaticMarkup(createElement(SdfFieldContent, { core: { ...legacy, schemaVersion: '0.2.0' }, field: 'insight' }));
+    expect(formatted.replace(/<\/?span\b[^>]*>/g, '')).toContain('<strong>Finding</strong>');
+    expect(formatted).not.toMatch(/<script|<img|href="javascript:/);
+    const invalid = renderToStaticMarkup(createElement(SdfFieldContent, { core: { ...legacy, schemaVersion: '0.2.0', fieldFormats: { insight: 'unknown' } }, field: 'insight' }));
+    expect(invalid).toContain('**Finding**');
+    expect(invalid).not.toContain('<strong>');
   });
 
   it('keeps upload format details secondary and gives preview actions touch targets', () => {
