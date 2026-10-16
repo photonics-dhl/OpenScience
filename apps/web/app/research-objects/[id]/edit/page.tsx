@@ -286,6 +286,7 @@ function EditorWorkspace({ params, searchParams }: EditorPageProps) {
   const showIngestionRecoveryLink = Boolean(selectedIngestionTask && (
     selectedIngestionTask.state === 'failed_retryable'
     || selectedIngestionTask.state === 'failed_blocked'
+    || selectedIngestionTask.state === 'needs_review'
     || (!ingestionLoading && !ingestionProposal && !selectedIngestionTask.confirmation && Boolean(ingestionMessage))
     || (ingestionProposal && !ingestionProposalHasContent)
   ));

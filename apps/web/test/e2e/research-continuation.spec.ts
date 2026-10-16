@@ -60,14 +60,18 @@ test('unsupported formatted research stays read-only across tabs, Hermes and bro
 
 test('selected frozen versions render their own format metadata rather than the live draft', async ({ page }) => {
   await fixtures(page, []);
+  const storedFormattedCore = { ...core, schemaVersion: '0.2.0', insight: '**Frozen finding**', fieldFormats: { insight: 'markdown' } };
   const versions = [
     { versionId: 'stored-formatted', versionNo: 2, status: 'draft', commitMessage: 'Stored formatted version', createdAt: '2026-10-08T00:00:00.000Z' },
     { versionId: 'stored-legacy', versionNo: 1, status: 'draft', commitMessage: 'Stored legacy version', createdAt: '2026-10-07T00:00:00.000Z' },
   ];
   await page.route('**/api/research-objects/journey-ro/versions', route => readJson(route, { versions }));
+  await page.route('**/api/versions/stored-formatted', route => readJson(route, { version: {
+    versionId: 'stored-formatted', snapshot: { core: storedFormattedCore, artifacts: [] },
+  } }));
   await page.route('**/api/research-objects/journey-ro/versions/*/record', route => {
     const versionId = new URL(route.request().url()).pathname.split('/').at(-2)!;
-    return readJson(route, { record: { objectId: ro.id, versionId, recordState: 'recorded', sdf: { ...core, schemaVersion: versionId === 'stored-formatted' ? '0.2.0' : '0.1.0', insight: '**Frozen finding**', fieldFormats: { insight: 'markdown' } }, manifest: [], claims: [], evidence: [] } });
+    return readJson(route, { record: { objectId: ro.id, versionId, recordState: 'recorded', sdf: versionId === 'stored-formatted' ? storedFormattedCore : { ...storedFormattedCore, schemaVersion: '0.1.0' }, manifest: [], claims: [], evidence: [] } });
   });
   await page.goto('/research-objects/journey-ro/edit');
   await page.locator('summary').filter({ hasText: /^More$/ }).click();
