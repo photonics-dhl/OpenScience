@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { editorReducer, emptyCore, saveDraft, loadDraft, clearDraft, draftKey } from '../lib/editor-state';
+import { editorReducer, emptyCore, saveDraft, loadDraft, clearDraft, draftKey, canEditSdfCore, canRestoreBrowserDraft } from '../lib/editor-state';
 import { suggestionReducer, applySuggestionsToCore, demoSuggestions } from '../lib/suggestions';
 
 /** §5.1 六字段（对齐 SDF_CORE_FIELDS，合同测试本地常量避免跨包依赖）。 */
@@ -27,6 +27,27 @@ const core = () => ({
 });
 
 describe('editorReducer', () => {
+  it('keeps unsupported snapshots intact and refuses edits, including invalid new snapshots', () => {
+    for (const snapshot of [
+      { ...core(), schemaVersion: '0.2.0', insight: '**Finding**', fieldFormats: { insight: 'markdown' } },
+      { schemaVersion: '0.2.0', insight: '**Finding**', fieldFormats: { insight: 'invalid' } },
+      { ...core(), schemaVersion: '9.0.0' },
+    ]) {
+      const state = editorReducer({ core: emptyCore(), version: 1, dirty: false, lastSavedAt: null }, { type: 'init', core: snapshot as ReturnType<typeof emptyCore>, version: 2, dirty: true });
+      expect(state.core).toEqual(snapshot);
+      expect(state.dirty).toBe(false);
+      expect(editorReducer(state, { type: 'edit_field', field: 'insight', value: 'Overwritten' })).toBe(state);
+      expect(canEditSdfCore(state.core)).toBe(false);
+    }
+  });
+
+  it('keeps legacy opaque same-name metadata editable without interpreting it', () => {
+    const legacy = { ...core(), fieldFormats: { insight: 'markdown', future: { arbitrary: true } } };
+    expect(canEditSdfCore(legacy)).toBe(true);
+    const state = editorReducer({ core: emptyCore(), version: 1, dirty: false, lastSavedAt: null }, { type: 'init', core: legacy, version: 2 });
+    expect(editorReducer(state, { type: 'edit_field', field: 'insight', value: 'Plain update' }).core).toEqual({ ...legacy, insight: 'Plain update' });
+  });
+
   it('loads partial paper content without dropping extension fields', () => {
     const partial = { schemaVersion: '0.1.0', problem: 'Research question', futureField: 'Retained' } as unknown as ReturnType<typeof emptyCore>;
     const state = editorReducer({ core: emptyCore(), version: 1, dirty: false, lastSavedAt: null }, { type: 'init', core: partial, version: 2 });
@@ -59,12 +80,27 @@ describe('editorReducer', () => {
   it('六字段全可编辑（§5.1 SDF_CORE_FIELDS）', () => {
     for (const field of SDF_CORE_FIELDS) {
       const s = editorReducer({ core: core(), version: 1, dirty: false, lastSavedAt: null }, { type: 'edit_field', field, value: `新${field}` });
-      expect((s.core as Record<string, string>)[field]).toBe(`新${field}`);
+      expect(s.core[field]).toBe(`新${field}`);
     }
   });
 });
 
 describe('草稿持久化（§18.3）', () => {
+  it('never replaces a retained browser draft with an unsupported snapshot', () => {
+    saveDraft('ro-1', core());
+    const before = localStorage.getItem(draftKey('ro-1'));
+    saveDraft('ro-1', { ...core(), schemaVersion: '0.2.0' });
+    expect(localStorage.getItem(draftKey('ro-1'))).toBe(before);
+  });
+
+  it('restores only a supported browser draft onto a supported server core', () => {
+    const draft = { core: core(), savedAt: Date.now() };
+    expect(canRestoreBrowserDraft(core(), draft)).toBe(true);
+    expect(canRestoreBrowserDraft({ ...core(), schemaVersion: '0.2.0' }, draft)).toBe(false);
+    expect(canRestoreBrowserDraft(core(), { ...draft, core: { ...core(), schemaVersion: '0.2.0' } })).toBe(false);
+    expect(canRestoreBrowserDraft(core(), { ...draft, savedAt: Number.NaN })).toBe(false);
+    expect(canRestoreBrowserDraft(core(), { ...draft, savedAt: Date.now() - 25 * 3600 * 1000 })).toBe(false);
+  });
 
   it('saveDraft + loadDraft 往返', () => {
     const c = core();

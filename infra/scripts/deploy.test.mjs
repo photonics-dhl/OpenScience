@@ -432,15 +432,16 @@ test('rollback verifier dispatches guarded finite proofs only after original def
     finiteImageCapablePairCompatibility(...args){events.push(['capable',...args]);return accept==='capable';},
     finiteImageFirstPairCompatibility(...args){events.push(['first',...args]);return accept==='first';},
     finiteVoicePairCompatibility(...args){events.push(['voice',...args]);return accept==='voice';},
+    finiteSdfReadablePairCompatibility(...args){events.push(['sdf',...args]);return accept==='sdf';},
     finiteSelectedGuidePairCompatibility(...args){events.push(['selected',...args]);return accept==='selected';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
   });
-  for(const allowed of ['video','capable','first','voice','selected']){
+  for(const allowed of ['video','capable','first','voice','sdf','selected']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
     assert.deepEqual(events.slice(0,2).map(row=>row[0]),['collect','collect']);
     const attempted=events.slice(2);
-    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','selected'].slice(0,['video','capable','first','voice','selected'].indexOf(allowed)+1));
+    assert.deepEqual(attempted.map(row=>row[0]),['video','capable','first','voice','sdf','selected'].slice(0,['video','capable','first','voice','sdf','selected'].indexOf(allowed)+1));
     for(const row of attempted){assert.equal(row[2],current);assert.equal(row[3],previous);assert.equal(row[6],roots);}
   }
   accept='';events.length=0;
@@ -1084,8 +1085,8 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
   // An ambient output must not replace current tracked bytes; tracked changes
   // already have the explicit, exact-byte-checked mutation path above.
   for (const filename of ambient.keys()) assert.ok(!sourceInventory.has(filename), 'ambient input cannot replace tracked source');
-  // W source fixtures compare tracked source inventories, not installed roots.
-  // Keep actual working-tree bytes and explicit mutations, including new files.
+  // Source fixtures compare selected inventories, not installed roots. Historical
+  // roots admit only their own bytes and explicit inputs, never live app fallback.
   const readable = filename => !trackedSourceOnly || !ownsSource(filename)
     || sourceInventory.has(key(filename)) || overlays.has(key(filename));
   // Same source-only analysis boundary as rollbackReaderClosure: this is not a
@@ -1167,6 +1168,72 @@ function videoPairRuntime(ts, text) {
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
 
+function sdfReadableSourceComponents() {
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  return runInNewContext(`${component}; ({ model: typeof finiteSdfReadableSourceModel === 'function' ? finiteSdfReadableSourceModel : undefined,
+    pair: typeof finiteSdfReadablePairCompatibility === 'function' ? finiteSdfReadablePairCompatibility : undefined, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+}
+
+test('SDF readable R source proof preserves the actual 764 runtime and old opaque domain', async () => {
+  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
+  const methods = sdfReadableSourceComponents();
+  assert.equal(typeof methods.model, 'function', 'the original finite verifier must cover readable R');
+  let model;
+  try { model = methods.model(actual.ts, videoPairContext(actual), videoPairContext(old)); }
+  catch (error) { assert.fail(`${error.reason ?? error.message} ${error.node?.getText?.().slice(0, 180) ?? ''}`); }
+  assert.equal(model.domain, 'stored-snapshot-copy-and-legacy-fresh');
+  assert.equal(model.projected.size, 6);
+  assert.equal(model.capsules.size, 1);
+  for (const [path, value] of model.projected) assert.deepEqual(videoPairRuntime(actual.ts, value.text),
+    videoPairRuntime(old.ts, old.program.getSourceFile(resolve(old.projectRoot, path)).text), path);
+  assert.equal(methods.pair(actual.ts, [], [], actual.projectRoot, old.projectRoot, []), false,
+    'source-only Programs must never acquire genuine DEFAULT collector authority');
+  for (const values of [[], [['module:reader', 'opaque']], JSON.parse(JSON.stringify([['module:reader', 'opaque']]))])
+    assert.equal(methods.pair(actual.ts, values, values.slice(), actual.projectRoot, old.projectRoot, methods.defaultRoots), false,
+      'uncollected and cloned arrays cannot borrow the actual Program proof');
+});
+
+test('SDF readable R rejects changes to source, permission, revision, fresh admission and opaque semantics', async t => {
+  const methods = sdfReadableSourceComponents();
+  const old = await videoIngressProgram(new Map(), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' });
+  const commits = 'packages/domain/src/commit/commits.ts', readable = 'packages/sdf-schema/src/readable-core.ts';
+  const cases = [
+    ['fresh readable validator', commits, text => text.replace('storedCore === undefined ? validateSdfDraftCore(finalCore)', 'storedCore === undefined ? validateReadableSdfDraftCore(finalCore)')],
+    ['raw caller core', commits, text => text.replace('core = source.manifest.coreJson as Record<string, unknown>;', 'core = (input as any).sdfCore;')],
+    ['cross RO version', commits, text => text.replace('where: { id: input.source.versionId, researchObjectId: ro.id }', 'where: { id: input.source.versionId }')],
+    ['stored optimistic conflict', commits, text => text.replace('if (ro.version !== input.version) throw', 'if (false) throw')],
+    ['stored transaction lock', commits, text => text.replace('FOR UPDATE`;', '`;')],
+    ['missing artifact retention', commits, text => text.replace('deletedAt: null } }) !== new Set(artifactIds).size', 'deletedAt: null } }) !== -1')],
+    ['ordinary authority residual', commits, text => text.replace("if (!['owner', 'maintainer', 'author', 'contributor'].includes(membership.role) || (isDefault && membership.role === 'contributor'))", 'if (false)')],
+    ['commit persistence residual', commits, text => text.replace('data: { version: input.version + 1 }', 'data: { version: input.version + 2 }')],
+    ['old opaque map reinterpreted', readable, text => text.replace("(doc as { schemaVersion?: unknown }).schemaVersion === SDF_READABLE_CORE_VERSION", "'fieldFormats' in doc")],
+    ['full reader uses draft validation', readable, text => text.replace('return validateSdfCore(doc);', 'return validateSdfDraftCore(doc);')],
+    ['unsupported identity coerced', readable, text => text.replace('return validateSdfDraftCore(doc);', "return validateSdfDraftCore({ ...doc as object, schemaVersion: '0.1.0' });")],
+    ['unsafe Ajv mutation option', readable, text => text.replace('new Ajv({ allErrors: true })', 'new Ajv({ allErrors: true, removeAdditional: true })')],
+    ['extra eager initialization', readable, text => `${text}\nconst eager = Date.now();\n`],
+    ['unsupported format accepted', readable, text => text.replace("enum: ['plain', 'markdown']", "enum: ['plain', 'markdown', 'html']")],
+    ['fresh createRO version reopened', 'packages/domain/src/research-object/research-objects.ts', text => text.replace('core.schemaVersion !== undefined && core.schemaVersion !== SDF_CORE_VERSION', 'false')],
+    ['journal version reopened', 'packages/domain/src/journal/publishing.ts', text => text.replace('explicitCoreVersion !== undefined && explicitCoreVersion !== SDF_CORE_VERSION', 'false')],
+    ['journal strips opaque history', 'packages/domain/src/journal/publishing.ts', text => text.replace('const core = { ...draft.core, schemaVersion:', 'const core = { schemaVersion:')],
+    ['unchanged digest exposes spread order', 'packages/domain/src/journal/content.ts', text => text.replace('JSON.stringify(canonical(value))', 'JSON.stringify(value)'), true],
+    ['restore caller source substitution', 'packages/domain/src/commit/restore-draft.ts', text => text.replace("source: { kind: 'version', versionId: source.id }", "source: { kind: 'version', versionId: input.versionId + '-other' }")],
+    ['extra stored source caller', commits, text => `${text}\nexport const unsafeStoredAlias = createStoredSnapshotCommit;\n`],
+    ['internal source escape', commits, text => `${text}\nexport const unsafeInternalAlias = createCommitInternal;\n`],
+    ['unchanged namespace acquires new helper', 'packages/domain/src/commit/research-record.ts', text => `import * as snapshots from './commits';\n${text}\nexport const escape = () => snapshots;\n`, true],
+    ['unchanged dynamic import acquires new helper', 'packages/domain/src/commit/research-record.ts', text => `${text}\nexport async function escape() { return import('./commits'); }\n`, true],
+    ['changed old opaque domain', 'packages/sdf-schema/src/core.ts', text => text.replace("title: 'OpenScience SDF Draft Core',", "title: 'OpenScience SDF Draft Core', additionalProperties: false,")],
+  ];
+  for (const [name, path, mutate, both] of cases) await t.test(name, async () => {
+    const current = await videoIngressProgram(new Map([[path, mutate]]), { trackedSourceOnly: true });
+    const previous = both ? await videoIngressProgram(new Map([[path, mutate]]), { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a' }) : old;
+    assert.throws(() => methods.model(current.ts, videoPairContext(current), videoPairContext(previous)),
+      error => typeof error.reason === 'string' && error.reason.startsWith('SDF_R_'), name);
+  });
+});
+
 function voicePairSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
@@ -1179,20 +1246,12 @@ function voicePairSourceComponents() {
 // the current writer phase. These historical source Programs grant no authority.
 const releasedVoiceReaderSource = { sourceRef: '70e81398903db9cfd6f46cbab51db18ba5f7cb05' };
 
-// Retain the previous pure-selector fixture after the format reader evolves.
-// The two MP3 runtime modules were unchanged by the released selector writer.
-// Reuse the already retained reader oracle; no additional CI ref is needed.
-// This remains an explicit source overlay, never a release or collector grant.
+// Pin each complete historical transition independently of later candidate work.
+// Inventories, manifests and runtime bytes must belong to the same source ref.
+const releasedVoiceFormatReaderSource = { sourceRef: '764020c76b25af571e8b88e80338406d70bdb37a', trackedSourceOnly: true };
+const releasedVoiceWriterSource = { sourceRef: '1c88ff813db128fd1933096a2f102c1c1c667b25' };
 async function retainedVoiceWriterProgram(changes = new Map(), options = {}) {
-  const root = fileURLToPath(new URL('../../', import.meta.url));
-  const historical = historicalVideoSource(root, releasedVoiceReaderSource.sourceRef);
-  const overlays = new Map(['packages/ai-gateway/src/synclip-audio-api.ts', 'packages/domain/src/agent/voice.ts']
-    .map(path => [path, historical.sources.get(resolve(root, path).replaceAll('\\', '/').toLowerCase())]));
-  for (const [path, change] of changes) {
-    const original = overlays.get(path) ?? (existsSync(resolve(root, path)) ? readFileSync(resolve(root, path), 'utf8') : '');
-    overlays.set(path, typeof change === 'function' ? change(original) : change);
-  }
-  return videoIngressProgram(overlays, options);
+  return videoIngressProgram(changes, { ...options, ...releasedVoiceWriterSource });
 }
 
 // The pure selector theorem compares complete adjacent MP3 source families.
@@ -1489,6 +1548,11 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
   assert.equal(methods.writer(scoped.ts, videoPairContext(scoped), videoPairContext(reader), voiceSourceEntries(scoped), voiceSourceEntries(reader)).phase, 'writer');
   const explicit = await retainedPureVoiceWriterProgram(new Map([...changes, [extra, text]]), { ambientSources, trackedSourceOnly: true });
   assert.equal(get(explicit)?.text, text, 'an explicit source mutation must remain visible even outside the tracked inventory');
+  const explicitClient = explicit.program.getSourceFile(resolve(explicit.projectRoot, client));
+  const explicitImport = explicitClient.statements.find(node => explicit.ts.isImportDeclaration(node)
+    && node.moduleSpecifier.text === '../generated/voice-source-boundary.js');
+  assert.ok(explicit.program.getTypeChecker().getSymbolAtLocation(explicitImport.moduleSpecifier)?.declarations
+    ?.some(node => node.getSourceFile() === get(explicit)), 'the explicit new JS must bind the real import even in a scoped historical Program');
   assert.throws(() => methods.writer(explicit.ts, videoPairContext(explicit), videoPairContext(reader), voiceSourceEntries(explicit), voiceSourceEntries(reader)),
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
   await assert.rejects(() => retainedPureVoiceWriterProgram(new Map([[extra, value => `${value}\nexport const another = 1;`]])),
@@ -1511,7 +1575,7 @@ test('voice writer source inventory bounds ambient JavaScript resolution without
 test('voice writer tracked runtime mutations retain exact current bytes and strict residual rejection', async () => {
   const methods = voicePairSourceComponents(), reader = await videoIngressProgram(new Map(), releasedVoiceReaderSource);
   const path = 'packages/ai-gateway/src/synclip-audio-api.ts';
-  const text = readFileSync(resolve(reader.projectRoot, path), 'utf8') + '\nexport const voiceSourceMutationSentinel = true;\n';
+  const text = reader.program.getSourceFile(resolve(reader.projectRoot, path)).text + '\nexport const voiceSourceMutationSentinel = true;\n';
   const writer = await retainedVoiceWriterProgram(new Map([[path, text]]), { trackedSourceOnly: true });
   assert.equal(writer.program.getSourceFile(resolve(writer.projectRoot, path)).text, text,
     'tracked-source inventory must preserve the exact current mutation, not read a HEAD blob');
@@ -1549,6 +1613,11 @@ function selectedGuideSourceContext(actual) {
 // image4cc inventory and source host; they are not the live combined candidate.
 function retainedSelectedGuideProgram(changes = new Map()) {
   return videoIngressProgram(changes, { sourceRef: '4cc78008f86da811aeb695b5d3639a5b52891d57' });
+}
+
+// Complete selected+voice transition, independent of later SDF additions.
+function retainedSelectedVoiceProgram(changes = new Map()) {
+  return videoIngressProgram(changes, { sourceRef: '2ad0aa1b103797dd9f86a005ff3c33050b33ff54', trackedSourceOnly: true });
 }
 
 test('selected guide supplementary writer input retains captured nodes and actual API and Drawer sources', async () => {
@@ -2084,7 +2153,7 @@ test('selected guide legacy retry cannot execute an added effect before its abse
 });
 
 test('selected guide current combination closes the whole source over the exact voice reader', async () => {
-  const components = selectedGuideSourceComponents(), actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  const components = selectedGuideSourceComponents(), actual = await retainedSelectedVoiceProgram();
   const previous = await historicalVideoIngressProgram(new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
   const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
   assert.equal(model.status, 'conditional');
@@ -2176,7 +2245,7 @@ test('selected guide initialization consumes original collected module equality 
 test('selected guide current voice predecessor refuses eager effects keys and non-data suppliers at their actual nodes', async t => {
   const components = selectedGuideSourceComponents(), voice = 'apps/agent-worker/src/voice.ts', worker = 'apps/agent-worker/src/index.ts';
   const check = async (changes, both, evidence) => {
-    const actual = await videoIngressProgram(changes);
+    const actual = await retainedSelectedVoiceProgram(changes);
     const previous = await historicalVideoIngressProgram(both ? changes : new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
     assert.throws(() => components.handlers(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
       error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED' && evidence(error.node, actual),

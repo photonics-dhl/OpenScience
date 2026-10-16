@@ -131,6 +131,20 @@ describe('高风险判定（§8.3 四类）', () => {
 });
 
 describe('mergePullRequest（§8.3 + §3.3 + Q2/Q3/Q4）', () => {
+  it.each(['0.1.0', '0.2.0'])('carries the selected source branch %s snapshot metadata into the merge', async schemaVersion => {
+    const f = await makeRoWithPr();
+    const source = f.db.versions.find(row => row.versionNo === 2)!;
+    const stored = { ...CORE, schemaVersion, insight: '**Source branch**', fieldFormats: { insight: 'markdown' }, opaque: ['retained'] };
+    f.db.versionManifests.find(row => row.versionId === source.id)!.coreJson = structuredClone(stored);
+    f.db.sdfDocuments[0].coreJson = { ...CORE, insight: 'Later live draft' };
+    await mergePullRequest(f.deps, { prId: f.pr.id, userId: f.owner.id, confirmHighRisk: false });
+    const merged = f.db.versions.toSorted((a, b) => b.versionNo - a.versionNo)[0]!;
+    expect(merged.id).not.toBe(source.id);
+    expect(f.db.versionManifests.find(row => row.versionId === merged.id)!.coreJson).toEqual(stored);
+    const record = (await getResearchRecord(f.deps, { researchObjectId: f.ro.id, versionId: merged.id, userId: f.owner.id })).record as Record<string, unknown>;
+    expect(record.sdf).toEqual(stored);
+  });
+
   it('owner merge 低风险：PR merged + target 分支新 commit + 新草稿版本 + 事件', async () => {
     const { deps, owner, pr, main } = await makeRoWithPr();
     const result = await mergePullRequest(deps, { prId: pr.id, userId: owner.id, confirmHighRisk: false });

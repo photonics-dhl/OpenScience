@@ -4,7 +4,7 @@ import { carryVersionMedia } from './carry-media';
 import type { ArtifactDeps } from '../artifact/artifacts';
 import type { WorkspaceDeps } from '../workspace/types';
 import { getBlobStorageKey } from '@openscience/storage';
-import { validateSdfDraftCore } from '@openscience/sdf-schema';
+import { validateReadableSdfDraftCore, validateSdfDraftCore } from '@openscience/sdf-schema';
 import { buildSnapshot, diffSdfCore, type ManifestEntryInput, type VersionSnapshot } from '@openscience/versioning';
 import type { Prisma } from '@prisma/client';
 import type { AuditContext } from '@openscience/observability';
@@ -99,6 +99,61 @@ export async function createCommit(
   transaction?: Prisma.TransactionClient,
   systemExecution?: { executor: 'hermes'; runId: string },
 ): Promise<CreateCommitResult> {
+  return createCommitInternal(deps, input, ctx, transaction, systemExecution);
+}
+
+/**
+ * Restore-only composition: derive content from the locked RO or a version of
+ * that same RO. No caller-provided core, artifact list or trust flag is accepted.
+ * This is intentionally absent from the domain public barrel and HTTP routes.
+ */
+export async function createStoredSnapshotCommit(
+  deps: WorkspaceDeps,
+  input: {
+    researchObjectId: string; userId: string; version: number; message: string;
+    source: { kind: 'version'; versionId: string } | { kind: 'current-draft' };
+  },
+  ctx: AuditContext,
+  transaction: Prisma.TransactionClient,
+): Promise<CreateCommitResult> {
+  await transaction.$queryRaw`SELECT id FROM research_objects WHERE id = ${input.researchObjectId}::uuid FOR UPDATE`;
+  const ro = await transaction.researchObject.findUnique({ where: { id: input.researchObjectId }, include: { sdfDocument: true } });
+  if (!ro || ro.deletedAt) throw new CommitError('RESEARCH_OBJECT_NOT_FOUND', '研究对象不存在');
+  await requireCommitAuthority({ ...deps, prisma: transaction as WorkspaceDeps['prisma'] }, ro.workspaceId, input.userId, true);
+  if (ro.version !== input.version) throw new CommitError('CONCURRENT_UPDATE', '版本冲突，请刷新后重试');
+  let core: Record<string, unknown>;
+  let artifacts: ArtifactReference[] | undefined;
+  if (input.source.kind === 'version') {
+    const source = await transaction.version.findFirst({
+      where: { id: input.source.versionId, researchObjectId: ro.id },
+      include: { manifest: { include: { entries: true } } },
+    });
+    if (!source?.manifest) throw new CommitError('VALIDATION_ERROR', '所选历史稿不存在');
+    const artifactIds = source.manifest.entries.map(entry => entry.artifactId);
+    if (await transaction.artifact.count({ where: { id: { in: artifactIds }, workspaceId: ro.workspaceId, deletedAt: null } }) !== new Set(artifactIds).size) {
+      throw new CommitError('VALIDATION_ERROR', '历史材料已移入回收站，请先恢复相关材料');
+    }
+    core = source.manifest.coreJson as Record<string, unknown>;
+    artifacts = source.manifest.entries.map(entry => ({ artifactId: entry.artifactId, logicalPath: entry.logicalPath }));
+  } else {
+    if (!ro.sdfDocument) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不存在');
+    core = ro.sdfDocument.coreJson as Record<string, unknown>;
+  }
+  return createCommitInternal(deps, {
+    researchObjectId: ro.id, userId: input.userId, version: input.version, message: input.message,
+    sdfCore: core, ...(artifacts ? { artifacts } : {}),
+  }, ctx, transaction, undefined, core);
+}
+
+/** The source-bound path shares all commit persistence and concurrency checks. */
+async function createCommitInternal(
+  deps: WorkspaceDeps,
+  input: CreateCommitInput,
+  ctx: AuditContext,
+  transaction?: Prisma.TransactionClient,
+  systemExecution?: { executor: 'hermes'; runId: string },
+  storedCore?: Record<string, unknown>,
+): Promise<CreateCommitResult> {
   // Internal composition: all reads and writes use the caller's transaction.
   if (transaction) deps = { ...deps, prisma: transaction as WorkspaceDeps['prisma'] };
   if (!transaction && (systemExecution || input.idempotencyKey?.startsWith('ingestion-confirm:') || input.idempotencyKey?.startsWith('hermes-ingestion:'))) {
@@ -189,7 +244,7 @@ export async function createCommit(
   const liveCore = (ro.sdfDocument?.coreJson as Record<string, unknown> | undefined) ?? predecessorCore;
   const changesets: Array<{ kind: string; payload: Prisma.InputJsonValue }> = [];
   const finalCore = input.sdfCore ?? (branch.isDefault ? liveCore : predecessorCore);
-  const check = validateSdfDraftCore(finalCore);
+  const check = storedCore === undefined ? validateSdfDraftCore(finalCore) : validateReadableSdfDraftCore(storedCore);
   if (!check.ok) throw new CommitError('VALIDATION_ERROR', 'SDF 文档不符合 core Schema');
   const patch = diffSdfCore(predecessorCore, finalCore);
   if (patch.length) {

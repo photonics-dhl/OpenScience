@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { apiRequest, type PublicClaim, type PublicEvidence, type PublicEvidenceSource, type SdfCore } from '@/lib/api';
+import { apiRequest, type PublicClaim, type PublicEvidence, type PublicEvidenceSource, type SdfCoreSnapshot } from '@/lib/api';
 import { ClaimNarrative } from '@/components/public/ClaimNarrative';
 import { EvidenceSheet } from '@/components/public/EvidenceSheet';
 import styles from '@/components/public/PublicReadingProduct.module.css';
@@ -10,7 +10,7 @@ import styles from '@/components/public/PublicReadingProduct.module.css';
 export type ReadingRecord = {
   objectId: string;
   versionId: string;
-  sdf: SdfCore;
+  sdf: SdfCoreSnapshot;
   claims: PublicClaim[];
   evidence: Array<Omit<PublicEvidence, 'artifact' | 'exactQuote'> & { artifactId: string; contentHash: string }>;
   manifest: Array<{ artifactId: string; logicalPath: string; blobSha256: string; mimeType?: string | null }>;
