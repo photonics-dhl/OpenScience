@@ -8,5 +8,5 @@
 - UI已认可视觉首组已发布观察；第二组与入口体验后继已审，旧CI的真实首图74pass/3fail和后置未到保留。唯一spec把私有Hermes结果与授权共享media分别实证，保账号task/origin/direct-run隔离、原key/body/次数；Source与组合High均零项，浏览器正由新组合原完整CI执行，不用旧候选结果替代。未将Source GO当产品交付，P05和未认可页面不扩权。
 - 原71e/591e/e875成功事实与一次额度保留；新稿旁白适配、single-emitter全字段限定和构图歧义仍需真实私有修订及科学High，未生成商业媒体或公开。原图/公开版本/PDF/SourceMap/task/oncekey、平台与供应商费用分开保护。
 - R12共同排序与ordinary late-paid/真实PG子组已验收，真实Redis/RO、主机断电、永久丢响应及整体仍OPEN；架构生产冻结未被独立视频许可覆盖。R08独立候选与R13 OOM根因未关闭。
-- 2026-10-15资源维护：旧stop137及原restore事实保留。根因窄定位后已同High恢复原PG专用alias，科研容器未重启；新的原受限custody一次成功保存3267条及当前/两历史state引用，随后只读已存schema及真实receiver908全部在源内。V2完整High零项，root单独prepare核身份/容量通过，Web约110秒正常退出、Worker300秒137/nonOOM，四后端未停/五卷未归档/配置未激活。原partial restore成功，原诊断栈与科研身份保持；唯一恢复后实测只作失败恢复对比、不称收益，该停止窗口结束不重试；应用发布完成后原两固定生命周期源码已一次读回，交架构定位最小候选/离线测试/同High，R13与receiver/在途义务仍OPEN，不以历史purge不可证无限阻塞。
+- 2026-10-15资源维护：旧stop137及原restore事实保留。根因窄定位后已同High恢复原PG专用alias，科研容器未重启；新的原受限custody一次成功保存3267条及当前/两历史state引用，随后只读已存schema及真实receiver908全部在源内。V2完整High零项，root单独prepare核身份/容量通过，Web约110秒正常退出、Worker300秒137/nonOOM，四后端未停/五卷未归档/配置未激活。原partial restore成功，原诊断栈与科研身份保持；唯一恢复后实测只作失败恢复对比、不称收益，该停止窗口结束不重试；应用发布完成后原两固定生命周期源码已一次读回，已定位NodeSDK关闭接线缺口，两compiled最小候选定向7/7、同High最终增量待收，未部署且不证明旧137根因，R13与receiver/在途义务仍OPEN，不以历史purge不可证无限阻塞。
 - 全部本机archive/cleanup/prune继续冻结；tracked恢复不等于依赖恢复，无安装/store修复/整拷node_modules。三篇真实论文全流程、普通用户旅程、完整视频与整站审美目标仍未完成。
