@@ -2,9 +2,9 @@
 
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施、失败与发布留在 Git 和原回执。
 
-- 最新直接人类指定图片reader先收口：保住当前生产052供图片独立配对CI与原发布窗口，其他源码/CI并行，避免其它上线使图片长跑失效。该排序不取消语音/视频/UI交付，R2不阻reader。
-- 图片reader独立完整CI现六job全部成功：实际候选/线上回滚配对、原9媒体例、558发布测试、API五文件55项和全部必需尾项均有原日志；旧失败/取消保留。root按原High条件进入唯一发布窗口，先fresh线上核对、一次新双库备份及读回，再原事务部署/after；尚未部署。R2源码已收取但capable兼容仍UNKNOWN、writer断开，自然改图与真实PNG/科学质量/费用未验，Provider HOLD保持。
-- UI R已发布并完成站内只读观察，视觉差额保留。格式W独立CI六job完整成功、唯一采集器关闭；尚未部署或激活W，祖先变化后核原配对适用性，不阻图片链。
-- 视频新独立CI六job已完整成功，root独核精确328/052身份，原owner唯一必要日志/元数据已收口，644发布检查与831 Native检查分别通过。先保护图片reader发布顺序，旧失败与paid/late保持；尚未发布或消费新私有修订。
-- 语音fee/WAV组合正式CI六job完整成功：真实bb40/052配对、compiled、535发布测试、类型/build/lint与主浏览器92/retry34/docs全部完成。唯一原件采集已关闭，原失败保留；当前未部署/启用，先按图片发布顺序保护052，再承接真实ASR及原paid-ID TTS恢复播放与逐笔/累计费用。
-- 无新Provider或费用回填；原1S/平台net0分别保留，实际音质/麦克风与成本整体P1仍未验。R12整体、R08/R13、三篇论文与普通用户完整旅程、维护J14/B/C及137失败仍未完成；原图/public/来源/UNKNOWN和安装/cleanup/prune冻结保持。
+- 图片 reader 已完成完整六 job CI 和原唯一备份/发布/独立 after，服务窗已关闭；实际三服务使用同一只读发布源。唯一 UI owner 的旧 IAB 实例不可用，一次官方恢复也失败；另准工具支持的 Chrome 同范围只读观察，尚无本轮页面或截图证据。
+- R2 已审源码正在与该实际 reader 机械组合：四个测试/配置差额，无冲突；原 R2 内容保持，唯一共享浏览器测试仅加入原诊断。原 Same High 已通过机械组合，root 已提交推送；原 owner 已开始仅两 infra 的 changed-capable 证明窗，应用源码冻结，writer/adoption 断开。
+- 自然改图、双入口同任务、断线恢复、原资产与位置理解、新 PNG 科学质量和费用仍未验；reader 上线和九个 harness 通过不代产品验收。Provider HOLD 保持。
+- UI 格式 writer、视频 writer、语音 fee/WAV 各自已有完整历史 CI；图片发布优先窗口已收口，后继须针对新实际祖先组合并完成必要配对，生产由 root 串行。原语音/视频 owner 已完成有界只读组合交接，视频已定位新的 wrapper/Core 证明缺口；旧 CI 不作新祖先的发布证明。
+- 语音原 paid-ID 恢复播放/ASR 与逐笔费用、视频获准一次新私有修订均未消费；原 supplier1S/平台net0 分开保留，未知或已付费任务不盲重发。
+- R12整体、R08/R13、三篇论文与普通用户旅程、维护J14/B/C及137失败仍未完成；原图/public/来源/UNKNOWN和安装/cleanup/prune冻结保持。
