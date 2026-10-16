@@ -52,6 +52,23 @@ async function fixture() {
 }
 
 describe('frozen research record real HTTP routes', () => {
+  it.each(['0.1.0', '0.2.0'])('returns the selected frozen %s format metadata unchanged in record and export reads', async schemaVersion => {
+    const f = await fixture();
+    const stored = { ...f.core, schemaVersion, insight: '**Frozen insight**', fieldFormats: { insight: 'markdown' }, opaque: { source: 'selected version' } };
+    f.db.versionManifests.find(row => row.versionId === f.versionId)!.coreJson = structuredClone(stored);
+    f.db.versions.find(row => row.id === f.versionId)!.researchRecord.dto.sdf = structuredClone(stored);
+    f.db.sdfDocuments[0].coreJson = { ...f.core, insight: 'Later live draft', fieldFormats: { method: 'markdown' } };
+    const response = await f.app.inject({ method: 'GET', url: f.url, cookies: f.cookies });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().record.sdf).toEqual(stored);
+    const exported = await f.app.inject({ method: 'GET', url: `${f.url}/export`, cookies: f.cookies });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.json().sdf).toEqual(stored);
+    const files = await buildExportPackage({ ...f.deps, mailer: createFakeMailer() }, { userId: f.user.id, versionId: f.versionId });
+    expect(JSON.parse(files.find(file => file.path === 'sdf/core.json')!.content.toString())).toEqual(stored);
+    expect(JSON.parse(files.find(file => file.path === 'research-record.json')!.content.toString()).sdf).toEqual(stored);
+  });
+
   it('captures the completed ingestion graph atomically and serves exactly the same fixed record in export', async () => {
     const f = await fixture();
     const response = await f.app.inject({method:'GET', url:f.url, cookies:f.cookies});

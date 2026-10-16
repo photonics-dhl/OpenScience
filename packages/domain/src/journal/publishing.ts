@@ -30,6 +30,11 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
     if (reviewer.membership.role === 'reviewer' && article.assignedReviewerId !== article.reviewedBy) throw new JournalError('INVALID_STATE', '审核分配已改变，请重新审核');
     const source = article.source as unknown as JournalSource;
     const draft = validateJournalDraft(article.draft, source);
+    const explicitCoreVersion = (draft.core as Record<string, unknown>).schemaVersion;
+    if (explicitCoreVersion !== undefined && explicitCoreVersion !== SDF_CORE_VERSION) {
+      throw new JournalError('VALIDATION_ERROR', '期刊发布暂不支持此正文版本');
+    }
+    const core = { ...draft.core, schemaVersion: SDF_CORE_VERSION };
     const metadata = article.metadata as unknown as JournalMetadata;
     const ro = await tx.researchObject.findUniqueOrThrow({ where: { id: article.researchObjectId } });
     if (ro.deletedAt) throw new JournalError('INVALID_STATE', '论文已被移入回收站');
@@ -46,7 +51,7 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
     if (!ro.publicId) await tx.identifier.create({ data: { researchObjectId: ro.id, publicId, issuedAt: new Date() } });
     const publishedAt = deps.now?.() ?? new Date();
     const publicVersionId = versionPublicId(publicId, versionNo);
-    const version = await tx.version.create({ data: { researchObjectId: ro.id, commitId: commit.id, versionNo: internalVersionNo, publicationNo: versionNo, parentVersionId: previous?.id, status: 'published', publicVersionId, manifest: { create: { coreJson: { schemaVersion: SDF_CORE_VERSION, ...draft.core } } } } });
+    const version = await tx.version.create({ data: { researchObjectId: ro.id, commitId: commit.id, versionNo: internalVersionNo, publicationNo: versionNo, parentVersionId: previous?.id, status: 'published', publicVersionId, manifest: { create: { coreJson: core } } } });
     const publicMetadata = {
       title: metadata.title,
       doi: metadata.doi,
@@ -84,11 +89,11 @@ export async function publishJournalArticle(deps: WorkspaceDeps, userId: string,
       historyCapture: { state: 'sealed', graphSource: 'journal_editorial_review', capturedAt: publishedAt.toISOString() },
     };
     await tx.version.update({ where: { id: version.id }, data: { researchRecord: journalJson(frozenRecord) } });
-    const contentDigest = journalDigest({ core: { schemaVersion: SDF_CORE_VERSION, ...draft.core }, journalPackage: snapshot, publicationMetadata });
+    const contentDigest = journalDigest({ core, journalPackage: snapshot, publicationMetadata });
     const release = await tx.journalRelease.create({ data: { articleId, versionId: version.id, revision: article.revision, requestKey: input.requestKey, snapshot: journalJson(snapshot), digest: contentDigest, publishedAt } });
     await tx.publication.create({ data: { versionId: version.id, publicVersionId, contentSha256: contentDigest, publishedAt, legalDisclaimer: '本页是基于已发表原文的期刊解读，由编辑核验；研究引用请优先使用原文 DOI。平台时间与版本不替代原文出版信息。' } });
     await tx.researchObject.update({ where: { id: ro.id }, data: { publicId, visibility: 'public', status: 'published', version: { increment: 1 } } });
-    await tx.sdfDocument.update({ where: { researchObjectId: ro.id }, data: { coreJson: { schemaVersion: SDF_CORE_VERSION, ...draft.core } } });
+    await tx.sdfDocument.update({ where: { researchObjectId: ro.id }, data: { coreJson: core } });
     await tx.journalArticle.update({ where: { id: articleId }, data: { directoryVisible: true } });
     await journalArticleEvent(tx, journalId, userId, 'journal.article.publish', articleId, { releaseId: release.id, revision: article.revision, publicVersionId });
     return { id: release.id, revision: article.revision, versionNo, publicId, publishedAt, url: snapshot.url };

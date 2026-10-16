@@ -13,3 +13,13 @@ export {
   type SdfManifest,
 } from './manifest';
 export { validateSdfCore, validateSdfDraftCore, validateManifest, type ValidationResult } from './validate';
+export {
+  SDF_READABLE_CORE_VERSION,
+  parseReadableSdfCore,
+  validateReadableSdfCore,
+  validateReadableSdfDraftCore,
+  type SdfField,
+  type SdfFieldFormat,
+  type FormattedSdfCore,
+  type ReadableSdfCore,
+} from './readable-core';

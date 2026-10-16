@@ -7,6 +7,86 @@ const core = { schemaVersion: '0.1.0', problem: 'Question', insight: 'Finding', 
 const confirmation = { commitId: 'confirmed-commit', versionId: 'confirmed-version', versionNo: 2, version: 7, evidenceStatus: 'needs_review', missingFields: ['results'] };
 const task = { id: 'journey-task', researchObjectId: ro.id, researchTitle: ro.title, logicalPath: 'paper.pdf', state: 'needs_review', retryCount: 0, error: null, artifactId: 'artifact-journey', agentTaskId: 'agent-journey' };
 
+test('stored formatted research stays read-only across tabs, Hermes and browser-draft recovery', async ({ page }) => {
+  await fixtures(page, []);
+  const stored = { ...core, schemaVersion: '0.2.0', insight: '**Stored finding**', fieldFormats: { insight: 'markdown' } };
+  const retained = JSON.stringify({ core: { ...core, insight: 'Older browser draft' }, savedAt: Date.now() });
+  await page.addInitScript(value => localStorage.setItem('editor:draft:journey-ro', value), retained);
+  await page.route('**/api/research-objects/journey-ro', route => readJson(route, { researchObject: { ...ro, sdf: { core: stored, nodes: [] } } }));
+  const writes: string[] = [];
+  await page.route('**/api/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() !== 'GET' && ['/api/sdf/journey-ro', '/api/research-objects/journey-ro/commits', '/api/ingestion/journey-task/confirm'].includes(path)) {
+      writes.push(path);
+      return route.fulfill({ status: 409, json: { error: { code: 'INVALID_STATE', message: 'Unexpected fresh write' } } });
+    }
+    return route.fallback();
+  });
+  await page.route('**/api/csrf-token', route => readJson(route, { csrfToken: 'test-csrf' }));
+  await page.route('**/api/agent/sessions', route => route.request().method() === 'POST' ? route.fulfill({ status: 201, json: { session: { id: 'readonly-guide' } } }) : route.fallback());
+  await page.route('**/api/agent/tasks', route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    expect(route.request().postDataJSON().payload.context.editorDraft).toBeUndefined();
+    return route.fulfill({ status: 201, json: { task: {
+      id: 'readonly-guide-task', sessionId: 'readonly-guide', researchObjectId: ro.id, kind: 'workspace.guide', status: 'succeeded', progress: 100,
+      result: { summary: 'Proposed text change', nextSteps: [{ label: 'Review media', intent: 'review-media', targetId: ro.id }], needsMoreInformation: false,
+        draftEdit: { base: { researchObjectId: ro.id, scope: 'sdf', version: 1, core: { problem: stored.problem, insight: stored.insight, method: stored.method, results: stored.results, limitations: stored.limitations, reproducibility: stored.reproducibility } }, changes: { insight: 'Unexpected replacement' } } },
+      error: null, createdAt: '2026-10-08T00:00:00.000Z', updatedAt: '2026-10-08T00:00:00.000Z',
+    } } });
+  });
+  await page.goto('/research-objects/journey-ro/edit');
+  await expect(page.locator('[data-sdf-snapshot-read-only="true"]')).toBeVisible();
+  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('Stored finding');
+  const tabs = page.getByRole('navigation', { name: 'Research sections' }).getByRole('button');
+  for (let index = 0; index < 4; index++) {
+    await tabs.nth(index).click();
+    await expect(page.locator('textarea[id^="sdf-field-"]')).toHaveCount(0);
+  }
+  await tabs.nth(0).click();
+  await page.locator('[data-hermes-input-owner="true"]').click();
+  const assistant = page.getByRole('complementary', { name: 'Hermes research guide', exact: true });
+  await assistant.getByLabel('Send an instruction to Hermes').fill('Make the first sentence clearer');
+  await assistant.getByRole('button', { name: 'Send', exact: true }).click();
+  await assistant.locator('summary').filter({ hasText: 'View changes' }).click();
+  await assistant.getByRole('button', { name: 'Use this field', exact: true }).click();
+  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('Stored finding');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('editor:draft:journey-ro'))).toBe(retained);
+  await page.reload();
+  await expect(page.locator('[data-sdf-format="markdown"] strong')).toHaveText('Stored finding');
+  await page.waitForTimeout(1100); // Exercise the existing one-second autosave debounce.
+  expect(writes).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem('editor:draft:journey-ro'))).toBe(retained);
+});
+
+test('selected frozen versions render their own format metadata rather than the live draft', async ({ page }) => {
+  await fixtures(page, []);
+  const storedFormattedCore = { ...core, schemaVersion: '0.2.0', insight: '**Frozen finding**', fieldFormats: { insight: 'markdown' } };
+  const versions = [
+    { versionId: 'stored-formatted', versionNo: 2, status: 'draft', commitMessage: 'Stored formatted version', createdAt: '2026-10-08T00:00:00.000Z' },
+    { versionId: 'stored-legacy', versionNo: 1, status: 'draft', commitMessage: 'Stored legacy version', createdAt: '2026-10-07T00:00:00.000Z' },
+  ];
+  await page.route('**/api/research-objects/journey-ro/versions', route => readJson(route, { versions }));
+  await page.route('**/api/versions/stored-formatted', route => readJson(route, { version: {
+    versionId: 'stored-formatted', snapshot: { core: storedFormattedCore, artifacts: [] },
+  } }));
+  await page.route('**/api/research-objects/journey-ro/versions/*/record', route => {
+    const versionId = new URL(route.request().url()).pathname.split('/').at(-2)!;
+    return readJson(route, { record: { objectId: ro.id, versionId, recordState: 'recorded', sdf: versionId === 'stored-formatted' ? storedFormattedCore : { ...storedFormattedCore, schemaVersion: '0.1.0' }, manifest: [], claims: [], evidence: [] } });
+  });
+  await page.goto('/research-objects/journey-ro/edit');
+  await page.locator('summary').filter({ hasText: /^More$/ }).click();
+  await page.getByRole('button', { name: 'Edit history', exact: true }).click();
+  const history = page.getByRole('dialog');
+  await history.getByRole('button', { name: /Stored formatted version/ }).click();
+  const formatted = history.locator('[data-selected-version="stored-formatted"]');
+  await expect(formatted.locator('[data-sdf-format="markdown"] strong')).toHaveText('Frozen finding');
+  await history.getByRole('button', { name: /Stored legacy version/ }).click();
+  const legacy = history.locator('[data-selected-version="stored-legacy"]');
+  await expect(legacy).toContainText('**Frozen finding**');
+  await expect(legacy.locator('strong')).toHaveCount(0);
+  await expect(history.locator('[data-selected-version="stored-formatted"]')).toHaveCount(0);
+});
+
 test.beforeEach(async ({ page }) => {
   await page.context().route('**/api/**', (route) => {
     const url = new URL(route.request().url());

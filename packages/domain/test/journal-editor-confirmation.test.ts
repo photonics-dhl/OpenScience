@@ -60,4 +60,21 @@ describe('journal editor content confirmation (not peer review)', () => {
     await reviewJournalArticle(deps, 'editor', 'journal', 'article', { revision: 3, decision: 'confirm', humanConfirmed: true, note: '' });
     await expect(publishJournalArticle(deps, 'editor', 'journal', 'article', { revision: 3, requestKey: 'test', humanConfirmed: true })).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
+
+  it.each(['0.2.0', '0.3.0', '', null])('rejects explicit new fresh-publication identity %j before creating a version', async (schemaVersion) => {
+    const { deps, tx, article } = fixture('owner');
+    tx.journal.findUnique.mockResolvedValue({ id: 'journal', workspaceId: 'workspace', operationalState: 'active', homepagePublished: true, workspace: { status: 'active' } } as never);
+    article.rights.publicDerivative = true;
+    Object.assign(article.draft.core, { schemaVersion, fieldFormats: { insight: 'markdown' } });
+    Object.assign(article, { reviewState: 'approved', reviewedBy: 'editor', reviewedRevision: 3 });
+    article.reviewedDigest = articleReviewDigest(article as never);
+    const persistence = Object.assign(tx, {
+      journalRelease: { findUnique: vi.fn().mockResolvedValue(null) },
+      researchObject: { findUniqueOrThrow: vi.fn() },
+    });
+    await expect(publishJournalArticle(deps, 'editor', 'journal', 'article', { revision: 3, requestKey: 'fresh', humanConfirmed: true }))
+      .rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(persistence.researchObject.findUniqueOrThrow).not.toHaveBeenCalled();
+    expect(article.draft.core).toHaveProperty('schemaVersion', schemaVersion);
+  });
 });

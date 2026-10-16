@@ -11,7 +11,7 @@ import { ClaimNarrative } from './ClaimNarrative';
 import { EvidenceRail } from './EvidenceRail';
 import { EvidenceSheet } from './EvidenceSheet';
 import { PresentationAssetGallery } from './PresentationAssetGallery';
-import { ScientificText } from '@/components/content/ScientificText';
+import { SdfFieldContent } from '@/components/content/SdfFieldContent';
 import styles from './PublicReadingProduct.module.css';
 import { ResearchTypeLabel } from '@/components/research/ResearchTypeLabel';
 
@@ -83,22 +83,22 @@ export function LegacyOverviewTab({ research }: { research: PublicResearch }) {
 
       <section className="pub-section">
         <h2>{t('abstract')}</h2>
-        <p>{r.version.core.problem || t('none')}</p>
+        <SdfFieldContent core={r.version.core} field="problem" fallback={t('none')} />
       </section>
 
       <section className="pub-section">
         <h2>{t('coreFields')}</h2>
         <dl>
           <dt>{t('insight')}</dt>
-          <dd>{r.version.core.insight || t('none')}</dd>
+          <dd><SdfFieldContent core={r.version.core} field="insight" fallback={t('none')} /></dd>
           <dt>{t('method')}</dt>
-          <dd>{r.version.core.method || t('none')}</dd>
+          <dd><SdfFieldContent core={r.version.core} field="method" fallback={t('none')} /></dd>
           <dt>{t('results')}</dt>
-          <dd>{r.version.core.results || t('none')}</dd>
+          <dd><SdfFieldContent core={r.version.core} field="results" fallback={t('none')} /></dd>
           <dt>{t('limitations')}</dt>
-          <dd>{r.version.core.limitations || t('none')}</dd>
+          <dd><SdfFieldContent core={r.version.core} field="limitations" fallback={t('none')} /></dd>
           <dt>{t('reproducibility')}</dt>
-          <dd>{r.version.core.reproducibility || t('none')}</dd>
+          <dd><SdfFieldContent core={r.version.core} field="reproducibility" fallback={t('none')} /></dd>
         </dl>
       </section>
 
@@ -263,7 +263,7 @@ export function PublicReadingSurface({ research }: { research: PublicResearch; a
           </header>
 
           <section className={`pub-reading-summary ${styles.contribution}`} aria-labelledby="public-summary-heading">
-            <ScientificText hideSourceMarkers as="p" id="public-summary-heading" data-reading-role="body">{version.core.insight || version.core.problem || t('none')}</ScientificText>
+            <SdfFieldContent core={version.core} field={version.core.insight ? 'insight' : 'problem'} fallback={t('none')} id="public-summary-heading" data-reading-role="body" />
           </section>
 
           <PresentationAssetGallery assets={directPresentation} leading />
@@ -273,7 +273,7 @@ export function PublicReadingSurface({ research }: { research: PublicResearch; a
             {PUBLIC_SDF_NODES.map(([key, label]) => {
               const value = version.core[key];
               return <section key={key} className={key === 'limitations' ? styles.limitation : undefined} data-sdf-node={key} data-sdf-state={value ? 'confirmed' : 'empty'}>
-                <h3>{t(label)}</h3><ScientificText hideSourceMarkers as="p" data-reading-role="reading">{value || t('none')}</ScientificText>
+                <h3>{t(label)}</h3><SdfFieldContent core={version.core} field={key} fallback={t('none')} data-reading-role="reading" />
               </section>;
             })}
           </section>
