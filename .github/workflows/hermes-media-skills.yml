@@ -788,7 +788,7 @@ jobs:
       - run: npx pnpm@9.15.0 --filter @openscience/ai-gateway exec vitest run test/native-image-review.test.ts
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "blocks unreviewed narrative image approval while preserving rejection and legacy profiles"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/trash/content-list.test.ts
-      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "reports private media retention authority"
+      - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "reports private media retention authority|selected image source binding"
       - run: node --test infra/scripts/cloudflared-resilience.test.mjs
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "starts one charged review-only task"
       - run: npx pnpm@9.15.0 --filter @openscience/domain exec vitest run test/assets/presentation-asset.test.ts -t "recovers a saved manual PNG only|local budget|local-budget"
