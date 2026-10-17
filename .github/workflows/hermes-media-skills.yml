@@ -797,6 +797,8 @@ jobs:
             --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
       - name: Test release tooling with the retained video source fixtures
+        env:
+          ROLLBACK_REF: ${{ inputs.rollback_ref }}
         run: |
           for fixture_ref in ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d 4cc78008f86da811aeb695b5d3639a5b52891d57 ba276d8edccf163a8fb4e5a44655dd8ccf718eff 764020c76b25af571e8b88e80338406d70bdb37a 2ad0aa1b103797dd9f86a005ff3c33050b33ff54 852c6eaef9df6acbded36ff8194ff4e8392e65ea 5979840b31d6aa02e5350b0e63c8c2c8b049b133; do
             if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
@@ -804,7 +806,177 @@ jobs:
             fi
             test "$(git rev-parse "$fixture_ref^{commit}")" = "$fixture_ref"
           done
-          node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+          # Optional observations must not change the original test command or its exit.
+          trace=tmp/release-tooling-telemetry
+          if ! mkdir -p "$trace"; then
+            node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+            exit "$?"
+          fi
+          node -e 'const v8=require("node:v8"); console.log(JSON.stringify({node:process.version,typescript:require("typescript").version,platform:process.platform,heapLimit:v8.getHeapStatistics().heap_size_limit,candidate:process.env.GITHUB_SHA,rollback:process.env.ROLLBACK_REF,run:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,command:["node","--test","infra/scripts/deploy.test.mjs","scripts/release-input-manifest.test.mjs","infra/scripts/production-release-retention.test.mjs"]}))' > "$trace/environment.json" || true
+          cat > "$trace/sample.py" <<'PY' || true
+          import json, os, signal, sys, time
+          from pathlib import Path
+
+          root, output = int(sys.argv[1]), Path(sys.argv[2])
+          stopping = False
+          def stop(_signal, _frame):
+              global stopping
+              stopping = True
+          signal.signal(signal.SIGTERM, stop)
+          signal.signal(signal.SIGINT, stop)
+          def record(pid):
+              fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+              return {"pid": pid, "ppid": int(fields[1]), "startTicks": int(fields[19]),
+                      "cpuUserTicks": int(fields[11]), "cpuSystemTicks": int(fields[12]),
+                      "rssBytes": int(fields[21]) * os.sysconf("SC_PAGE_SIZE")}
+          try:
+              identity = record(root)["startTicks"]
+          except (OSError, ValueError, IndexError):
+              print("telemetry root exited before its identity was observed", file=sys.stderr)
+              sys.exit(0)
+          seen, total = {root: identity}, 0
+          with output.open("a", buffering=1) as target:
+              for sample in range(841):
+                  if stopping:
+                      break
+                  rows, pending, incomplete = [], [root], False
+                  while pending and len(rows) < 64:
+                      pid = pending.pop()
+                      try:
+                          value = record(pid)
+                          if pid in seen and seen[pid] != value["startTicks"]:
+                              incomplete = True
+                              continue
+                          seen[pid] = value["startTicks"]
+                          rows.append(value)
+                          children = Path(f"/proc/{pid}/task/{pid}/children").read_text().split()
+                          if record(pid)["startTicks"] != value["startTicks"]:
+                              incomplete = True
+                              continue
+                          for child in children:
+                              child = int(child)
+                              data = record(child)
+                              if data["ppid"] == pid and (child not in seen or seen[child] == data["startTicks"]):
+                                  seen[child] = data["startTicks"]
+                                  pending.append(child)
+                      except (OSError, ValueError, IndexError):
+                          incomplete = True
+                  if not rows or rows[0]["pid"] != root or rows[0]["startTicks"] != identity:
+                      break
+                  text = json.dumps({"sample": sample, "unixSeconds": time.time(), "monotonicSeconds": time.monotonic(),
+                                     "incomplete": incomplete or bool(pending), "processes": rows}, separators=(",", ":")) + "\n"
+                  if total + len(text) > 8 * 1024 * 1024:
+                      print("telemetry byte bound reached; remaining observations unavailable", file=sys.stderr)
+                      break
+                  target.write(text)
+                  total += len(text)
+                  if sample % 12 == 0:
+                      phase = None
+                      try:
+                          with output.with_name("phase.ndjson").open("rb") as source:
+                              source.seek(max(0, source.seek(0, 2) - 4096))
+                              last = json.loads(source.read().splitlines()[-1])
+                          allowed = {"66-parent-begin", "66-parent-exit", "67-parent-begin", "67-parent-exit",
+                                     "67-data-begin", "67-data-parsed", "67-fixture-written", "67-collect-begin",
+                                     "67-collect-end", "67-collect-throw", "67-initialize-begin", "67-initialize-end",
+                                     "67-refusal-begin", "67-refusal-end", "67-cleanup-begin", "67-cleanup-end",
+                                     "67-cleanup-throw", "68-parent-begin", "68-parent-exit", "68-mutant-begin", "68-mutant-exit"}
+                          if last.get("phase") in allowed and all(type(last.get(key)) is int for key in ("pid", "ordinal")):
+                              phase = {key: last[key] for key in ("phase", "pid", "ordinal")}
+                      except (OSError, ValueError, IndexError, AttributeError):
+                          pass
+                      print(json.dumps({"toolingSample": sample, "processes": rows, "lastActualPhase": phase,
+                                        "incomplete": incomplete or bool(pending)}), flush=True)
+                  for _ in range(50):
+                      if stopping:
+                          break
+                      time.sleep(0.1)
+          PY
+          monitor_pid= out_pid= err_pid= monitor_start= out_start= err_start=
+          observer_start() {
+            local stat fields
+            IFS= read -r stat < "/proc/$1/stat" 2>/dev/null || return 1
+            read -ra fields <<< "${stat##*) }"
+            [[ ${fields[19]:-} =~ ^[0-9]+$ ]] || return 1
+            printf '%s\n' "${fields[19]}"
+          }
+          observer_state() {
+            local stat fields
+            if ! kill -0 "$1" 2>/dev/null; then printf 'gone'; return; fi
+            if [[ -z "$2" ]] || ! IFS= read -r stat < "/proc/$1/stat" 2>/dev/null; then printf 'unknown'; return; fi
+            read -ra fields <<< "${stat##*) }"
+            [[ ${fields[19]:-} =~ ^[0-9]+$ ]] || { printf 'unknown'; return; }
+            if [[ ${fields[19]:-} != "$2" ]]; then printf 'reused';
+            elif [[ ${fields[0]:-} == Z || ${fields[0]:-} == X ]]; then printf 'exited';
+            else printf 'live'; fi
+          }
+          finish_observer() {
+            local pid=$1 start=$2 kind=$3 state signal_name deadline rc=unknown hard_stop=false
+            [[ -n "$pid" ]] || return 0
+            # At most 1s drain, 2s TERM and 1s KILL grace per owned observer.
+            if [[ "$kind" != sampler ]]; then
+              deadline=$((SECONDS + 1))
+              while (( SECONDS < deadline )); do
+                [[ $(observer_state "$pid" "$start") == live ]] || break
+                sleep 0.05
+              done
+            fi
+            for signal_name in TERM KILL; do
+              state=$(observer_state "$pid" "$start")
+              [[ "$state" == live ]] || break
+              kill -"$signal_name" "$pid" 2>/dev/null || true
+              if [[ "$signal_name" == TERM ]]; then deadline=$((SECONDS + 2));
+              else deadline=$((SECONDS + 1)); hard_stop=true; fi
+              while (( SECONDS < deadline )); do
+                [[ $(observer_state "$pid" "$start") == live ]] || break
+                sleep 0.05
+              done
+            done
+            state=$(observer_state "$pid" "$start")
+            case "$state" in
+              gone|exited|reused) wait "$pid"; rc=$? ;;
+              *) state=incomplete ;;
+            esac
+            printf '{"observer":"%s","pid":%s,"cleanup":"%s","exit":"%s","hardStopRequested":%s}\n' "$kind" "$pid" "$state" "$rc" "$hard_stop" >> "$trace/observer-cleanup.ndjson" || true
+            if [[ "$kind" == sampler ]]; then printf '%s\n' "$rc" > "$trace/sampler.exit" || true; fi
+            return 0
+          }
+          finish_observers() {
+            original_rc=$?
+            trap - EXIT
+            finish_observer "$monitor_pid" "$monitor_start" sampler
+            finish_observer "$out_pid" "$out_start" stdout
+            finish_observer "$err_pid" "$err_start" stderr
+            exit "$original_rc"
+          }
+          trap finish_observers EXIT
+          trap 'printf "{\"event\":\"wrapper-signal\",\"signal\":2}\n" >> "$trace/command.ndjson" || true; exit 130' INT
+          trap 'printf "{\"event\":\"wrapper-signal\",\"signal\":15}\n" >> "$trace/command.ndjson" || true; exit 143' TERM
+          set +e
+          if ! exec {out_fd}> >(tee --output-error=warn "$trace/stdout.log"); then
+            node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+            exit "$?"
+          fi
+          out_pid=$!
+          out_start=$(observer_start "$out_pid") || true
+          if ! exec {err_fd}> >(tee --output-error=warn "$trace/stderr.log" >&2); then
+            exec {out_fd}>&-
+            node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
+            exit "$?"
+          fi
+          err_pid=$!
+          err_start=$(observer_start "$err_pid") || true
+          printf '{"event":"command-begin","unixSeconds":%s}\n' "$(date +%s)" > "$trace/command.ndjson" || true
+          XGS_VIDEO_TIMEOUT_TRACE="$trace/phase.ndjson" node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs >&$out_fd 2>&$err_fd &
+          test_pid=$!
+          exec {out_fd}>&- {err_fd}>&-
+          python3 -u "$trace/sample.py" "$test_pid" "$trace/process.ndjson" 2> "$trace/sampler.stderr" &
+          monitor_pid=$!
+          monitor_start=$(observer_start "$monitor_pid") || true
+          wait "$test_pid"
+          test_rc=$?
+          printf '{"event":"command-exit","unixSeconds":%s,"pid":%s,"exit":%s}\n' "$(date +%s)" "$test_pid" "$test_rc" >> "$trace/command.ndjson" || true
+          exit "$test_rc"
       - name: Lint first-image continuation sources and tests
         run: npx pnpm@9.15.0 exec eslint apps/agent-worker/src/presentation/handler.ts apps/agent-worker/src/scientific-writing-source.ts apps/agent-worker/src/workspace-guide.ts apps/agent-worker/test/workspace-guide.test.ts apps/api/src/routes/agent.ts apps/api/src/routes/research-runs.ts apps/api/test/agent-payload.test.ts apps/api/test/first-image-continuation.test.ts apps/web/components/hermes/HermesAssistantDrawer.tsx apps/web/components/hermes/HermesFirstImageResult.tsx apps/web/lib/api.ts apps/web/lib/hermes/presentation-intent.ts apps/web/test/e2e/hermes-first-image.spec.ts apps/web/test/hermes-guide-recovery.test.ts apps/web/test/hermes-presentation-intent.test.ts packages/domain/src/agent/first-image-continuation.ts packages/domain/src/agent/native-agent-execution.ts packages/domain/src/agent/workspace-guide-contract.ts packages/domain/src/assets/illustration-source.ts packages/domain/src/assets/presentation-asset.ts packages/domain/test/agent/first-image-continuation-fixture.ts packages/domain/test/agent/first-image-continuation.test.ts packages/domain/test/workspace-guide-contract.test.ts
       - name: Check completed paid image recovery and changed sources
@@ -925,6 +1097,7 @@ jobs:
             apps/web/test/visual/out/**/*.json
             tmp/hermes-guide-browser/**/*.png
             tmp/native-restore-source-identity/ci-*/
+            tmp/release-tooling-telemetry/
           if-no-files-found: ignore
           retention-days: 7
 

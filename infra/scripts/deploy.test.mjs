@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { getHeapStatistics } from 'node:v8';
 import {
   chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile,
 } from 'node:fs/promises';
@@ -14,6 +15,22 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { runInNewContext, Script } from 'node:vm';
 import * as deployLock from './production-deploy-lock.mjs';
+
+let videoTimeoutObservationDisabled = false;
+function videoTimeoutObservation(phase, ordinal = 0) {
+  try {
+    if (videoTimeoutObservationDisabled) return;
+    const target = process.env.XGS_VIDEO_TIMEOUT_TRACE;
+    if (!target) return;
+    const memory = process.memoryUsage(), cpu = process.cpuUsage();
+    appendFileSync(target, JSON.stringify({ phase, ordinal, pid: process.pid, elapsedMs: performance.now(),
+      cpuUserUs: cpu.user, cpuSystemUs: cpu.system, rss: memory.rss, heapUsed: memory.heapUsed,
+      external: memory.external, heapLimit: getHeapStatistics().heap_size_limit }) + '\n');
+  } catch {
+    videoTimeoutObservationDisabled = true;
+  }
+}
+
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
@@ -2426,6 +2443,8 @@ test('selected guide legacy retry cannot execute an added effect before its abse
 });
 
 test('selected guide current combination closes the whole source over the exact voice reader', async () => {
+  videoTimeoutObservation('66-parent-begin');
+  try {
   const components = selectedGuideSourceComponents(), actual = await retainedSelectedVoiceProgram();
   const previous = await historicalVideoIngressProgram(new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
   const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
@@ -2437,17 +2456,22 @@ test('selected guide current combination closes the whole source over the exact 
   assert.equal(relative(actual.projectRoot, model.handlers.voicePredecessor.factory.getSourceFile().fileName).replaceAll('\\', '/'), 'apps/agent-worker/src/voice.ts');
   for (const [key, value] of model.projected)
     assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
+  } finally { videoTimeoutObservation('66-parent-exit'); }
 });
 
 test('selected guide initialization consumes original collected module equality without reclassifying root metadata', async t => {
+  videoTimeoutObservation('67-parent-begin');
+  try {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const ts = createRequire(import.meta.url)('typescript');
+  videoTimeoutObservation('67-data-begin');
   const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
   const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
   const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
     ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
   assert.ok(declaration && ts.isObjectLiteralExpression(declaration.initializer));
   const original = JSON.parse(declaration.initializer.getText(parsed));
+  videoTimeoutObservation('67-data-parsed');
   const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
   const metadata = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   const consumer = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
@@ -2467,7 +2491,12 @@ test('selected guide initialization consumes original collected module equality 
   });
   const parent = join(projectRoot, 'tmp/first-image'); await mkdir(parent, { recursive: true });
   const fixture = await mkdtemp(join(parent, 'selected-collected-runtime-'));
-  t.after(() => rm(fixture, { recursive: true, force: true }));
+  t.after(() => {
+    videoTimeoutObservation('67-cleanup-begin');
+    return rm(fixture, { recursive: true, force: true }).then(value => {
+      videoTimeoutObservation('67-cleanup-end'); return value;
+    }, error => { videoTimeoutObservation('67-cleanup-throw'); throw error; });
+  });
   const candidate = join(fixture, 'candidate'), previous = join(fixture, 'previous');
   const modulePath = 'packages/search/generated/client/index.js', roots = [[modulePath]];
   const input = directory => {
@@ -2482,14 +2511,23 @@ test('selected guide initialization consumes original collected module equality 
     await writeFile(join(directory, modulePath), input(directory));
     await writeFile(join(directory, 'packages/search/generated/client/runtime/library.js'), 'module.exports = {};');
   }
-  const collect = directory => functions.collect(ts, directory, roots, {});
+  videoTimeoutObservation('67-fixture-written');
+  const collect = directory => {
+    videoTimeoutObservation('67-collect-begin');
+    try { const value = functions.collect(ts, directory, roots, {}); videoTimeoutObservation('67-collect-end'); return value; }
+    catch (error) { videoTimeoutObservation('67-collect-throw'); throw error; }
+  };
   const current = collect(candidate), old = collect(previous);
   const left = contexts.get(current), right = contexts.get(old), key = `module:${modulePath}`;
   assert.notEqual(roots, defaultRoots);
   assert.equal(JSON.stringify(new Map(current).get(key)), JSON.stringify(new Map(old).get(key)));
   assert.notEqual(left.modules.get(resolve(candidate, modulePath)).text, right.modules.get(resolve(previous, modulePath)).text);
+  videoTimeoutObservation('67-initialize-begin');
   assert.equal(functions.initialize(ts, left, right, { current, previous: old }).status, 'conditional');
-  const refuses = action => assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  videoTimeoutObservation('67-initialize-end');
+  const refuses = action => { videoTimeoutObservation('67-refusal-begin');
+    assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+    videoTimeoutObservation('67-refusal-end'); };
   refuses(() => functions.initialize(ts, left, right)); // Source-only equality cannot mint the captured proof.
   for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }])
     refuses(() => functions.initialize(ts, left, right, collected));
@@ -2513,16 +2551,23 @@ test('selected guide initialization consumes original collected module equality 
     assert.throws(() => collect(candidate), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   }
   assert.ok(vendorCalls.length >= 2);
+  } finally { videoTimeoutObservation('67-parent-exit'); }
 });
 
 test('selected guide current voice predecessor refuses eager effects keys and non-data suppliers at their actual nodes', async t => {
+  videoTimeoutObservation('68-parent-begin');
+  try {
   const components = selectedGuideSourceComponents(), voice = 'apps/agent-worker/src/voice.ts', worker = 'apps/agent-worker/src/index.ts';
+  let observedMutant = 0;
   const check = async (changes, both, evidence) => {
+    const ordinal = ++observedMutant; videoTimeoutObservation('68-mutant-begin', ordinal);
+    try {
     const actual = await retainedSelectedVoiceProgram(changes);
     const previous = await historicalVideoIngressProgram(both ? changes : new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
     assert.throws(() => components.handlers(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
       error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED' && evidence(error.node, actual),
       'The named boundary must refuse at its supplying node, not an unrelated earlier frontier');
+    } finally { videoTimeoutObservation('68-mutant-exit', ordinal); }
   };
   await t.test('same factory eager effect on both source sides', () => check(new Map([[voice,
     text => text.replace('  const wait = options.wait ??', '  globalThis.eagerVoiceFactory();\n  const wait = options.wait ??')]]), true,
@@ -2549,6 +2594,7 @@ test('selected guide current voice predecessor refuses eager effects keys and no
   await t.test('actual factory shorthand escape', () => check(new Map([[worker,
     text => text + '\nconst leakedVoiceFactory = { createHermesVoiceHandlers };\n']]), false,
   (node, input) => input.ts.isShorthandPropertyAssignment(node.parent)));
+  } finally { videoTimeoutObservation('68-parent-exit'); }
 });
 
 test('selected guide supplemental HTTP library identity requires the actual locked importer and same installed package', () => {
