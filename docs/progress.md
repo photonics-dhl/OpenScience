@@ -3,7 +3,7 @@
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施、失败与发布留在 Git 和原回执。
 
 - 图片 reader 已完成完整六 job CI、原唯一备份/发布及独立 after，服务窗关闭。官方 Chrome 站内只读观察也已完成，保留10张原截图及IAB错误；桌面Hermes遮罩与研究页侧栏视觉差异仍在，原图待审核、历史brief未明确定位。
-- R2 原无写入兼容frontier保留。原Same High已明确真实事务/共同前缀/旧失败尾部的有限保留状态关系，Domain/Worker不改；确认Agent普通opaque guide误入selected查询的P1。唯一owner已报两路径实际get/list2RED→最小11/11GREEN并冻结，现接原两infra完整证明，同一包回原High；阶段证据不代最终审查，不承诺自动恢复。
+- R2 原无写入兼容frontier保留。原Same High已明确真实事务/共同前缀/旧失败尾部的有限保留状态关系，Domain/Worker不改；确认Agent普通opaque guide误入selected查询的P1。唯一owner已报两路径实际get/list2RED→最小11/11GREEN并冻结，现接原两infra完整证明；owner最新报告总source入口和六类poller初步通过，仍待完整冻结包回原High。阶段证据不代最终审查/installed pair，不承诺自动恢复。
 - 语音原CI在四个费用历史fixture缺052对象处失败；原Same Voice High已审最小补输入零项，root提交推送并启动新完整CI，唯一collector已STARTED。旧失败/未执行尾部保留，新结果尚待；费用生产和历史回填仍未授权。
 - 视频wrapper/Core两infra完整包获原Same High零项并已收取推送，1named与18reported定向通过分开记录，资源失败及错误修正原件保留。精确saved-state UNKNOWN仍在；root已给同owner一次原两infra完整历史状态关系后继窗，真实配对/CI/发布尚待。
 - 自然改图、双入口同任务、断线恢复、原资产与位置理解、新 PNG 科学质量和费用仍未验；reader 上线和九个 harness 通过不代产品验收。Provider HOLD 保持，selected writer/adoption 断开。
