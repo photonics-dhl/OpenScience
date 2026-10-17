@@ -16,6 +16,7 @@ export default {
   } }],
   resolve: { alias: {
     '@': fileURLToPath(new URL('../../', import.meta.url)),
+    '@openscience/sdf-schema': fileURLToPath(new URL('../../../../packages/sdf-schema/src/index.ts', import.meta.url)),
     '@openscience/domain/browser-result': fileURLToPath(new URL('../../../../packages/domain/src/retrieval/browser-result.ts', import.meta.url)),
     '@openscience/domain/canonical-evidence-contract': fileURLToPath(new URL('../../../../packages/domain/src/ingestion/canonical-evidence-contract.ts', import.meta.url)),
     '@openscience/domain/workspace-guide-contract': fileURLToPath(new URL('../../../../packages/domain/src/agent/workspace-guide-contract.ts', import.meta.url)),
