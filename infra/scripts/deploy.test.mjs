@@ -3239,10 +3239,11 @@ test('current host message alias rejects changed history and suppliers using act
   });
 });
 
-test('current and exact capable video ingress locate the authenticated retained tool seed', async () => {
+test('current and exact capable video ingress compose hybrid whole receipts through the original conditional chain', async () => {
   // Actual597's original prover/fixture established EXTRA_MATERIALIZER_CALLER.
-  // This changed contract checks the newly factored ACTUAL entry witness only;
-  // it never upgrades the remaining selected-state family to a successful edge.
+  // Each ACTUAL Program/checker must supply the full wrapper/selected/receipt
+  // trace before entering the original conditional store chain. This fixture
+  // is neither an installed collector context nor release permission.
   const components = selectedGuideSourceComponents();
   for (const sourceRef of [undefined, '5979840b31d6aa02e5350b0e63c8c2c8b049b133']) {
     const input = await videoIngressProgram(new Map(), { sourceRef });
@@ -3261,21 +3262,78 @@ test('current and exact capable video ingress locate the authenticated retained 
     assert.ok(entry.selectedCoreCall.arguments[0].getSourceFile() === file, 'selected argument must belong to the exact actual SourceFile');
     const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
     assert.equal(result.status, 'unknown');
-    assert.equal(result.reason, 'SELECTED_VIDEO_RETAINED_TOOL_SEED_UNPROVEN');
-    const storeSource = input.program.getSourceFile(resolve(input.projectRoot, 'apps/agent-worker/src/native-agent/task-store.ts'));
-    const factory = storeSource.statements.find(node => input.ts.isFunctionDeclaration(node) && node.name?.text === 'createNativeTaskStore');
-    const returned = factory.body.statements.find(input.ts.isReturnStatement);
-    const read = returned.expression.properties.find(node => input.ts.isMethodDeclaration(node) && node.name?.text === 'read');
-    const seed = read.body.statements.filter(input.ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
-      .find(node => node.name?.text === 'cp');
-    assert.ok(seed.getSourceFile() === storeSource, 'seed belongs to the original store SourceFile');
-    assert.ok(input.program.getTypeChecker().getSymbolAtLocation(seed.name)?.valueDeclaration === seed, 'seed belongs to this original checker');
-    assert.equal(result.at.file, 'apps/agent-worker/src/native-agent/task-store.ts');
-    assert.equal(result.at.line, storeSource.getLineAndCharacterOfPosition(seed.getStart()).line + 1);
-    assert.ok(!result.proven.includes('materializer-host'));
-    assert.ok(!result.proven.includes('host-before-session'));
+    assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify({ reason: result.reason, at: result.at }));
+    assert.equal(result.proven.length, 8, JSON.stringify({ reason: result.reason, at: result.at, proven: result.proven }));
+    assert.ok(result.proven.includes('materializer-host'));
+    assert.ok(result.proven.includes('host-before-session'));
+    assert.ok(result.proven.includes('verified-base'));
+    assert.equal(result.privateStoreChain.status, 'conditional');
+    assert.equal(result.storeGraph.status, 'conditional');
     assert.equal(result.releaseCompatible, false);
   }
+});
+
+test('hybrid receipt composition refuses changed whole values ordering images adoption and paid history', async t => {
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const host = 'apps/agent-worker/src/native-agent/host-task.ts', workspace = 'apps/agent-worker/src/workspace-guide.ts';
+  const session = 'apps/agent-worker/src/native-agent/session.ts';
+  const cases = [
+    ['video-settings-guard', illustration, "if (nativeVideo !== (input.settings.output === 'video' && input.settings.narrative === true))", 'if (false)'],
+    ['audio-flag-supplier', illustration, "const nativeVideoAudio = 'nativeVideoAudio' in profile && profile.nativeVideoAudio;", 'const nativeVideoAudio = true;'],
+    ['partial-whole-receipt', illustration, 'if (!isDeepStrictEqual(rebuilt, recorded)) stopped();', 'if (!isDeepStrictEqual(rebuilt.prompts, recorded.prompts)) stopped();'],
+    ['lost-prior-state', illustration, 'const before = { science, art, review, pendingScience, contextStyles };', 'const before = { science, art, review, pendingScience: undefined, contextStyles };'],
+    ['restore-noop', illustration, 'const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };', 'const restore = () => {};'],
+    ['filtered-global-sequence', illustration, 'for (const [sequence, tool] of calls.entries())', "for (const [sequence, tool] of calls.filter(call => call.function.name.startsWith('paper_illustration_')).entries())"],
+    ['last-review-bypass', illustration, 'lastReview?.id !== currentReview.id', 'false'],
+    ['saved-arguments-bypass', illustration, 'if (saved && (name !== saved.name || !isDeepStrictEqual(args, saved.args))) stopped();', 'if (false) stopped();'],
+    ['receipt-map-escape', illustration, 'const savedIds = new Set<string>();', 'const savedIds = new Set<string>();\n  exposePrivateMap(savedIllustrationReceipts);'],
+    ['receipt-map-mutable', illustration, 'const savedIllustrationReceipts = new Map<string,', 'let savedIllustrationReceipts = new Map<string,'],
+    ['image-receipt-identity', illustration, "{ status: 'image_view_ready', selectedImage: input.selectedImage.binding } : undefined;", "{ status: 'image_view_ready', selectedImage: otherBinding } : undefined;"],
+    ['image-argument-bypass', illustration, 'Object.keys(args).length || !isDeepStrictEqual(result, imageReceipt)', 'false || !isDeepStrictEqual(result, imageReceipt)'],
+    ['wrong-stored-image-hash', illustration, "createHash('sha256').update(Buffer.from(message.images[0]!.data, 'base64')).digest('hex')", "createHash('sha256').update(Buffer.from('other', 'base64')).digest('hex')"],
+    ['context-order-bypass', illustration, 'calls.indexOf(contextCall) >= calls.indexOf(views[0]!)', 'false'],
+    ['reply-before-image', illustration, 'calls.indexOf(questions[0]!) <= calls.indexOf(views[0]!)', 'false'],
+    ['final-text-unbound', illustration, 'last.response.text !== native.finalResponse', 'false'],
+    ['foreign-completed-store', illustration, 'const completed = await store.read(); const last = completed?.turns.at(-1);', 'const completed = await otherStore.read(); const last = completed?.turns.at(-1);'],
+    ['lost-latest-image', host, 'const latest = value.messages.at(-1);', 'const latest = value.messages.at(0);'],
+    ['image-slot-argument', host, '!isDeepStrictEqual(slot.args, value.arguments) || !isDeepStrictEqual(slot.result, value.result)', '!isDeepStrictEqual(slot.args, otherArguments) || !isDeepStrictEqual(slot.result, value.result)'],
+    ['lost-image-prefix', host, 'slot.images = images.content; respond(res, 200, images);', 'respond(res, 200, images);'],
+    ['paid-response-adoption', workspace, 'cp.responseHash !== paid.responseHash', 'false'],
+    ['result-cas-adoption', workspace, 'result: { equals: current.result! }', 'result: { equals: otherResult }'],
+    ['paid-late-prefix-loss', session, 'await input.store.complete(started, completed);', 'await input.store.compareAndSet(started, completed);'],
+    ['global-host-sequence', host, 'sequence: toolSequence++,', 'sequence: 0,', 'host-before-session'],
+  ];
+  for (const [name, file, before, after, target = 'materializer-host'] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[file, value => {
+      value = value.replaceAll('\r\n', '\n'); assert.ok(value.includes(before), name);
+      const changed = value.replace(before, after); assert.notEqual(changed, value); return changed;
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown', name);
+    assert.equal(result.releaseCompatible, false, name);
+    assert.ok(!result.proven.includes(target), JSON.stringify({ name, reason: result.reason, at: result.at, proven: result.proven }));
+    assert.notEqual(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', name);
+    assert.notEqual(result.reason, 'SOURCE_ANALYSIS_UNKNOWN', 'a programming exception is not the requested source refusal');
+  });
+});
+
+test('hybrid receipt signatures reject mutable flags and image default effects', async t => {
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const cases = [
+    ['mutable-video-flag', 'const nativeVideo = input.nativeVideo === true;', 'let nativeVideo = input.nativeVideo === true;'],
+    ['evaluate-default-effect', 'historicalExecution = false, approvedVideoPrompts = false)', 'historicalExecution = opaqueEffect(), approvedVideoPrompts = false)'],
+    ['image-default-effect', 'images: async (args: unknown, result: unknown) => {', 'images: async (args: unknown = opaqueEffect(), result: unknown) => {'],
+    ['sync-image-supplier', 'images: async (args: unknown, result: unknown) => {', 'images: (args: unknown, result: unknown) => {'],
+  ];
+  for (const [name, before, after] of cases) await t.test(name, async () => {
+    const input = await videoIngressProgram(new Map([[file, value => {
+      assert.ok(value.includes(before), name); return value.replace(before, after);
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown'); assert.equal(result.releaseCompatible, false);
+    assert.ok(!result.proven.includes('materializer-host'), JSON.stringify({ name, reason: result.reason }));
+    assert.notEqual(result.reason, 'SOURCE_ANALYSIS_UNKNOWN', name);
+  });
 });
 
 test('selected video source data producers refuse foreign paper claims style and pixels', async t => {

@@ -1530,7 +1530,9 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     const handler = file('apps/agent-worker/src/presentation/handler.ts');
     const fn = (scope, name) => one(walk(scope, value => ts.isFunctionDeclaration(value) && value.name?.text === name), `FUNCTION_${name}_UNKNOWN`);
     const materializer = fn(illustration, 'createNativeIllustrationMaterializer');
-    const live = fn(illustration, 'runNativeIllustrationTask'), replay = fn(illustration, 'replayNativeVideoPlan');
+    let live = fn(illustration, 'runNativeIllustrationTask');
+    const replay = fn(illustration, 'replayNativeVideoPlan');
+    let composedEntry;
     const hostFactory = fn(host, 'runHostedNativeTask'), sessionFactory = fn(sessionFile, 'createNativeAgentSession');
     const storeFactory = fn(storeFile, 'createNativeTaskStore');
     const enclosing = node => {
@@ -1791,14 +1793,345 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       need(tail.length === 2 && ts.isExpressionStatement(tail[0]) && ts.isReturnStatement(tail[1])
         && match(tail[0].expression, 'known.set(cp.serializedSha256, cp)', { known: known.name, cp: cp.name })
         && same(tail[1].expression, loaded.name), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN', readMethod);
-      // The actual row/reference/bytes and first-tools equality are bound.
-      // Authentication preserves a seed; it does not prove its original tools
-      // are pure L/H/A or ordinary image rather than a retained hybrid set.
-      // No state/receipt edge or exclusion is granted for that opaque history.
-      fail('SELECTED_VIDEO_RETAINED_TOOL_SEED_UNPROVEN', cp);
+      // Admit the actual opaque/hybrid seed. A selected caller's image setting
+      // alone says nothing about its saved profile. The *real* materializer
+      // rejects a video profile before Host/Session can run; successful selected
+      // calls instead retain the common image/reply branches below.
+      const stop = fn(illustration, 'stopped'), materializerInput = materializer.parameters[0].name;
+      need(stop.body.statements.length === 1 && ts.isThrowStatement(stop.body.statements[0])
+        && !stop.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword), 'REJECTION_NOT_TERMINAL', stop);
+      const materializerVideo = variable(materializer, 'nativeVideo'), revision = variable(materializer, 'revisionSceneIndex');
+      need(materializer.body.statements[0].declarationList?.declarations[0] === materializerVideo
+        && materializerVideo.parent.flags & ts.NodeFlags.Const && revision.parent.flags & ts.NodeFlags.Const
+        && match(materializerVideo.initializer, 'input.nativeVideo === true', { input: materializerInput })
+        && guard(materializer.body.statements[3], "nativeVideo !== (input.settings.output === 'video' && input.settings.narrative === true)",
+          { input: materializerInput, nativeVideo: materializerVideo.name }, stop)
+        && match(revision.initializer, 'nativeVideo ? input.settings.revisionSceneIndex : undefined',
+          { input: materializerInput, nativeVideo: materializerVideo.name })
+        && guard(entry.selected.body.statements[0], "input.settings.output !== 'image' || input.settings.narrativeSceneLimit !== 1",
+          { input: entry.selected.parameters[0].name }, stop), 'SELECTED_VIDEO_PROFILE_REJECTION_UNPROVEN', materializerVideo);
+      // Existing pure constructor/selector proof applies to EVERY art receipt,
+      // not just the final art or an assumed homogeneous task. On the successful
+      // selected image branch nativeVideo=false and revision=undefined; the
+      // selector references are pure and neither videoPrompt nor alternate
+      // inherited video construction can execute. Do not erase that caller.
+      const model = finiteVideoSourceModel(ts, { program, checker, root: sourceRoot });
+      need(model.routes.some(route => route.kind === 'reconstruct-whole') && model.readers.has('legacy'),
+        'SELECTED_VIDEO_CONSTRUCTOR_TRACE_UNPROVEN', materializer);
+      // Finite statement grammars only: no execution, source hash, transformed
+      // Program or collector grant. The actual original nodes stay in their
+      // checker; free variables resolve to the already bound real suppliers.
+      const shape = (actual, text, bindings, reason) => {
+        const parsed = ts.createSourceFile('receipt-shape.ts', `async function expected() { ${text}\n}`, ts.ScriptTarget.ES2022, true);
+        need(parsed.parseDiagnostics.length === 0, reason, actual);
+        const compare = (a, b) => {
+          const strip = node => { while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)
+            || ts.isNonNullExpression(node))) node = node.expression; return node; };
+          a = strip(a); b = strip(b);
+          if (!a || !b || a.kind !== b.kind) return false;
+          if (ts.isPropertyAccessExpression(a)) return a.name.text === b.name.text && compare(a.expression, b.expression)
+            && !!a.questionDotToken === !!b.questionDotToken;
+          if (ts.isIdentifier(b)) {
+            if (ts.isPropertyAssignment(b.parent) && b.parent.name === b) return a.text === b.text;
+            return Object.hasOwn(bindings, b.text) ? same(a, bindings[b.text]) : a.text === b.text;
+          }
+          if (ts.isLiteralExpression(b) || ts.isTemplateLiteralToken(b)) return a.text === b.text;
+          if (ts.isVariableDeclarationList(a) && (a.flags & ts.NodeFlags.BlockScoped) !== (b.flags & ts.NodeFlags.BlockScoped)) return false;
+          if ((ts.isPrefixUnaryExpression(a) || ts.isPostfixUnaryExpression(a)) && a.operator !== b.operator) return false;
+          const left = [], right = [];
+          ts.forEachChild(a, node => { if (!ts.isTypeNode(node)) left.push(node); });
+          ts.forEachChild(b, node => { if (!ts.isTypeNode(node)) right.push(node); });
+          return left.length === right.length && left.every((node, index) => compare(node, right[index]));
+        };
+        const expected = parsed.statements[0].body;
+        need(Array.isArray(actual) ? actual.length === expected.statements.length
+          && actual.every((statement, index) => compare(statement, expected.statements[index])) : compare(actual, expected),
+        reason, Array.isArray(actual) ? actual[0] : actual);
+      };
+      const states = Object.fromEntries(['science', 'art', 'review', 'pendingScience', 'contextStyles', 'styles']
+        .map(name => [name, variable(materializer, name).name]));
+      const evaluate = fn(materializer, 'evaluate'), reconstruct = fn(materializer, 'reconstruct');
+      need(evaluate.parameters.length === 6 && evaluate.parameters.every(parameter => ts.isIdentifier(parameter.name)
+        && !parameter.dotDotDotToken && !parameter.questionToken)
+        && evaluate.parameters.slice(0, 4).every(parameter => !parameter.initializer)
+        && evaluate.parameters.slice(4).every(parameter => parameter.initializer?.kind === ts.SyntaxKind.FalseKeyword),
+      'SELECTED_VIDEO_RECEIPT_SIGNATURE_UNPROVEN', evaluate);
+      const savedResult = fn(materializer, 'savedResult'), materializerCall = fn(materializer, 'call'), finish = fn(materializer, 'finish');
+      const traceEqual = importOf(illustration, 'node:util', 'isDeepStrictEqual');
+      const traceRoles = { ...states, input: materializerInput, nativeVideo: materializerVideo.name,
+        stopped: stop.name, evaluate: evaluate.name, reconstruct: reconstruct.name, savedResult: savedResult.name,
+        isDeepStrictEqual: traceEqual, parseStructuredJson: importOf(illustration, '@openscience/ai-gateway', 'parseStructuredJson'),
+        record: one(illustration.statements.filter(ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
+          .filter(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'record'), 'SELECTED_VIDEO_RECEIPT_BINDINGS_UNPROVEN').name };
+      for (const [declaration, names] of [[reconstruct, ['name', 'args', 'sequence', 'callId', 'recorded']],
+        [materializerCall, ['name', 'args', 'sequence', 'callId']], [finish, ['messages', 'finalResponse']]]) {
+        need(!declaration.asteriskToken && !declaration.modifiers?.some(node => node.kind === ts.SyntaxKind.AsyncKeyword)
+          && declaration.parameters.length === names.length && declaration.parameters.every((parameter, index) =>
+            ts.isIdentifier(parameter.name) && parameter.name.text === names[index] && !parameter.initializer && !parameter.dotDotDotToken),
+        'SELECTED_VIDEO_RECEIPT_SIGNATURE_UNPROVEN', declaration);
+      }
+      shape(reconstruct.body, `
+        const before = { science, art, review, pendingScience, contextStyles };
+        const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };
+        const rebuilt = evaluate(name, args, sequence, callId);
+        if (!recorded || isDeepStrictEqual(rebuilt, recorded)) return rebuilt;
+        if (nativeVideo && input.nativeVideoAudio === true && name === 'paper_illustration_art' && recorded.status === 'art_ready') {
+          restore(); const approved = evaluate(name, args, sequence, callId, false, true);
+          if (isDeepStrictEqual(approved, recorded)) return approved;
+        }
+        const hasDesignGuidance = name === 'paper_illustration_context' && recorded.status === 'illustration_context'
+          || (name === 'paper_illustration_science' || name === 'paper_illustration_science_repair') && recorded.status === 'science_ready'
+          || name === 'paper_illustration_art' && recorded.status === 'art_ready';
+        if (hasDesignGuidance && !nativeVideo) {
+          restore(); const historical = evaluate(name, args, sequence, callId, true);
+          if (isDeepStrictEqual(historical, recorded)) return historical;
+        }
+        restore(); stopped();`, traceRoles, 'SELECTED_VIDEO_WHOLE_RECONSTRUCTION_UNPROVEN');
+      shape(materializerCall.body, 'return reconstruct(name, args, sequence, callId, savedResult(name, args, callId));',
+        traceRoles, 'SELECTED_VIDEO_RECEIPT_CALL_UNPROVEN');
+      shape(finish.body, `
+        science = undefined; art = undefined; review = undefined; pendingScience = undefined; contextStyles = styles;
+        const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
+        for (const [sequence, tool] of calls.entries()) {
+          if (!tool.function.name.startsWith('paper_illustration_')) continue;
+          if (calls.filter(item => item.id === tool.id).length !== 1) stopped();
+          const receipts = messages.filter(message => message.role === 'tool' && message.toolCallId === tool.id);
+          if (receipts.length !== 1) stopped();
+          const recorded = JSON.parse(receipts[0]!.content) as unknown;
+          if (!record(recorded)) stopped();
+          const args: unknown = JSON.parse(tool.function.arguments);
+          const saved = savedResult(tool.function.name, args, tool.id);
+          if (saved && !isDeepStrictEqual(saved, recorded)) stopped();
+          const rebuilt = reconstruct(tool.function.name, args, sequence, tool.id, recorded);
+          if (!isDeepStrictEqual(rebuilt, recorded)) stopped();
+        }
+        const selected: unknown = parseStructuredJson(finalResponse);
+        const currentScience = science as unknown, currentArt = art as unknown, currentReview = review as unknown;
+        const lastReview = [...calls].reverse().find(tool => tool.function.name === 'paper_illustration_review');
+        if (!record(selected) || Object.keys(selected).join(',') !== 'reviewToolCallId' || !currentScience || !currentArt || !currentReview
+          || selected.reviewToolCallId !== currentReview.id || lastReview?.id !== currentReview.id
+          || currentReview.artId !== currentArt.id || currentArt.scienceId !== currentScience.id) stopped();
+        return { document: currentArt.document, review: currentReview.review, prompts: currentArt.prompts,
+          designSkills: currentArt.designSkills, planToolCallId: currentArt.id, reviewToolCallId: currentReview.id };`,
+      traceRoles, 'SELECTED_VIDEO_FINISH_TRACE_UNPROVEN');
+      need(uses(reconstruct).length === 2 && uses(reconstruct).every(call => [materializerCall, finish].includes(enclosing(call)))
+        && uses(evaluate).length === 3 && uses(evaluate).every(call => enclosing(call) === reconstruct),
+      'SELECTED_VIDEO_RECEIPT_ESCAPE_UNPROVEN', reconstruct);
+      // Saved-result lookup must not splice prompts or change arguments; each
+      // retained receipt is recompiled from the same pre-call state above.
+      shape(savedResult.body, `const saved = savedIllustrationReceipts.get(callId);
+        if (saved && (name !== saved.name || !isDeepStrictEqual(args, saved.args))) stopped();
+        return saved?.result;`, { ...traceRoles, savedIllustrationReceipts: variable(materializer, 'savedIllustrationReceipts').name },
+      'SELECTED_VIDEO_SAVED_RESULT_UNPROVEN');
+      const dispatch = unwrap(objectProperty(paper.initializer, 'call'));
+      need(entry.images.initializer.modifiers?.length === 1 && entry.images.initializer.modifiers[0].kind === ts.SyntaxKind.AsyncKeyword
+        && entry.images.initializer.parameters.every((parameter, index) => ts.isIdentifier(parameter.name)
+          && parameter.name.text === ['args', 'result'][index] && !parameter.initializer && !parameter.dotDotDotToken && !parameter.questionToken),
+      'SELECTED_VIDEO_RECEIPT_SIGNATURE_UNPROVEN', entry.images.initializer);
+      need(match(variable(core, 'imageReceipt').initializer,
+        "input.selectedImage ? { status: 'image_view_ready', selectedImage: input.selectedImage.binding } : undefined", { input: coreInput })
+        && match(variable(core, 'selectedImageCaption').initializer,
+          "input.selectedImage ? 'Actual selected image ' + JSON.stringify(input.selectedImage.binding) : undefined", { input: coreInput })
+        && match(variable(core, 'nativeVideoAudio').initializer, "'nativeVideoAudio' in profile && profile.nativeVideoAudio", { profile: profile.name })
+        && same(objectProperty(unwrap(coreMaterializer.initializer).arguments[0], 'nativeVideoAudio'), variable(core, 'nativeVideoAudio').name),
+      'SELECTED_VIDEO_IMAGE_VALUE_SUPPLIER_UNPROVEN', dispatch);
+      shape(dispatch.body, `
+        if (input.selectedImage && name === 'paper_image_view') {
+          if (!record(args) || Object.keys(args).length) stopped(); return imageReceipt!;
+        }
+        if (input.selectedImage && name === 'paper_selected_image_reply') {
+          if (!record(args) || Object.keys(args).sort().join(',') !== 'kind,text' || !['explanation', 'question'].includes(String(args.kind))
+            || typeof args.text !== 'string' || !args.text.trim() || args.text.length > (args.kind === 'question' ? 400 : 1200)) stopped();
+          return { status: 'selected_image_reply', selectedImage: input.selectedImage.binding, kind: args.kind, text: args.text };
+        }
+        return name.startsWith('paper_illustration_') ? materializer.call(name, args, sequence!, callId!) : source.call(name, args);`,
+      { input: coreInput, record: traceRoles.record, stopped: stop.name, imageReceipt: variable(core, 'imageReceipt').name,
+        materializer: coreMaterializer.name, source: entry.sourceVariable.name }, 'SELECTED_VIDEO_DISPATCH_TRACE_UNPROVEN');
+      shape(entry.images.initializer.body, `
+        if (input.selectedImage && record(result) && result.status === 'image_view_ready') {
+          if (!record(args) || Object.keys(args).length || !isDeepStrictEqual(result, imageReceipt)) stopped();
+          await authorize();
+          const image = input.selectedImageAttachment!;
+          return { content: [{ type: 'text' as const, text: selectedImageCaption! },
+            { type: 'image_url' as const, image_url: { url: \`data:\${image.mediaType};base64,\${Buffer.from(image.bytes).toString('base64')}\` } }] };
+        }
+        return source.images(args, result);`,
+      { input: coreInput, record: traceRoles.record, isDeepStrictEqual: traceEqual, stopped: stop.name,
+        authorize: variable(core, 'authorize').name, imageReceipt: variable(core, 'imageReceipt').name,
+        selectedImageCaption: variable(core, 'selectedImageCaption').name, source: entry.sourceVariable.name },
+      'SELECTED_VIDEO_IMAGES_TRACE_UNPROVEN');
+      // These statements bind the real image/reply outcome to the same stored
+      // paid completion. The original Host/Session/store chain is still below.
+      const last = variable(core, 'last'), completedState = variable(core, 'completed');
+      need(ts.isAwaitExpression(completedState.initializer) && match(completedState.initializer, 'store.read()', { store: store.name })
+        && match(last.initializer, 'completed?.turns.at(-1)', { completed: completedState.name }),
+      'SELECTED_VIDEO_COMPLETED_RECEIVER_UNPROVEN', last);
+      const terminal = core.body.statements.find(statement => ts.isIfStatement(statement)
+        && match(statement.expression, "!last || last.state !== 'completed' || last.response.finishReason !== 'stop' || last.response.toolCalls?.length || last.response.model !== execution.model || last.target.model !== execution.model || last.response.text !== native.finalResponse",
+          { last: last.name, execution: execution.name, native: native.name }));
+      need(terminal && guard(terminal, terminal.expression.getText(), {}, stop), 'SELECTED_VIDEO_COMPLETED_RECEIPT_UNPROVEN', last);
+      const selectedFinal = core.body.statements.find(statement => ts.isIfStatement(statement)
+        && match(statement.expression, 'input.selectedImage', { input: coreInput }) && statement.getStart() > terminal.getStart());
+      need(selectedFinal, 'SELECTED_VIDEO_COMPLETED_RECEIVER_UNPROVEN', core);
+      const coreStatements = [...core.body.statements], nativeAt = coreStatements.indexOf(native.parent.parent);
+      need(ts.isAwaitExpression(native.initializer) && coreStatements[nativeAt + 1]?.expression
+        && ts.isAwaitExpression(coreStatements[nativeAt + 1].expression)
+        && match(coreStatements[nativeAt + 1].expression, 'authorize()', { authorize: variable(core, 'authorize').name })
+        && coreStatements[nativeAt + 2] === completedState.parent.parent && coreStatements[nativeAt + 3] === last.parent.parent
+        && coreStatements[nativeAt + 4] === terminal && coreStatements[nativeAt + 5] === selectedFinal,
+      'SELECTED_VIDEO_COMPLETED_DOMINANCE_UNPROVEN', native);
+      shape(selectedFinal.thenStatement, `
+        const messages = last.request.messages;
+        const calls = messages.flatMap(message => message.role === 'assistant' ? message.toolCalls ?? [] : []);
+        const views = calls.filter(call => call.function.name === 'paper_image_view');
+        const shownImages = messages.filter(message => message.role === 'user' && message.content === selectedImageCaption);
+        if (!views.length || views.some(call => {
+          const receipts = messages.filter(message => message.role === 'tool' && message.toolCallId === call.id);
+          return receipts.length !== 1 || !isDeepStrictEqual(parseStructuredJson(receipts[0]!.content), imageReceipt);
+        }) || !shownImages.length || shownImages.some(message => message.images?.length !== 1
+          || message.images[0]!.mediaType !== input.selectedImageAttachment!.mediaType
+          || createHash('sha256').update(Buffer.from(message.images[0]!.data, 'base64')).digest('hex') !== input.selectedImage!.binding.contentHash)) stopped();
+        const contextCall = calls.find(call => call.function.name === 'paper_illustration_context');
+        const contextReceipts = contextCall ? messages.filter(message => message.role === 'tool' && message.toolCallId === contextCall.id) : [];
+        const context = contextReceipts.length === 1 ? parseStructuredJson(contextReceipts[0]!.content) : undefined;
+        if (!contextCall || calls.indexOf(contextCall) >= calls.indexOf(views[0]!) || !record(context)
+          || !isDeepStrictEqual(context.selectedImage, input.selectedImage)) stopped();
+        const selected = parseStructuredJson(native.finalResponse);
+        if (record(selected) && Object.keys(selected).join(',') === 'replyToolCallId') {
+          const questions = calls.filter(call => call.function.name === 'paper_selected_image_reply');
+          if (questions.length !== 1 || questions[0]!.id !== selected.replyToolCallId
+            || calls.indexOf(questions[0]!) <= calls.indexOf(views[0]!)) stopped();
+          const receipts = messages.filter(message => message.role === 'tool' && message.toolCallId === questions[0]!.id);
+          if (receipts.length !== 1) stopped();
+          const args = parseStructuredJson(questions[0]!.function.arguments), receipt = parseStructuredJson(receipts[0]!.content);
+          if (!record(args) || Object.keys(args).sort().join(',') !== 'kind,text' || !['explanation', 'question'].includes(String(args.kind))
+            || typeof args.text !== 'string' || !args.text.trim() || args.text.length > (args.kind === 'question' ? 400 : 1200)
+            || !isDeepStrictEqual(receipt, { status: 'selected_image_reply', selectedImage: input.selectedImage.binding, kind: args.kind, text: args.text })) stopped();
+          return { reply: { kind: args.kind, text: args.text, toolCallId: questions[0]!.id }, promptHash: last.target.promptHash,
+            responseHash: createHash('sha256').update(last.response.text).digest('hex'), provider: last.target.provider, model: last.target.model };
+        }
+        const firstScience = calls.findIndex(call => call.function.name === 'paper_illustration_science');
+        if (firstScience < 0 || firstScience <= calls.indexOf(views[0]!)) stopped();`,
+      { input: coreInput, last: last.name, native: native.name, selectedImageCaption: variable(core, 'selectedImageCaption').name,
+        imageReceipt: variable(core, 'imageReceipt').name, record: traceRoles.record, stopped: stop.name,
+        parseStructuredJson: traceRoles.parseStructuredJson, isDeepStrictEqual: traceEqual,
+        createHash: importOf(illustration, 'node:crypto', 'createHash') }, 'SELECTED_VIDEO_SELECTED_FINAL_RECEIVER_UNPROVEN');
+      // Close the private receipt-map lifetime instead of trusting a label.
+      // Its only writer parses the original authenticated prefix, its only
+      // reader is savedResult, and that result is used only by the two whole
+      // reconstruction sites above. The trace neither returns recorded bytes
+      // to Host nor lends this map to evaluate/an opaque mutator.
+      const receiptMap = variable(materializer, 'savedIllustrationReceipts'), savedMessages = variable(materializer, 'savedMessages');
+      const mapReferences = (identifiers.get(receiptMap.name.text) ?? []).filter(node => node !== receiptMap.name && same(node, receiptMap.name));
+      const lookup = variable(savedResult, 'saved');
+      const writer = one(mapReferences.filter(node => ts.isPropertyAccessExpression(node.parent) && node.parent.name.text === 'set'),
+        'SELECTED_VIDEO_RECEIPT_VALUE_LIFETIME_UNPROVEN');
+      need(mapReferences.length === 2 && mapReferences.some(node => ts.isPropertyAccessExpression(node.parent)
+        && node.parent.name.text === 'get' && node.parent.parent === unwrap(lookup.initializer))
+        && ts.isCallExpression(writer.parent.parent) && enclosing(writer) === materializer
+        && match(savedMessages.initializer, 'input.savedState?.turns.at(-1)?.request.messages ?? []', { input: materializerInput })
+        && uses(savedResult).length === 2 && uses(savedResult).every(call => [materializerCall, finish].includes(enclosing(call))),
+      'SELECTED_VIDEO_RECEIPT_VALUE_LIFETIME_UNPROVEN', writer);
+      const receiptLoop = writer.parent.parent.parent.parent;
+      need(ts.isBlock(receiptLoop) && ts.isForOfStatement(receiptLoop.parent) && ts.isForOfStatement(receiptLoop.parent.parent),
+        'SELECTED_VIDEO_RECEIPT_VALUE_LIFETIME_UNPROVEN', writer);
+      const outerLoop = receiptLoop.parent.parent, innerLoop = receiptLoop.parent;
+      const outerBinding = outerLoop.initializer?.declarations?.[0], innerBinding = innerLoop.initializer?.declarations?.[0];
+      need(outerBinding && innerBinding && ts.isVariableDeclarationList(outerLoop.initializer)
+        && ts.isVariableDeclarationList(innerLoop.initializer) && outerLoop.initializer.flags & ts.NodeFlags.Const
+        && innerLoop.initializer.flags & ts.NodeFlags.Const && outerLoop.initializer.declarations.length === 1
+        && innerLoop.initializer.declarations.length === 1 && same(outerLoop.expression, savedMessages.name)
+        && match(innerLoop.expression, "message.role === 'assistant' ? message.toolCalls ?? [] : []", { message: outerBinding.name })
+        && outerBinding.name.text === 'message' && innerBinding.name.text === 'tool'
+        && match(receiptMap.initializer, 'new Map()') && receiptMap.parent.flags & ts.NodeFlags.Const,
+      'SELECTED_VIDEO_RECEIPT_VALUE_LIFETIME_UNPROVEN', outerLoop);
+      shape(receiptLoop, `
+        if (!tool.function.name.startsWith('paper_illustration_')) continue;
+        if (!tool.id || savedIds.has(tool.id)) stopped();
+        savedIds.add(tool.id);
+        const receipts = savedMessages.filter(item => item.role === 'tool' && item.toolCallId === tool.id);
+        if (receipts.length > 1) stopped();
+        if (!receipts.length) continue;
+        const result: unknown = JSON.parse(receipts[0]!.content);
+        if (!record(result)) stopped();
+        savedIllustrationReceipts.set(tool.id, { name: tool.function.name, args: JSON.parse(tool.function.arguments), result });`,
+      { savedMessages: savedMessages.name, savedIllustrationReceipts: receiptMap.name, savedIds: variable(materializer, 'savedIds').name,
+        record: traceRoles.record, stopped: stop.name }, 'SELECTED_VIDEO_RECEIPT_VALUE_LIFETIME_UNPROVEN');
+      // Preserve actual selected image delivery and the next SDK request's
+      // exact image content. Slot ordering/count remains the original Host's
+      // global toolSequence, which the unchanged chain below proves.
+      const history = fn(hostFactory, 'validateSourceHistory'), hostRoles = { input: hostFactory.parameters[0].name,
+        slots: variable(hostFactory, 'slots').name, blocked: hostStop.name,
+        record: one(host.statements.filter(ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
+          .filter(declaration => declaration.name?.text === 'record'), 'SELECTED_VIDEO_HOST_IMAGES_UNPROVEN').name,
+        isDeepStrictEqual: importOf(host, 'node:util', 'isDeepStrictEqual') };
+      shape([...history.body.statements].slice(2), `const expected = slots.flatMap(s => s.images ?? []);
+        if (expected.length) {
+          if (!record(value) || !Array.isArray(value.messages)) blocked();
+          const latest = value.messages.at(-1);
+          if (!record(latest) || latest.role !== 'user' || !isDeepStrictEqual(latest.content, expected)) blocked();
+        }`, hostRoles, 'SELECTED_VIDEO_HOST_IMAGES_UNPROVEN');
+      const imageRoute = one(walk(hostFactory, node => ts.isIfStatement(node)
+        && match(node.expression, "req.url === '/task/tools/images'")), 'SELECTED_VIDEO_HOST_IMAGES_UNPROVEN');
+      shape(imageRoute.thenStatement, `
+        const slot = slots.find(s => s.id === value.callId && (s.name === 'paper_view' || s.name === 'paper_image_view') && s.authorized && s.called);
+        if (!slot || !isDeepStrictEqual(slot.args, value.arguments) || !isDeepStrictEqual(slot.result, value.result)) blocked();
+        const images = await input.paper.images(value.arguments, value.result);
+        const deliver = async () => {
+          if (settled || Date.now() >= input.deadlineAt) blocked();
+          slot.images = images.content; respond(res, 200, images);
+        };
+        return await (input.paper.withAuthorizedToolCall ? input.paper.withAuthorizedToolCall(deliver) : deliver());`,
+      { ...hostRoles, settled: variable(hostFactory, 'settled').name, respond: fn(host, 'respond').name }, 'SELECTED_VIDEO_HOST_IMAGES_UNPROVEN');
+      // Actual workspace consumer: a reply is not a proposal, and neither may
+      // adopt a paid result without live reauthorization and exact CP target /
+      // response hash plus task-result CAS. Retain all private prior evidence.
+      const actual = entry.selectedCalls[0].parent.parent;
+      need(ts.isVariableDeclaration(actual) && ts.isIdentifier(actual.name) && ts.isAwaitExpression(actual.initializer)
+        && actual.parent.flags & ts.NodeFlags.Const, 'SELECTED_VIDEO_WORKSPACE_ADOPTION_UNPROVEN', actual);
+      const selectedStatements = [...selectedBranch.thenStatement.statements], actualAt = selectedStatements.indexOf(actual.parent.parent);
+      need(actualAt >= 0, 'SELECTED_VIDEO_WORKSPACE_ADOPTION_UNPROVEN', actual);
+      shape(selectedStatements.slice(actualAt + 1), `
+        const question = actual.kind === 'reply';
+        const accepted = !question && actual.review.decision === 'accepted';
+        const selectedImageDraft = accepted ? readWorkspaceSelectedImageDraft({ status: 'private-proposal',
+          source: workspaceSelectedImageDraftSource(selected.binding), document: actual.document }) : undefined;
+        const summary = question ? actual.reply.text : accepted
+          ? payload.locale === 'zh' ? '已查看原图并保存私有修改提案；尚未生成新图，原图保持保留。' : 'The original image was read and a private revision proposal saved. No new image has been generated; the original is retained.'
+          : actual.review.summary.slice(0, 1200);
+        const paid = question ? actual : actual.review;
+        const selectedImageReply = { kind: question ? actual.reply.kind : accepted ? 'proposal' : 'blocked', sourceBinding: selected.binding,
+          target: { provider: paid.provider, model: paid.model, promptHash: paid.promptHash }, responseHash: paid.responseHash, summary,
+          ...(question ? { replyToolCallId: actual.reply.toolCallId } : { reviewToolCallId: actual.nativeAgent.reviewToolCallId }) };
+        await deps.prisma.$transaction(async tx => {
+          await authorize(tx);
+          const current = await tx.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+          const cp = readNativeAgentExecution(current.result)?.checkpoint;
+          if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls
+            || cp.responseHash !== paid.responseHash || !isDeepStrictEqual(cp.target, selectedImageReply.target)) throw new Error('[blocked] Selected-image paid completion changed');
+          const stored = current.result as unknown;
+          const update = await tx.agentTask.updateMany({ where: { id: task.id, status: 'running', deletedAt: null, executionAttempt: task.executionAttempt,
+            result: { equals: current.result } }, data: { result: { ...stored, selectedImageReply,
+              ...(selectedImageDraft ? { selectedImageDraft } : {}),
+              ...(!question ? { storyboardReview: actual.review, nativeIllustration: actual.nativeAgent } : {}) } } });
+          if (update.count !== 1) throw new Error('[blocked] Selected-image result changed');
+        }, { isolationLevel: 'Serializable' });
+        return { summary, nextSteps: [], needsMoreInformation: question ? actual.reply.kind === 'question' : !accepted,
+          selectedImageReference: workspaceSelectedImageDraftSource(selected.binding), ...(selectedImageDraft ? { selectedImageDraft } : {}),
+          sourceMapRef: narrative.reference, selectedImageReply, ...(!question ? { storyboardReview: actual.review } : {}) };`,
+      { actual: actual.name, selected: selected.name, deps, task, payload: payload.name, narrative: narrative.name, authorize: authorizer.name,
+        readNativeAgentExecution: importOf(workspace, '@openscience/domain', 'readNativeAgentExecution'),
+        readWorkspaceSelectedImageDraft: importOf(workspace, '@openscience/domain', 'readWorkspaceSelectedImageDraft'),
+        workspaceSelectedImageDraftSource: importOf(workspace, '@openscience/domain', 'workspaceSelectedImageDraftSource'),
+        isDeepStrictEqual: equal }, 'SELECTED_VIDEO_WORKSPACE_ADOPTION_UNPROVEN');
+      // The retained prefix's full decoder/store and paid/late contracts remain
+      // necessary below. This bridge changes only the live receiver to the
+      // actual Core; the original wrapper/caller and selected branch stay real.
+      composedEntry = entry;
+      live = core;
     }
 
-    const materializerUses = uses(materializer), liveUses = uses(live), replayUses = uses(replay);
+    const materializerUses = uses(materializer), liveUses = composedEntry ? composedEntry.ordinaryCalls : uses(live), replayUses = uses(replay);
     need(materializerUses.length === 2 && materializerUses.every(call => [live, replay].includes(enclosing(call))), 'EXTRA_MATERIALIZER_CALLER', materializerUses[2]);
     need(liveUses.length === 1 && liveUses[0].getSourceFile() === handler
       && replayUses.length === 1 && replayUses[0].getSourceFile() === handler, 'EXTRA_LIVE_OR_REPLAY_CALLER');
@@ -1808,7 +2141,8 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
       && same(objectProperty(unwrap(liveMaterializer.initializer).arguments[0], 'savedState'), liveSaved.name), 'CALLER_SELECTED_SAVED_STATE');
     const paper = variable(live, 'paper'), paperCall = unwrap(objectProperty(paper.initializer, 'call'));
     need(ts.isArrowFunction(paperCall) && paperCall.parameters.length === 4, 'PAPER_CALL_NOT_BOUND');
-    need(match(paperCall.body, "name.startsWith('paper_illustration_') ? materializer.call(name, args, sequence, callId) : source.call(name, args)",
+    const ordinaryDispatch = composedEntry ? paperCall.body.statements.at(-1)?.expression : paperCall.body;
+    need(match(ordinaryDispatch, "name.startsWith('paper_illustration_') ? materializer.call(name, args, sequence, callId) : source.call(name, args)",
       { materializer: liveMaterializer.name, name: paperCall.parameters[0].name, args: paperCall.parameters[1].name,
         sequence: paperCall.parameters[2].name, callId: paperCall.parameters[3].name, source: variable(live, 'source').name }), 'PAPER_CALL_NOT_MATERIALIZER');
     const session = variable(live, 'session'), native = variable(live, 'native');
