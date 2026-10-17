@@ -1,6 +1,5 @@
 import type { Redis } from 'ioredis';
 import { isDeepStrictEqual } from 'node:util';
-import { readSelectedImageGenerationChild } from '../assets/presentation-asset';
 import { lockLiveResearchObject, lockTrashReferences, rememberDiscardedTaskResult } from '../trash/trash';
 import { Prisma, type AgentSession, type AgentTask } from '@prisma/client';
 import { SDF_CORE_FIELDS } from '@openscience/sdf-schema';
@@ -32,7 +31,7 @@ import { hasStandaloneScienceDiagnostics, inspectStandaloneScienceRecovery } fro
 import { inspectHermesSourceReviewRecovery, requireHermesSourceReviewExecution, resolveNativeSourceCorrectionExecution, isNativeSourceCorrectionTaskKey, type SourceReviewNotSubmittedVerifier } from '../ingestion/source-review-recovery';
 import { requireHermesSourceCompositionRecoveryResult, SOURCE_COMPOSITION_RECOVERY_PREFIX } from '../ingestion/source-composition-recovery';
 import { initialNativeImageReviewResult, nativeImageReviewTerminalResult } from '../assets/scene-image';
-import { isDirectNativeVideoStoryboard, isOrdinaryNativeVideoStoryboardRevision, parsePresentationGenerationPayload, requireStoryboardBase } from '../assets/presentation-asset';
+import { isDirectNativeVideoStoryboard, isOrdinaryNativeVideoStoryboardRevision, parsePresentationGenerationPayload, requireStoryboardBase, readSelectedImageGenerationChild } from '../assets/presentation-asset';
 import { readNativeImageReviewCheckpoint } from '../assets/native-image-review';
 import { readNativeSourceReview, nativeSourceReviewTerminalResult } from '../ingestion/native-source-review';
 import { readNativeAgentExecution, nativeAgentTerminalResult, initialNativeAgentExecution, requireNativeAgentExecutionAuthority, requireNativeIllustrationTerminalSource, supportsNativeIllustration, type NativeAgentRuntimeConfig } from './native-agent-execution';

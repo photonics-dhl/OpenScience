@@ -1758,30 +1758,58 @@ test('selected guide actual capable maintenance composes the complete retained-s
   const components = selectedGuideSourceComponents();
   const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
   const actual = await capableSelectedGuideProgram();
-  const baseline = selectedGuideSourceContext(previous);
+  // These two real source entries are analysis inputs, never DEFAULT collector
+  // membership. The historical helper does not supply the infra reader corpus.
+  const roots = [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']];
+  const contextFor = owner => {
+    const context = selectedGuideSourceContext(owner);
+    for (const [entry] of roots) {
+      const source = owner.program.getSourceFile(resolve(owner.projectRoot, entry));
+      assert.ok(source && !source.isDeclarationFile, `the full actual Program must supply ${entry}`);
+      assert.equal(source.text, owner.sourceHost.readFile(source.fileName));
+    }
+    return { ...context, roots };
+  };
+  const baseline = contextFor(previous);
   let model;
-  try { model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), baseline); }
-  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  try { model = components.sourceModel(actual.ts, contextFor(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}/${error.initializationSite ?? ''}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}`); }
   assert.equal(model.status, 'conditional');
   assert.equal(model.projected.size, 6);
   assert.equal(model.fresh.fresh, 'legacy');
   assert.equal(model.origin.domain, 'authenticated-ordinary-opaque-and-capable-selected-retained');
+  assert.deepEqual(Array.from(model.initialization.ordering, value => value.entry), roots.map(([entry]) => entry));
+  for (const value of model.initialization.ordering) assert.equal(JSON.stringify(value.before.external), JSON.stringify(value.after.external), value.entry);
   for (const [key, value] of model.projected) {
     assert.equal(value.source, actual.program.getSourceFile(resolve(actual.projectRoot, key)));
     assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text));
   }
   assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+  const agent = 'packages/domain/src/agent/agent.ts';
+  const originalImport = "import { isDirectNativeVideoStoryboard, isOrdinaryNativeVideoStoryboardRevision, parsePresentationGenerationPayload, requireStoryboardBase } from '../assets/presentation-asset';";
+  const mergedImport = originalImport.replace('requireStoryboardBase }', 'requireStoryboardBase, readSelectedImageGenerationChild }');
+  const early = await capableSelectedGuideProgram(new Map([[agent, text => {
+    assert.equal(text.split(mergedImport).length, 2);
+    const retained = text.replace(mergedImport, originalImport);
+    const anchor = "import { isDeepStrictEqual } from 'node:util';";
+    assert.equal(retained.split(anchor).length, 2);
+    const newline = retained.includes('\r\n') ? '\r\n' : '\n';
+    return retained.replace(anchor, `${anchor}${newline}import { readSelectedImageGenerationChild } from '../assets/presentation-asset';`);
+  }]]));
+  assert.throws(() => components.sourceModel(early.ts, contextFor(early), baseline), error =>
+    error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN' && error.initializationSite === 'graph-order'
+      && error.node === early.program.getSourceFile(resolve(early.projectRoot, roots[1][0])));
   const api = 'apps/api/src/routes/agent.ts';
   const activated = await capableSelectedGuideProgram(new Map([[api, text => text.replace('parseWorkspaceGuidePayload, requireSelectedImageSource',
     'parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage, requireSelectedImageSource')
     .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
-  assert.throws(() => components.sourceModel(activated.ts, selectedGuideSourceContext(activated), baseline), error =>
+  assert.throws(() => components.sourceModel(activated.ts, contextFor(activated), baseline), error =>
     ['SELECTED_GUIDE_MAINTENANCE_ACTIVATION_UNKNOWN', 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN',
       'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'].includes(error.reason)
       && error.node?.getSourceFile().fileName.replaceAll('\\', '/').endsWith(api));
   const loss = await capableSelectedGuideProgram(new Map([['packages/domain/src/agent/workspace-guide-contract.ts', text =>
     text.replace('export function readWorkspaceGuidePayloadWithSelectedImage(', 'export function lostWorkspaceGuidePayloadWithSelectedImage(')]]));
-  assert.throws(() => components.sourceModel(loss.ts, selectedGuideSourceContext(loss), baseline), error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
+  assert.throws(() => components.sourceModel(loss.ts, contextFor(loss), baseline), error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
 });
 
 // Complete selected+voice transition, independent of later SDF additions.
