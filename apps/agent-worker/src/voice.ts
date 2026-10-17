@@ -1,4 +1,4 @@
-import { downloadSynclipAudio, validateHermesVoiceWav, type SynclipVoiceRuntime } from '@openscience/ai-gateway';
+import { downloadHermesVoiceAudio, validateHermesVoiceWav, type SynclipVoiceRuntime } from '@openscience/ai-gateway';
 import { finalizeHermesVoiceTask, loadHermesVoiceExecution, saveHermesVoiceCheckpoint,
   withHermesVoiceSubmission, isHermesVoiceWriterEnabled, HERMES_VOICE_READER_ONLY,
   type HermesVoiceDeps, type HermesVoiceExecution } from '@openscience/domain';
@@ -28,7 +28,7 @@ async function recording(deps: HermesVoiceDeps, execution: HermesVoiceExecution)
 /** Each handler owns one bounded polling window; a saved ID is the only recovery path. */
 export function createHermesVoiceHandlers(runtime?: SynclipVoiceRuntime, options: {
   maxPolls?: number; pollIntervalMs?: number; wait?: (milliseconds: number) => Promise<void>;
-  downloadAudio?: typeof downloadSynclipAudio;
+  downloadAudio?: typeof downloadHermesVoiceAudio;
 } = {}): Record<'voice.transcribe' | 'voice.reply', TaskHandler> {
   const wait = options.wait ?? (async milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
   const handle: TaskHandler = async (workerDeps, task) => {
@@ -74,12 +74,12 @@ export function createHermesVoiceHandlers(runtime?: SynclipVoiceRuntime, options
             ...(output.coins_used === undefined ? {} : { credits: output.coins_used }) });
         } else {
           if (!('url_expires_at' in output)) throw new Error('[blocked] VOICE_RESPONSE_INVALID');
-          const audio = await (options.downloadAudio ?? downloadSynclipAudio)(output);
+          const audio = await (options.downloadAudio ?? downloadHermesVoiceAudio)(output);
           if (audio.bytes.length > 20 * 1024 * 1024) throw new Error('[blocked] VOICE_AUDIO_TOO_LARGE');
           const sha256 = sha256HexBuffer(audio.bytes);
-          const objectKey = `derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.mp3`;
-          await deps.storage.putObject(objectKey, audio.bytes, { contentType: 'audio/mpeg', sha256 });
-          const storedAudio = { objectKey, sha256, bytes: audio.bytes.length, contentType: 'audio/mpeg' as const };
+          const objectKey = `derived/hermes-voice/${originalIdentity.userId}/${originalIdentity.taskId}/${sha256}.${audio.format}`;
+          await deps.storage.putObject(objectKey, audio.bytes, { contentType: audio.contentType, sha256 });
+          const storedAudio = { objectKey, sha256, bytes: audio.bytes.length, contentType: audio.contentType };
           try {
             await saveHermesVoiceCheckpoint(deps, originalIdentity, { phase: 'completed',
               ...(output.coins_used === undefined ? {} : { credits: output.coins_used }), audio: storedAudio });
