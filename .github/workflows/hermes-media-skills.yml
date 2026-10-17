@@ -798,7 +798,7 @@ jobs:
       - run: node --check infra/hermes-agent/offline_host.cjs
       - name: Test release tooling with the retained video source fixtures
         run: |
-          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d 4cc78008f86da811aeb695b5d3639a5b52891d57 ba276d8edccf163a8fb4e5a44655dd8ccf718eff 764020c76b25af571e8b88e80338406d70bdb37a 2ad0aa1b103797dd9f86a005ff3c33050b33ff54 852c6eaef9df6acbded36ff8194ff4e8392e65ea 5979840b31d6aa02e5350b0e63c8c2c8b049b133; do
+          for fixture_ref in ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d 4cc78008f86da811aeb695b5d3639a5b52891d57 ba276d8edccf163a8fb4e5a44655dd8ccf718eff 764020c76b25af571e8b88e80338406d70bdb37a 2ad0aa1b103797dd9f86a005ff3c33050b33ff54 852c6eaef9df6acbded36ff8194ff4e8392e65ea 5979840b31d6aa02e5350b0e63c8c2c8b049b133; do
             if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
               git fetch --no-tags --depth=1 origin "$fixture_ref"
             fi
