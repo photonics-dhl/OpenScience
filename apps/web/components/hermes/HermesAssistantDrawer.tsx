@@ -45,6 +45,7 @@ import { ResearchPublicationPanel } from '@/components/research/ResearchPublicat
 import type { HermesConversationAction } from '@/lib/hermes/conversation-action';
 import { HermesMediaReview } from './HermesMediaReview';
 import { ScientificText } from '@/components/content/ScientificText';
+import { ScientificMarkdown } from '@/components/content/ScientificMarkdown';
 import { HermesWritingDraft, type HermesWritingDraftValue } from './HermesWritingDraft';
 import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
 import { HermesVoiceControls, type HermesVoiceMemory } from './HermesVoiceControls';
@@ -1181,7 +1182,7 @@ function HermesAssistantDrawerContent({
           {sourceReview}
           {turns.map((turn) => <React.Fragment key={turn.id}>
             {turn.user && <p className="hermes-message hermes-message-user">{turn.user}</p>}
-            <ScientificText className="hermes-message hermes-message-assistant">{turn.summary}</ScientificText>
+            <div className="hermes-message hermes-message-assistant hermes-message-content"><ScientificMarkdown body={turn.summary} /></div>
           </React.Fragment>)}
           {sentGoal && <p className="hermes-message hermes-message-user">{sentGoal}</p>}
           {busy && <p className="hermes-message hermes-message-assistant hermes-conversation-status" role="status">{t('guide.working')}</p>}
@@ -1190,7 +1191,7 @@ function HermesAssistantDrawerContent({
             {error && activeTask && <button type="button" onClick={() => setError('')}>{t('guide.resume')}</button>}
           </div>}
           {!submitting && result && <div className="hermes-message hermes-message-assistant">
-            <ScientificText as="p">{result.summary}</ScientificText>
+            <div className="hermes-message-content"><ScientificMarkdown body={result.summary} /></div>
             {runDraftHref ? <Link className="hermes-conversation-link" href={runDraftHref}>{tc(result?.researchRunDraft?.output === 'video' ? 'openResearchVideoRun' : 'openResearchRun')} →</Link> : null}
             {result.draftEdit && <div className="hermes-conversation-change">
               <p role="status">{editOutcome ? tw(editOutcome.conflicts ? 'editConflict' : 'editApplied', { count: editOutcome.applied }) : tw('editProposal')}</p>
