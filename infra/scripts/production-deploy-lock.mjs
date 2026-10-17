@@ -6250,6 +6250,672 @@ function finiteSelectedGuideDecoderTerms(ts, context, rollbackContext) {
       'complete residual/import/init equality', 'original successful default collector provenance'] };
 }
 
+function finiteSelectedGuideMaintenanceBookingTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const nodes = (root, predicate) => { const result = []; const visit = node => {
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const module = (owner, path) => { const source = owner.program.getSourceFile(resolve(owner.root, path)); need(source, undefined); return source; };
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const same = (node, text) => {
+    const grammar = ts.createSourceFile('selected-booking-term.ts', text, ts.ScriptTarget.ES2022, true);
+    need(!grammar.parseDiagnostics.length && grammar.statements.length === 1, node);
+    need(JSON.stringify(context.canonical(node)) === JSON.stringify(context.canonical(grammar.statements[0])), node);
+  };
+  const path = 'packages/domain/src/assets/presentation-asset.ts';
+  const source = module(context, path), previousSource = module(rollbackContext, path);
+  const target = fn(source, 'submitPresentationGeneration'), previous = fn(previousSource, target.name.text);
+  const read = one(nodes(target, node => ts.isVariableDeclaration(node) && node.name.text === 'parentOwner'), target);
+  const readStatement = read.parent.parent;
+  same(readStatement, 'const parentOwner = await tx.agentTask.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId } });');
+  const body = readStatement.parent;
+  need(ts.isBlock(body) && ts.isArrowFunction(body.parent) && body.parent.parameters.length === 1
+    && ts.isIdentifier(body.parent.parameters[0].name) && body.parent.parameters[0].name.text === 'tx', read);
+  const callback = body.parent, tx = callback.parameters[0];
+  const readIndex = body.statements.indexOf(readStatement);
+  need(readIndex >= 2, read);
+  same(body.statements[readIndex - 2], 'const currentParent = await requireSceneImageParent(tx, payload);');
+  same(body.statements[readIndex - 1], "if (!currentParent || currentParent.identity !== sceneParentForTask!.identity) throw new PresentationAssetError('VALIDATION_ERROR', 'Scene image parent changed before task booking');");
+  const commonRead = one(nodes(body.statements[readIndex - 2], ts.isCallExpression), read);
+  const scenePath = 'packages/domain/src/assets/scene-image.ts';
+  const sceneParent = fn(module(context, scenePath), 'requireSceneImageParent');
+  need(symbol(commonRead.expression)?.valueDeclaration === sceneParent
+    && JSON.stringify(context.canonical(sceneParent)) === JSON.stringify(rollbackContext.canonical(fn(module(rollbackContext, scenePath), 'requireSceneImageParent'))), commonRead);
+  const guard = body.statements[readIndex + 1];
+  same(guard, `if (parentOwner?.kind === 'workspace.guide' || recordValue(lockedParent.provenance).nativeIllustration !== undefined) {
+    if (parentOwner?.kind !== 'workspace.guide') throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image parent has no original guide owner');
+    const selected = await requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: parentOwner.id, executionAttempt: parentOwner.executionAttempt });
+    if (selected.asset.status !== 'approved' || payload.sceneImage!.sceneIndex !== 0
+      || input.idempotencyKey !== selectedImageChildKey(parentOwner.id)
+      || !isDeepStrictEqual(payload.sourceClaimIds, selected.source.binding.sourceClaimIds)
+      || payload.sceneImage!.styleReferenceAssetId || payload.sceneImage!.revisionAssetId)
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image submission no longer matches its guide');
+  }`);
+  for (const node of nodes(readStatement, ts.isIdentifier).concat(nodes(guard, ts.isIdentifier), nodes(commonRead, ts.isIdentifier))) {
+    if (node.text === 'tx') need(symbol(node) === symbol(tx.name), node);
+    if (node.text === 'input') need(symbol(node) === symbol(target.parameters[1].name), node);
+  }
+  const parentCall = one(nodes(guard, node => ts.isCallExpression(node) && node.expression.getText() === 'requireSelectedImageGuideParent'), guard);
+  need(symbol(parentCall.expression)?.valueDeclaration === fn(source, 'requireSelectedImageGuideParent'), parentCall);
+  const locked = one(nodes(callback, node => ts.isVariableDeclaration(node) && node.name.text === 'lockedParent'), callback);
+  same(locked.parent.parent, 'const lockedParent = await tx.presentationAsset.findUnique({ where: { id: payload.sceneImage!.storyboardAssetId }, select: { id: true, updatedAt: true, provenance: true } });');
+  const provenance = one(nodes(locked, node => ts.isPropertyAssignment(node) && node.name.getText() === 'provenance'), locked);
+  const removed = new Set([readStatement, guard, provenance]);
+  const transformed = ts.transform(target, [transformation => {
+    const visit = node => removed.has(node) ? undefined : ts.visitEachChild(node, visit, transformation);
+    return node => ts.visitNode(node, visit);
+  }]);
+  let ordinaryText;
+  try { ordinaryText = ts.createPrinter().printNode(ts.EmitHint.Unspecified, transformed.transformed[0], source); }
+  finally { transformed.dispose(); }
+  const ordinary = ts.createSourceFile(path, ordinaryText, ts.ScriptTarget.ES2022, true).statements[0];
+  need(JSON.stringify(context.canonical(ordinary.body)) === JSON.stringify(rollbackContext.canonical(previous.body)), target);
+  const agentPath = 'packages/domain/src/agent/agent.ts';
+  const agent = module(context, agentPath), oldAgent = module(rollbackContext, agentPath);
+  const submit = fn(agent, 'submitAgentTask'), oldSubmit = fn(oldAgent, 'submitAgentTask');
+  // Bind the complete original transaction/retry/dispatch tail, then the actual
+  // callback and persistence order inside that same captured transaction.
+  need(JSON.stringify(context.canonical(submit)) === JSON.stringify(rollbackContext.canonical(oldSubmit)), submit);
+  const transaction = one(nodes(submit, node => ts.isCallExpression(node) && node.expression.getText() === 'deps.prisma.$transaction'), submit);
+  need(transaction.arguments.length === 2 && ts.isArrowFunction(transaction.arguments[0]), transaction);
+  const book = transaction.arguments[0];
+  need(book.parameters.length === 1 && ts.isIdentifier(book.parameters[0].name), book);
+  same(book.body.statements[0], 'await beforePersist?.(tx);');
+  same(book.body.statements[1], 'return persistAgentTaskInTransaction(deps, tx, persistenceInput, ctx);');
+  same(ts.factory.createExpressionStatement(transaction.arguments[1]), "({ isolationLevel: 'Serializable' });");
+  const actualTx = one(nodes(book.body.statements[0], node => ts.isIdentifier(node) && node.text === 'tx'), book);
+  need(symbol(actualTx) === symbol(book.parameters[0].name), actualTx);
+  const persistence = book.body.statements[1].expression;
+  need(symbol(persistence.expression)?.valueDeclaration === fn(agent, 'persistAgentTaskInTransaction'), persistence);
+  need(ts.isAwaitExpression(transaction.parent), transaction);
+  return { status: 'conditional', source, previousSource, target, previous, ordinary, ordinaryText,
+    read, callback, guard, commonRead, parentCall, transaction, submit, persistence,
+    relation: 'same-Serializable-prefix-abort-before-persist; ordinary continuation retains old body',
+    outstanding: ['qualified selected helper/authority closure', 'actual client/vendor transaction semantics',
+      'complete retained-state model, strict remainder and original private collector/history authority'] };
+}
+
+function finiteSelectedGuideMaintenanceWorkerTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_WORKER_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const nodes = (root, predicate) => { const result = []; const visit = node => {
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const module = (owner, path) => { const source = owner.program.getSourceFile(resolve(owner.root, path)); need(source, undefined); return source; };
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const symbol = (node, owner = context) => { let value = owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value; };
+  const same = (node, text) => {
+    const grammar = ts.createSourceFile('selected-worker-term.ts', text, ts.ScriptTarget.ES2022, true);
+    need(!grammar.parseDiagnostics.length && grammar.statements.length === 1, node);
+    need(JSON.stringify(context.canonical(node)) === JSON.stringify(context.canonical(grammar.statements[0])), node);
+  };
+  const path = 'apps/agent-worker/src/presentation/handler.ts';
+  const source = module(context, path), previousSource = module(rollbackContext, path);
+  const target = fn(source, 'createPresentationGenerationHandler'), previous = fn(previousSource, target.name.text);
+  const declaration = one(nodes(target, node => ts.isVariableDeclaration(node) && node.name.text === 'requireSelectedGuideParentUnchanged'), target);
+  need(!declaration.initializer && declaration.parent.declarations.length === 1, declaration);
+  const bound = symbol(declaration.name), removed = new Set([declaration.parent.parent]);
+  const scene = one(nodes(target, node => ts.isVariableDeclaration(node) && node.name.text === 'sceneParent'), target);
+  same(scene.parent.parent, 'const sceneParent = await requireSceneImageParent(deps.prisma, payload);');
+  const block = scene.parent.parent.parent;
+  const guard = block.statements[block.statements.indexOf(scene.parent.parent) + 1];
+  same(guard, `if (sceneParent && payload.sceneImage) {
+    const parentTask = await deps.prisma.agentTask.findUnique({ where: { id: payload.sceneImage.storyboardAssetId } });
+    const parentRow = await deps.prisma.presentationAsset.findUnique({ where: { id: payload.sceneImage.storyboardAssetId } });
+    const selectedProof = parentRow?.provenance && typeof parentRow.provenance === 'object' && !Array.isArray(parentRow.provenance)
+      && Object.hasOwn(parentRow.provenance, 'nativeIllustration');
+    if (parentTask?.kind === 'workspace.guide' || selectedProof) {
+      if (parentTask?.kind !== 'workspace.guide') throw new Error('[blocked] Selected-image parent has no original guide owner');
+      const selected = await requireSelectedImageGuideParent(deps.prisma, { userId: scope.userId, guideTaskId: parentTask.id, executionAttempt: parentTask.executionAttempt });
+      const selectedResult = structuredClone(selected.task.result) as Record<string, unknown>;
+      const selectedPayload = structuredClone(selected.task.payload), selectedBinding = structuredClone(selected.source.binding);
+      const verify = (proof: typeof selected) => {
+        const hash = createHash('sha256').update(renderStoryboard(proof.document, proof.settings)).digest('hex');
+        if (proof.asset.status !== 'approved' || proof.asset.contentHash !== hash
+          || proof.asset.objectKey !== \`presentation/\${payload.researchObjectId}/\${payload.versionId}/\${hash}.html\`
+          || payload.sceneImage!.sceneIndex !== 0 || !isDeepStrictEqual(payload.sourceClaimIds, proof.source.binding.sourceClaimIds)
+          || !isDeepStrictEqual(sceneParent.view.document, proof.document) || sceneParent.contentHash !== hash)
+          throw new Error('[blocked] Selected-image parent bytes or source changed');
+      };
+      verify(selected);
+      requireSelectedGuideParentUnchanged = async tx => {
+        const current = await requireSelectedImageGuideParent(tx, { userId: scope.userId, guideTaskId: parentTask.id, executionAttempt: parentTask.executionAttempt });
+        verify(current);
+        const keys = ['nativeAgentExecution', 'selectedImageContext', 'selectedImageReply', 'selectedImageDraft', 'sourceMapRef', 'storyboardReview', 'nativeIllustration'];
+        const currentResult = current.task.result as Record<string, unknown>;
+        if (keys.some(key => !isDeepStrictEqual(currentResult[key], selectedResult[key]))
+          || !isDeepStrictEqual(current.task.payload, selectedPayload) || !isDeepStrictEqual(current.source.binding, selectedBinding))
+          throw new Error('[blocked] Selected-image paid source changed');
+      };
+    }
+  }`);
+  removed.add(guard);
+  const handler = block.parent;
+  need(ts.isArrowFunction(handler) && handler.parameters.length === 2 && ts.isIdentifier(handler.parameters[0].name), handler);
+  for (const value of nodes(guard, node => ts.isIdentifier(node) && node.text === 'deps'))
+    need(symbol(value) === symbol(handler.parameters[0].name), value);
+  const helpers = module(context, 'packages/domain/src/assets/presentation-asset.ts');
+  const qualifier = fn(helpers, 'requireSelectedImageGuideParent');
+  for (const call of nodes(guard, node => ts.isCallExpression(node) && node.expression.getText() === 'requireSelectedImageGuideParent'))
+    need(symbol(call.expression)?.valueDeclaration === qualifier, call);
+  const refreshes = nodes(target, node => ts.isIfStatement(node) && ts.isIdentifier(node.expression) && symbol(node.expression) === bound);
+  need(refreshes.length === 2, declaration);
+  for (const refresh of refreshes) {
+    const text = refresh.getText();
+    if (text.includes('(prisma as Prisma.TransactionClient)')) same(refresh, 'if (requireSelectedGuideParentUnchanged) await requireSelectedGuideParentUnchanged(prisma as Prisma.TransactionClient);');
+    else same(refresh, 'if (requireSelectedGuideParentUnchanged) await requireSelectedGuideParentUnchanged(deps.prisma);');
+    removed.add(refresh);
+  }
+  const late = one(nodes(target, node => ts.isIfStatement(node) && node.expression.getText() === "parentTask?.kind === 'workspace.guide'" && node.elseStatement), target);
+  same(late.thenStatement, `{
+    if (!requireSelectedGuideParentUnchanged || sceneRevision || styleReference)
+      throw new Error('[blocked] Selected-image rendering requires its accepted exact guide parent');
+    await requireSelectedGuideParentUnchanged(deps.prisma);
+  }`);
+  const transformed = ts.transform(target, [transformation => {
+    const visit = node => removed.has(node) ? undefined : node === late
+      ? ts.visitNode(node.elseStatement, visit) : ts.visitEachChild(node, visit, transformation);
+    return node => ts.visitNode(node, visit);
+  }]);
+  let ordinaryText;
+  try { ordinaryText = ts.createPrinter().printNode(ts.EmitHint.Unspecified, transformed.transformed[0], source); }
+  finally { transformed.dispose(); }
+  const ordinary = ts.createSourceFile(path, ordinaryText, ts.ScriptTarget.ES2022, true).statements[0];
+  need(JSON.stringify(context.canonical(ordinary)) === JSON.stringify(rollbackContext.canonical(previous)), target);
+  // The SAME actual prefix already includes claim and possibly consumed rearm.
+  // Match failures to the original false-handlerCompleted CAS/cleanup tail;
+  // never assert zero prior writes or automatic recovery for a failed row.
+  const retained = [];
+  for (const [file, names] of [
+    ['apps/agent-worker/src/index.ts', ['createHandlers', 'createPollOnce']],
+    ['packages/domain/src/agent/agent.ts', ['claimAgentTask', 'markTaskProgress', 'markTaskProgressOnce', 'retryAgentTask', 'evaluateAgentTaskRetryEligibility']],
+    ['packages/domain/src/agent/native-agent-execution.ts', ['nativeAgentTerminalResult']],
+    ['packages/domain/src/assets/scene-image.ts', ['requireSceneImageParent', 'nativeImageReviewTerminalResult']],
+  ]) for (const name of names) {
+    const current = fn(module(context, file), name), old = fn(module(rollbackContext, file), name);
+    need(JSON.stringify(context.canonical(current)) === JSON.stringify(rollbackContext.canonical(old)), current);
+    retained.push({ current, old });
+  }
+  const index = module(context, 'apps/agent-worker/src/index.ts'), poll = fn(index, 'createPollOnce');
+  const failure = one(nodes(poll, node => ts.isCallExpression(node) && node.expression.getText() === 'markTaskProgress'
+    && node.arguments[1]?.getText().includes("status: 'failed'")), poll);
+  same(ts.factory.createExpressionStatement(failure), `markTaskProgress(deps, {
+    taskId, status: 'failed', error: e instanceof Error ? e.message.slice(0, 1000) : String(e), expectedExecutionAttempt: claimed?.executionAttempt
+  });`);
+  const transfer = failure.parent;
+  need(ts.isPropertyAccessExpression(transfer) && transfer.name.text === 'catch'
+    && ts.isAwaitExpression(transfer.parent.parent), failure);
+  need(symbol(failure.expression)?.valueDeclaration === fn(module(context, 'packages/domain/src/agent/agent.ts'), 'markTaskProgress'), failure);
+  return { status: 'conditional', source, previousSource, target, previous, ordinary, ordinaryText, declaration, guard, scene,
+    late, refreshes, retained, failure, qualifier,
+    relation: 'same-claimed/rearm-prefix; original failed-or-retained-running/CAS-race and queue tail',
+    outstanding: ['selected qualification and caller/reference closure', 'actual client/vendor and Gateway receipt identity',
+      'complete retained-state source/history model; no guarantee of same-task automatic recovery'] };
+}
+
+function finiteSelectedGuideMaintenanceViewTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_VIEW_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const nodes = (root, predicate) => { const result = []; const visit = node => {
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const source = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/agent/agent.ts'));
+  const previous = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/agent/agent.ts'));
+  need(source && previous, source);
+  const fn = (parsed, name) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), parsed);
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const view = fn(source, 'selectedImageChildTaskView');
+  need(view.parameters.length === 4 && view.parameters.every((parameter, index) => ts.isIdentifier(parameter.name)
+    && parameter.name.text === ['deps', 'task', 'userId', 'canRetry'][index] && !parameter.initializer && !parameter.dotDotDotToken)
+    && view.modifiers?.length === 1 && view.modifiers[0].kind === ts.SyntaxKind.AsyncKeyword, view);
+  // Display-only conditional string leaves carry no task/source authority.
+  // Every status literal, route key, actor binding and object field stays exact.
+  const display = root => {
+    const result = ts.transform(root, [transformation => {
+      const visit = node => ts.isStringLiteral(node) && ts.isConditionalExpression(node.parent)
+        && (node.parent.whenTrue === node || node.parent.whenFalse === node)
+        ? ts.factory.createStringLiteral('display') : ts.visitEachChild(node, visit, transformation);
+      return node => ts.visitNode(node, visit);
+    }]);
+    try { return context.canonical(result.transformed[0]); } finally { result.dispose(); }
+  };
+  const grammar = ts.createSourceFile('selected-live-view.ts', `async function selected(deps: unknown, task: unknown, userId: string, canRetry: boolean) {
+    const view = taskToView(task, canRetry);
+    if (task.kind !== 'workspace.guide' || !isJsonRecord(task.result) || !isJsonRecord(task.result.selectedImageDraft)
+      || !isJsonRecord(view.result?.selectedImageDraft)) return view;
+    const context = isJsonRecord(task.payload) ? task.payload.context : undefined;
+    const presentation = isJsonRecord(context) ? context.presentation : undefined;
+    if (!isJsonRecord(presentation) || !Object.hasOwn(presentation, 'selectedImageAssetId')) return view;
+    const zh = isJsonRecord(task.payload) && task.payload.locale === 'zh';
+    try {
+      const child = await deps.prisma.$transaction(tx => readSelectedImageGenerationChild(tx, { userId, guideTaskId: task.id }), { isolationLevel: 'Serializable' });
+      if (!child) return view;
+      const summary = ['failed', 'cancelled'].includes(child.status)
+        ? zh ? 'display' : 'display'
+        : child.status === 'succeeded' ? zh ? 'display' : 'display' : zh ? 'display' : 'display';
+      return { ...view, result: { ...view.result, summary, nextSteps: [{ intent: 'open-task', targetId: child.id,
+        label: zh ? 'display' : 'display' }] } };
+    } catch {
+      return { ...view, result: { ...view.result, nextSteps: [], summary: zh ? 'display' : 'display' } };
+    }
+  }`, ts.ScriptTarget.ES2022, true).statements[0];
+  need(JSON.stringify(display(view.body)) === JSON.stringify(display(grammar.body)), view);
+  for (const name of ['taskToView', 'projectAgentTaskResult', 'isJsonRecord']) {
+    const current = fn(source, name), old = fn(previous, name);
+    need(JSON.stringify(context.canonical(current)) === JSON.stringify(rollbackContext.canonical(old)), current);
+  }
+  const base = one(nodes(view, node => ts.isCallExpression(node) && node.expression.getText() === 'taskToView'), view);
+  need(symbol(base.expression)?.valueDeclaration === fn(source, 'taskToView') && symbol(base.arguments[0]) === symbol(view.parameters[1].name), base);
+  const child = one(nodes(view, node => ts.isCallExpression(node) && node.expression.getText() === 'readSelectedImageGenerationChild'), view);
+  const assets = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/assets/presentation-asset.ts'));
+  need(assets && symbol(child.expression)?.valueDeclaration === fn(assets, 'readSelectedImageGenerationChild'), child);
+  const calls = nodes(source, node => ts.isCallExpression(node) && symbol(node.expression)?.valueDeclaration === view);
+  need(calls.length === 2, view);
+  const replacements = new Map();
+  for (const call of calls) {
+    const grammarCall = ts.createSourceFile('selected-call.ts', 'await selectedImageChildTaskView(deps, task, input.userId, await canRetryAgentTask(deps, task, input.userId));', ts.ScriptTarget.ES2022, true).statements[0].expression;
+    need(ts.isAwaitExpression(call.parent) && JSON.stringify(context.canonical(call.parent)) === JSON.stringify(context.canonical(grammarCall)), call);
+    replacements.set(call.parent, ts.factory.createCallExpression(ts.factory.createIdentifier('taskToView'), undefined, [call.arguments[1], call.arguments[3]]));
+  }
+  const imported = one(nodes(source, node => ts.isImportSpecifier(node) && symbol(node.name)?.valueDeclaration === fn(assets, 'readSelectedImageGenerationChild')), source);
+  const transformed = ts.transform(source, [transformation => {
+    const visit = node => {
+      if (node === view) return undefined;
+      if (replacements.has(node)) return replacements.get(node);
+      if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)
+        && node.importClause.namedBindings.elements.includes(imported)) {
+        const elements = node.importClause.namedBindings.elements.filter(element => element !== imported);
+        if (!elements.length && !node.importClause.name) return undefined;
+        return ts.factory.updateImportDeclaration(node, node.modifiers, ts.factory.updateImportClause(node.importClause,
+          node.importClause.isTypeOnly, node.importClause.name, ts.factory.updateNamedImports(node.importClause.namedBindings, elements)), node.moduleSpecifier, node.attributes);
+      }
+      return ts.visitEachChild(node, visit, transformation);
+    }; return node => ts.visitNode(node, visit);
+  }]);
+  let text;
+  try { text = ts.createPrinter().printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+  const ordinary = ts.createSourceFile(source.fileName, text, ts.ScriptTarget.ES2022, true);
+  need(JSON.stringify(context.canonical(ordinary)) === JSON.stringify(rollbackContext.canonical(previous)), source);
+  return { status: 'conditional', source, previous, text, view, calls, child, base,
+    relation: 'same-row ordinary opaque view; strict projected selected source plus qualified readonly child extension',
+    outstanding: ['complete strict selected qualifier/caller closure', 'actual query source/vendor identities and original retained history'] };
+}
+
+function finiteSelectedGuideMaintenanceQualificationTerms(ts, context, rollbackContext) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_QUALIFICATION_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const source = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/assets/presentation-asset.ts'));
+  need(source, undefined);
+  const fn = (parsed, name) => { const matches = parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    need(matches.length === 1, parsed); return matches[0]; };
+  const bind = (name, body) => {
+    const target = fn(source, name), grammar = ts.createSourceFile('selected-qualification.ts', `async function qualified(tx: unknown, input: unknown) ${body}`, ts.ScriptTarget.ES2022, true).statements[0];
+    need(!grammar.getSourceFile().parseDiagnostics.length && target.parameters.length >= 2
+      && target.parameters.slice(0, 2).every((parameter, index) => ts.isIdentifier(parameter.name)
+        && parameter.name.text === ['tx', 'input'][index] && !parameter.initializer && !parameter.dotDotDotToken), target);
+    need(!target.asteriskToken && target.modifiers?.length === 2
+      && target.modifiers[0].kind === ts.SyntaxKind.ExportKeyword && target.modifiers[1].kind === ts.SyntaxKind.AsyncKeyword, target);
+    need(JSON.stringify(context.canonical(target.body)) === JSON.stringify(context.canonical(grammar.body)), target);
+    return target;
+  };
+  const production = bind('requireSelectedImageGuideProduction', `{
+    function fail(): never { throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production source changed'); }
+    const task = await tx.agentTask.findUnique({ where: { id: input.guideTaskId } });
+    if (!task || task.deletedAt || task.kind !== 'workspace.guide' || !['succeeded', 'failed', 'running'].includes(task.status)) fail();
+    if (task.status === 'running') {
+      if (input.executionAttempt === undefined) fail();
+      await requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: input.executionAttempt });
+    }
+    const session = await tx.agentSession.findUnique({ where: { id: task.sessionId } });
+    const payload = readWorkspaceGuidePayloadWithSelectedImage(task.payload), scope = payload.context.presentation;
+    if (!session || session.deletedAt || session.status !== 'active' || session.kind !== 'workspace.guide' || session.userId !== input.userId
+      || !scope?.versionId || !scope.selectedImageAssetId || session.researchObjectId !== scope.researchObjectId) fail();
+    await requirePresentationWriteScope(tx, { userId: input.userId, researchObjectId: scope.researchObjectId, versionId: scope.versionId });
+    const saved = recordValue(task.result), marker = readNativeAgentExecution(saved), cp = marker?.checkpoint;
+    if (marker?.profile !== 'paper-illustration' || !cp || cp.taskId !== task.id || cp.executionAttempt > task.executionAttempt
+      || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls) fail();
+    await requireNativeIllustrationTerminalSource(tx, task);
+    const reply = recordValue(saved.selectedImageReply);
+    const incoming = Object.fromEntries(['summary', 'nextSteps', 'needsMoreInformation', 'selectedImageReference', 'selectedImageDraft', 'sourceMapRef', 'selectedImageReply', 'storyboardReview']
+      .filter(key => Object.hasOwn(saved, key)).map(key => [key, saved[key]]));
+    incoming.summary = reply.summary; incoming.nextSteps = []; incoming.needsMoreInformation = reply.kind !== 'proposal' && reply.kind !== 'explanation';
+    incoming.selectedImageReference ??= workspaceSelectedImageDraftSource(saved.selectedImageContext as unknown as SelectedImageBinding);
+    nativeAgentTerminalResult(task, 'succeeded', incoming);
+    if (reply.kind !== 'proposal' || !selectedImageProductionIntent(payload.goal)) return undefined;
+    const draft = readWorkspaceSelectedImageDraft(saved.selectedImageDraft);
+    const document = parseStoryboardDocument(draft.document, draft.source.sourceClaimIds, 'image');
+    const source = await requireSelectedImageSource(tx, { userId: input.userId, researchObjectId: scope.researchObjectId,
+      versionId: scope.versionId, assetId: scope.selectedImageAssetId });
+    const review = recordValue(saved.storyboardReview), native = recordValue(saved.nativeIllustration);
+    if (document.scenes.length !== 1 || review.sourceEvidenceIdentity !== source.binding.sourceEvidenceIdentity
+      || native.runtimeId !== marker.runtimeId || native.skillCatalogueId !== marker.skillCatalogueId
+      || typeof native.planToolCallId !== 'string' || !native.planToolCallId || typeof native.reviewToolCallId !== 'string'
+      || !native.reviewToolCallId || native.reviewToolCallId === native.planToolCallId || native.reviewToolCallId !== reply.reviewToolCallId) fail();
+    const supported = source.claims.map(claim => ({ id: claim.id, sourcePassages: source.evidence.filter(row => row.claimId === claim.id)
+      .map(row => ({ evidenceId: row.id, text: row.exactQuote ?? '', relation: row.relation })) }));
+    for (const scene of document.scenes) {
+      if (!scene.illustration || scene.paperOriginal) fail();
+      requireIllustrationSourceSupport(scene.illustration, supported);
+    }
+    const settings = parseStoryboardRequest({ locale: payload.locale, style: source.settings.style,
+      instruction: 'Revise only the selected image. Read the complete userRequest and original scientific brief in context.selectedImage.',
+      output: 'image', narrative: true, narrativeSceneLimit: 1 });
+    return { task, session, payload, scope: { researchObjectId: scope.researchObjectId, versionId: scope.versionId }, source, document, settings, review, native };
+  }`);
+  const parent = bind('requireSelectedImageGuideParent', `{
+    const authority = await requireSelectedImageGuideProduction(tx, input);
+    if (!authority) throw new PresentationAssetError('VALIDATION_ERROR', 'Selected guide does not authorize image production');
+    const asset = await tx.presentationAsset.findUnique({ where: { id: input.guideTaskId } });
+    const p = recordValue(asset?.provenance);
+    const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: input.guideTaskId } });
+    if (!asset || asset.deletedAt || asset.kind !== 'interactive_html' || !['draft', 'approved'].includes(asset.status)
+      || asset.label !== PRESENTATION_ASSET_LABEL || asset.generator !== 'OpenScience Hermes storyboard planner' || asset.generatorVersion !== '1'
+      || asset.researchObjectId !== authority.scope.researchObjectId || asset.versionId !== authority.scope.versionId
+      || p.taskId !== authority.task.id || p.subtype !== 'sourced_storyboard' || p.source !== 'verified_claims'
+      || !isDeepStrictEqual(p.storyboardDocument, authority.document) || !isDeepStrictEqual(p.storyboardSettings, authority.settings)
+      || !isDeepStrictEqual(p.illustrationReview, authority.review) || !isDeepStrictEqual(p.nativeIllustration, authority.native)
+      || p.sourceEvidenceIdentity !== authority.source.binding.sourceEvidenceIdentity
+      || !isDeepStrictEqual(p.sourceEvidenceIds, authority.source.evidence.map(row => row.id))
+      || !isDeepStrictEqual(p.sourceClaimIds, authority.source.binding.sourceClaimIds) || p.contentType !== 'text/html; charset=utf-8'
+      || !isDeepStrictEqual(links.map(link => link.claimId).sort(), authority.source.binding.sourceClaimIds)
+      || (expected && (asset.contentHash !== expected.contentHash || asset.objectKey !== expected.objectKey)))
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image parent no longer matches its original guide');
+    return { ...authority, asset };
+  }`);
+  need(parent.parameters.length === 3 && parent.parameters[2].name.text === 'expected'
+    && parent.parameters[2].questionToken && !parent.parameters[2].initializer, parent);
+  const child = bind('readSelectedImageGenerationChild', `{
+    const child = await tx.agentTask.findUnique({ where: { idempotencyKey: selectedImageChildKey(input.guideTaskId) } });
+    if (!child || child.deletedAt) return undefined;
+    const owner = await tx.agentTask.findUnique({ where: { id: input.guideTaskId } });
+    const parent = await requireSelectedImageGuideParent(tx, { ...input, executionAttempt: owner?.executionAttempt });
+    if (parent.asset.status !== 'approved') throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image child parent is no longer approved');
+    const session = await tx.agentSession.findUnique({ where: { id: child.sessionId } });
+    const expected = { schemaVersion: 1, ...parent.scope, kind: 'image', sourceClaimIds: [...parent.source.binding.sourceClaimIds], sceneImage: { storyboardAssetId: input.guideTaskId, sceneIndex: 0 } };
+    if (child.kind !== 'presentation.generate' || !session || session.deletedAt || session.userId !== input.userId || session.researchObjectId !== parent.scope.researchObjectId
+      || session.kind !== 'visualization' || !isDeepStrictEqual(child.payload, expected))
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image child changed');
+    return child;
+  }`);
+  need(production.parameters.length === 2 && child.parameters.length === 2, production);
+  const roles = [production, parent, child];
+  const declared = new Map(roles.map(node => [node.name.text, node]));
+  const originalValidators = new Map();
+  for (const [path, names] of [
+    ['packages/domain/src/agent/workspace-guide-contract.ts', ['readWorkspaceGuidePayloadWithSelectedImage', 'readWorkspaceSelectedImageDraft', 'workspaceSelectedImageDraftSource']],
+    ['packages/domain/src/agent/native-agent-execution.ts', ['readNativeAgentExecution', 'nativeAgentTerminalResult', 'requireNativeAgentExecutionAuthority', 'requireNativeIllustrationTerminalSource']],
+    ['packages/domain/src/assets/presentation-asset.ts', ['requirePresentationWriteScope']],
+    ['packages/domain/src/assets/storyboard.ts', ['parseStoryboardDocument', 'parseStoryboardRequest']],
+    ['packages/domain/src/assets/scene-image.ts', ['requireSelectedImageSource']],
+    ['packages/domain/src/assets/illustration-brief.ts', ['requireIllustrationSourceSupport']],
+    ['packages/domain/src/commit/research-record-snapshot.ts', ['recordValue']],
+  ]) {
+    const owner = context.program.getSourceFile(resolve(context.root, path)); need(owner, source);
+    for (const name of names) originalValidators.set(name, fn(owner, name));
+  }
+  const symbol = node => { let value = context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const calls = [], visit = node => { if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) calls.push(node); ts.forEachChild(node, visit); };
+  for (const role of roles) visit(role.body);
+  for (const call of calls) {
+    const name = call.expression.text, target = symbol(call.expression)?.valueDeclaration;
+    if (declared.has(name)) { need(target === declared.get(name), call); continue; }
+    if (name === 'selectedImageProductionIntent' || name === 'selectedImageChildKey') continue; // separately bound added declarations
+    if (name === 'fail') { need(target && target.getSourceFile() === source && target.pos >= production.pos && target.end <= production.end, call); continue; }
+    const local = context.checker.getSymbolAtLocation(call.expression)?.declarations?.find(ts.isImportSpecifier);
+    if (local) {
+      const statement = local.parent.parent.parent;
+      if (ts.isImportDeclaration(statement) && builtinModules.includes(statement.moduleSpecifier.text.replace(/^node:/u, ''))) {
+        const old = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, relative(context.root, source.fileName)));
+        need(old?.statements.some(node => ts.isImportDeclaration(node)
+          && JSON.stringify(context.canonical(statement)) === JSON.stringify(rollbackContext.canonical(node))), call);
+        continue;
+      }
+    }
+    need(target && target === originalValidators.get(name) && !target.getSourceFile().isDeclarationFile, call);
+    const path = relative(context.root, target.getSourceFile().fileName).replaceAll('\\', '/');
+    const oldSource = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, path));
+    need(oldSource, call);
+    const old = oldSource.statements.flatMap(value => ts.isVariableStatement(value) ? [...value.declarationList.declarations] : [value])
+      .find(value => value.name?.text === target.name?.text);
+    need(old && JSON.stringify(context.canonical(target)) === JSON.stringify(rollbackContext.canonical(old)), call);
+  }
+  return { status: 'conditional', source, production, parent, child, roles, calls,
+    relation: 'same original actor/session/task/CP/source/full-Claims; exact approved parent and qualified fixed child',
+    outstanding: ['added intent/key declarations and all caller/namespace/export closure', 'complete ordinary/dormant/residual/history and actual collector/vendor binding'] };
+}
+
+function finiteSelectedGuideMaintenanceRemainderTerms(ts, context, rollbackContext, models) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_REMAINDER_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const nodes = (root, predicate) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(root); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const module = (owner, path) => { const source = owner.program.getSourceFile(resolve(owner.root, path)); need(source, undefined); return source; };
+  const fn = (source, name) => one(source.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name), source);
+  const symbol = node => { let value = ts.isShorthandPropertyAssignment(node.parent)
+    ? context.checker.getShorthandAssignmentValueSymbol(node.parent)
+    : ts.isExportSpecifier(node.parent) ? context.checker.getExportSpecifierLocalTargetSymbol(node.parent)
+      : context.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = context.checker.getAliasedSymbol(value); return value; };
+  const within = (node, region) => node.getSourceFile() === region.getSourceFile() && node.pos >= region.pos && node.end <= region.end;
+  const unwrap = raw => { let node = raw; while (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node)) node = node.expression; return node; };
+  const same = (node, text) => { const grammar = ts.createSourceFile('selected-maintained-term.ts', text, ts.ScriptTarget.ES2022, true);
+    need(!grammar.parseDiagnostics.length && grammar.statements.length === 1
+      && JSON.stringify(context.canonical(node)) === JSON.stringify(context.canonical(grammar.statements[0])), node); };
+  const runtime = (text, owner) => {
+    const compiled = ts.transpileModule(text, { reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!compiled.diagnostics?.some(value => value.category === ts.DiagnosticCategory.Error), undefined);
+    const parsed = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!parsed.parseDiagnostics.length, parsed);
+    return JSON.stringify(owner.canonical(parsed));
+  };
+  const contract = module(context, 'packages/domain/src/agent/workspace-guide-contract.ts');
+  const assets = models.qualification.source, worker = models.worker.source;
+  const guide = module(context, 'apps/agent-worker/src/workspace-guide.ts'), index = module(context, 'packages/domain/src/index.ts');
+  const intent = fn(contract, 'selectedImageProductionIntent'), adopt = fn(assets, 'adoptSelectedImageGuide');
+  const prepare = fn(guide, 'prepareSelectedImageGeneration');
+  const key = one(assets.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations])
+    .filter(node => node.name.text === 'selectedImageChildKey'), assets);
+  same(key.parent.parent, 'const selectedImageChildKey = (guideId: string) => `selected-image:${guideId}:scene:0`;');
+  same(prepare.body, '{ return adoptSelectedImageGuide({ ...deps, renderStoryboard }, input); }');
+  need(prepare.parameters.length === 2 && prepare.parameters.every((parameter, position) => parameter.name.text === ['deps', 'input'][position]
+    && !parameter.initializer && !parameter.dotDotDotToken) && !prepare.asteriskToken, prepare);
+  const prepareCall = one(nodes(prepare, ts.isCallExpression), prepare);
+  need(symbol(prepareCall.expression)?.valueDeclaration === adopt, prepareCall);
+  // The added request predicate is a bounded local primitive computation. It
+  // cannot call owned code, Provider, eval, mutate an escaped object or loop on
+  // an unbounded iterator. Its production activation remains separately closed.
+  need(intent.parameters.length === 1 && intent.parameters[0].name.text === 'goal' && !intent.parameters[0].initializer
+    && !intent.parameters[0].dotDotDotToken && !intent.asteriskToken && intent.modifiers?.length === 1
+    && intent.modifiers[0].kind === ts.SyntaxKind.ExportKeyword, intent);
+  const local = node => symbol(node)?.declarations?.every(value => within(value, intent));
+  const intrinsic = node => { const value = context.checker.getSymbolAtLocation(node);
+    return !(value?.flags & ts.SymbolFlags.Alias) && !value?.declarations?.some(declaration => !declaration.getSourceFile().isDeclarationFile); };
+  const loops = nodes(intent.body, node => ts.isForOfStatement(node) || ts.isForStatement(node) || ts.isWhileStatement(node) || ts.isDoStatement(node));
+  need(loops.length === 1 && ts.isForOfStatement(loops[0]) && ts.isIdentifier(loops[0].expression)
+    && symbol(loops[0].expression) === symbol(intent.parameters[0].name), intent);
+  for (const node of nodes(intent.body, () => true)) {
+    if (ts.isAwaitExpression(node) || ts.isYieldExpression(node) || ts.isThrowStatement(node)
+      || ts.isDeleteExpression(node) || ts.isFunctionLike(node) || ts.isImportEqualsDeclaration(node)
+      || ts.isImportDeclaration(node) || ts.isExportDeclaration(node) || ts.isModuleDeclaration(node)
+      || ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isTaggedTemplateExpression(node)
+      || ts.isWithStatement(node)) fail(node);
+    if (ts.isNewExpression(node)) need(ts.isIdentifier(node.expression) && node.expression.text === 'Set' && intrinsic(node.expression), node);
+    if (ts.isCallExpression(node)) {
+      if (ts.isIdentifier(node.expression)) need(node.expression.text === 'Boolean' && intrinsic(node.expression), node);
+      else need(ts.isPropertyAccessExpression(node.expression)
+        && ['values', 'at', 'pop', 'push', 'has', 'trim', 'replace', 'test', 'exec'].includes(node.expression.name.text), node);
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment)
+      need(ts.isIdentifier(node.left) && local(node.left), node);
+    if (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      need(![ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator), node);
+    if (ts.isReturnStatement(node)) need(node.expression && (node.expression.kind === ts.SyntaxKind.TrueKeyword || node.expression.kind === ts.SyntaxKind.FalseKeyword
+      || ts.isCallExpression(node.expression) && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Boolean'), node);
+    if (ts.isIdentifier(node) && !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+      && !(ts.isPropertyAssignment(node.parent) && node.parent.name === node)
+      && !local(node)) need(['Object', 'Set', 'Boolean', 'undefined'].includes(node.text) && intrinsic(node), node);
+  }
+  const transition = fn(assets, 'transitionPresentationAssetUnderReview');
+  need(transition.parameters.length === 6 && transition.parameters[4].name.text === 'selectedGuideTaskId'
+    && transition.parameters[5].name.text === 'selectedGuideExecutionAttempt'
+    && transition.parameters.slice(4).every(parameter => parameter.questionToken && !parameter.initializer), transition);
+  const selectedParameter = symbol(transition.parameters[4].name);
+  const transitionGuard = one(nodes(transition.body, node => ts.isIfStatement(node) && ts.isIdentifier(node.expression)
+    && symbol(node.expression) === selectedParameter), transition);
+  same(transitionGuard, `if (selectedGuideTaskId) {
+    const selected = await requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: selectedGuideTaskId, executionAttempt: selectedGuideExecutionAttempt });
+    if (internalRunId || selected.asset.id !== asset.id || input.status !== 'approved' || selected.review.decision !== 'accepted')
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image scientific transition does not match its guide');
+    if (asset.status === 'approved') return asset;
+  }`);
+  const qualified = models.qualification;
+  for (const call of qualified.calls) {
+    if (call.expression.text === 'selectedImageProductionIntent') need(symbol(call.expression)?.valueDeclaration === intent, call);
+    if (call.expression.text === 'selectedImageChildKey') need(symbol(call.expression)?.valueDeclaration === key, call);
+  }
+  const definitions = [intent, key, qualified.production, qualified.parent, qualified.child, adopt, prepare];
+  const exported = new Map(definitions.map(node => [symbol(node.name), node]));
+  need(exported.size === definitions.length && !exported.has(undefined), assets);
+  const exports = index.statements.filter(ts.isExportDeclaration).filter(node => node.exportClause && ts.isNamedExports(node.exportClause))
+    .flatMap(node => [...node.exportClause.elements]).filter(node => exported.has(symbol(node.name)));
+  need(exports.length === 4 && [adopt, qualified.production, qualified.parent, qualified.child].every(node => exports.some(entry => symbol(entry.name) === symbol(node.name))), index);
+  const allowed = new Map([
+    [intent, [qualified.production]], [key, [adopt, qualified.child, models.booking.guard]],
+    [qualified.production, [qualified.parent, adopt]],
+    [qualified.parent, [adopt, qualified.child, models.booking.guard, models.worker.guard, transitionGuard]],
+    [qualified.child, [models.view.view]], [adopt, [prepare]], [prepare, []],
+  ]);
+  const changedModules = new Set([contract, assets, worker, guide, index, models.view.source]);
+  for (const parsed of context.program.getSourceFiles()) {
+    if (parsed.isDeclarationFile || !/^(?:apps|packages)\//u.test(relative(context.root, parsed.fileName).replaceAll('\\', '/'))) continue;
+    for (const node of nodes(parsed, ts.isIdentifier)) {
+      const definition = exported.get(symbol(node));
+      if (!definition || node === definition.name) continue;
+      if (exports.some(entry => node === entry.name || node === entry.propertyName)) continue;
+      if (ts.isImportSpecifier(node.parent)) {
+        need((allowed.get(definition) ?? []).some(region => region.getSourceFile() === parsed), node); continue;
+      }
+      need((allowed.get(definition) ?? []).some(region => within(node, region)), node);
+    }
+    for (const node of nodes(parsed, ts.isNamespaceImport)) {
+      const statement = node.parent.parent;
+      const target = context.resolveSource(statement.moduleSpecifier.text, parsed.fileName)?.resolvedFileName;
+      if (!target || ![...changedModules].some(value => resolve(value.fileName) === resolve(target))) continue;
+      const binding = context.checker.getSymbolAtLocation(node.name);
+      for (const use of nodes(parsed, ts.isIdentifier).filter(value => context.checker.getSymbolAtLocation(value) === binding && value !== node.name))
+        need(ts.isPropertyAccessExpression(use.parent) && use.parent.expression === use, use);
+    }
+  }
+  for (const declaration of definitions) for (const node of nodes(declaration, ts.isRegularExpressionLiteral)) {
+    try { new Script(`void (${node.getText()})`); } catch { fail(node); }
+  }
+  const projected = new Map();
+  const add = (source, text) => {
+    const path = relative(context.root, source.fileName).replaceAll('\\', '/');
+    const previous = module(rollbackContext, path);
+    need(!projected.has(path) && runtime(text, context) === runtime(previous.text, rollbackContext), source);
+    projected.set(path, { source, previous, text });
+  };
+  add(models.view.source, models.view.text);
+  const drop = new Set([intent, key.parent.parent, qualified.production, qualified.parent, qualified.child, adopt, prepare]);
+  const frames = new Map([[models.booking.target, models.booking.ordinary], [models.worker.target, models.worker.ordinary]]);
+  const transitionSymbol = symbol(transition.name);
+  for (const use of nodes(assets, ts.isIdentifier).filter(node => symbol(node) === transitionSymbol && node !== transition.name))
+    need(within(use, adopt) || ts.isCallExpression(use.parent) && use.parent.expression === use && use.parent.arguments.length <= 4, use);
+  const specialAudit = one(nodes(transition, node => ts.isSpreadAssignment(node) && ts.isConditionalExpression(unwrap(node.expression))
+    && ts.isIdentifier(unwrap(node.expression).condition) && symbol(unwrap(node.expression).condition) === selectedParameter), transition);
+  const auditGrammar = ts.createSourceFile('selected-audit.ts', `const audit = { ...(selectedGuideTaskId ? {
+    executor: 'hermes', authorizedByUserId: input.userId, guideTaskId: selectedGuideTaskId, userAccepted: false
+  } : {}) };`, ts.ScriptTarget.ES2022, true).statements[0].declarationList.declarations[0].initializer.properties[0];
+  need(JSON.stringify(context.canonical(specialAudit)) === JSON.stringify(context.canonical(auditGrammar)), specialAudit);
+  const auditOrs = nodes(transition, node => ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    && ts.isIdentifier(node.right) && symbol(node.right) === selectedParameter);
+  need(auditOrs.length === 2 && auditOrs.every(node => node.left.getText() === 'internalRunId'), transition);
+  for (const source of [contract, assets, worker, guide, index]) {
+    const previous = module(rollbackContext, relative(context.root, source.fileName));
+    const oldBindings = new Set(previous.statements.filter(ts.isImportDeclaration).flatMap(statement => {
+      const clause = statement.importClause;
+      return clause?.namedBindings && ts.isNamedImports(clause.namedBindings) ? clause.namedBindings.elements.map(node =>
+        JSON.stringify([statement.moduleSpecifier.text, (node.propertyName ?? node.name).text, node.name.text, !!clause.isTypeOnly, !!node.isTypeOnly])) : [];
+    }));
+    const transformed = ts.transform(source, [transformation => {
+      const visit = node => {
+        if (drop.has(node) || node === transitionGuard || node === specialAudit) return undefined;
+        // Keep captured nodes in their own SourceFile during this print. A
+        // parsed frame from another SourceFile has incompatible text ranges.
+        if (frames.has(node)) return node;
+        if (auditOrs.includes(node)) return node.left;
+        if (node === transition) return ts.factory.updateFunctionDeclaration(node, node.modifiers, node.asteriskToken, node.name,
+          node.typeParameters, node.parameters.slice(0, 4), node.type, ts.visitEachChild(node.body, visit, transformation));
+        if (ts.isImportDeclaration(node) && (node.importClause?.name || node.importClause?.namedBindings && ts.isNamespaceImport(node.importClause.namedBindings)))
+          need(previous.statements.some(value => ts.isImportDeclaration(value)
+            && JSON.stringify(context.canonical(node)) === JSON.stringify(rollbackContext.canonical(value))), node);
+        if (ts.isImportDeclaration(node) && node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
+          const elements = node.importClause.namedBindings.elements.filter(value => oldBindings.has(JSON.stringify([
+            node.moduleSpecifier.text, (value.propertyName ?? value.name).text, value.name.text, !!node.importClause.isTypeOnly, !!value.isTypeOnly])));
+          for (const removed of node.importClause.namedBindings.elements.filter(value => !elements.includes(value))) {
+            need(!['Object', 'Array', 'Boolean', 'Set', 'Error', 'structuredClone', 'undefined', 'String', 'Date', 'Buffer', 'Promise'].includes(removed.name.text), removed);
+            const binding = context.checker.getSymbolAtLocation(removed.name);
+            need(binding?.declarations?.length === 1 && binding.declarations[0] === removed, removed);
+            for (const use of nodes(source, ts.isIdentifier).filter(value => context.checker.getSymbolAtLocation(value) === binding
+              && value !== removed.name && value !== removed.propertyName))
+              need([...drop, ...frames.keys(), transitionGuard].some(region => within(use, region)), use);
+          }
+          if (!elements.length && !node.importClause.name) return undefined;
+          return ts.factory.updateImportDeclaration(node, node.modifiers, ts.factory.updateImportClause(node.importClause,
+            node.importClause.isTypeOnly, node.importClause.name, ts.factory.updateNamedImports(node.importClause.namedBindings, elements)), node.moduleSpecifier, node.attributes);
+        }
+        if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+          const elements = node.exportClause.elements.filter(value => !exports.includes(value));
+          return ts.factory.updateExportDeclaration(node, node.modifiers, node.isTypeOnly, ts.factory.updateNamedExports(node.exportClause, elements), node.moduleSpecifier, node.attributes);
+        }
+        return ts.visitEachChild(node, visit, transformation);
+      }; return node => ts.visitNode(node, visit);
+    }]);
+    let text;
+    try { text = ts.createPrinter().printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+    const edits = [];
+    const printed = ts.createSourceFile(source.fileName, text, ts.ScriptTarget.ES2022, true);
+    for (const target of frames.keys()) if (target.getSourceFile() === source) {
+      const current = fn(printed, target.name.text);
+      need(runtime(current.getText(), context) === runtime(target.getText(), context), target);
+      edits.push({ start: current.getStart(printed), end: current.end,
+        text: target === models.booking.target ? models.booking.ordinaryText : models.worker.ordinaryText });
+    }
+    for (const edit of edits.sort((a, b) => b.start - a.start)) text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
+    add(source, text);
+  }
+  const auxiliary = [];
+  for (const source of context.program.getSourceFiles()) {
+    const path = relative(context.root, source.fileName).replaceAll('\\', '/');
+    if (source.isDeclarationFile || !/^(?:apps|packages)\//u.test(path) || projected.has(path)) continue;
+    // Captured entries retain the original collector's whole-module equality,
+    // including its already-proved Prisma location/consumer normalization.
+    // Re-parsing those bytes here would lose the original literal identities.
+    if (context.modules?.has(resolve(source.fileName))) continue;
+    const previous = module(rollbackContext, path);
+    need(source.text.replaceAll('\r\n', '\n') === previous.text.replaceAll('\r\n', '\n') || runtime(source.text, context) === runtime(previous.text, rollbackContext), source);
+    auxiliary.push({ source, previous });
+  }
+  return { status: 'conditional', projected, auxiliary, intent, key, adopt, prepare, definitions, allowed, transition,
+    relation: 'retained complete capable reader; dormant producers have no runtime caller; strict full module remainder',
+    outstanding: ['original installed default collector/private snapshot and library/config/vendor identity',
+      'locked ordered-pair and root-controlled producer/retainer history; no future W activation grant'] };
+}
+
 function finiteSelectedGuideFreshTerms(ts, context, decoder, rollbackContext) {
   const { program, checker, root } = context;
   const fail = node => { throw { reason: 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN', node }; };
@@ -6441,7 +7107,14 @@ function finiteSelectedGuideFreshTerms(ts, context, decoder, rollbackContext) {
     // the actual forwarder changed before the call. Keep its complete old body.
     // This is conditional on the old writer/alias and shared-runtime premises;
     // it never treats a name or a retained body alone as an absence witness.
-    need(JSON.stringify(context.canonical(target.body)) === JSON.stringify(rollbackContext.canonical(previous.body)), target);
+    if (JSON.stringify(context.canonical(target.body)) !== JSON.stringify(rollbackContext.canonical(previous.body))) {
+      const oldContract = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/agent/workspace-guide-contract.ts'));
+      need(oldContract?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === decoder.reader.name.text), target);
+      // A changed forwarding body is accepted only through this actual bounded
+      // callback/frame relation, never by its name, kind annotation or a flag.
+      const booking = finiteSelectedGuideMaintenanceBookingTerms(ts, context, rollbackContext);
+      need(booking.target === target && booking.previous === previous, target);
+    }
     forwarders.add(target);
   };
   const variableOwner = declaration => {
@@ -8362,7 +9035,42 @@ function finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, resi
     projection: residual.publicReader.ordinaryRelation, transfers, marker, terminalGate: terminal.body.statements.slice(gate, gate + 2) };
 }
 
+function finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext, collected) {
+  const left = finiteSelectedGuideSupplementaryTerms(ts, context, { ui: false });
+  const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext, { ui: false });
+  const decoder = finiteSelectedGuideDecoderTerms(ts, left, right);
+  const oldContract = right.program.getSourceFile(resolve(right.root, 'packages/domain/src/agent/workspace-guide-contract.ts'));
+  if (!oldContract?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === decoder.reader.name.text))
+    throw { reason: 'SELECTED_GUIDE_MAINTENANCE_READER_MISSING', node: oldContract };
+  const initialization = finiteSelectedGuideInitializationTerms(ts, context, rollbackContext, collected);
+  const booking = finiteSelectedGuideMaintenanceBookingTerms(ts, left, right);
+  const worker = finiteSelectedGuideMaintenanceWorkerTerms(ts, left, right);
+  const view = finiteSelectedGuideMaintenanceViewTerms(ts, left, right);
+  const qualification = finiteSelectedGuideMaintenanceQualificationTerms(ts, left, right);
+  const fresh = finiteSelectedGuideFreshTerms(ts, left, decoder, right);
+  if (fresh.fresh !== 'legacy') throw { reason: 'SELECTED_GUIDE_MAINTENANCE_ACTIVATION_UNKNOWN', node: fresh.strictCall };
+  const models = { decoder, initialization, booking, worker, view, qualification, fresh };
+  const remainder = finiteSelectedGuideMaintenanceRemainderTerms(ts, left, right, models);
+  // The old capable projector, all six old contract functions and every other
+  // retained runtime module survive the complete remainder equality. Ordinary
+  // source/result/marker supplies are the same captured authenticated rows.
+  // Selected reads are the qualified live extension; new producers stay cold.
+  return { status: 'conditional', ...models, ...remainder,
+    origin: { status: 'conditional', domain: 'authenticated-ordinary-opaque-and-capable-selected-retained',
+      current: view.source, previous: view.previous, liveProjection: view.view,
+      transfers: worker.retained, sameTransactionalAbort: booking },
+    outstanding: ['successful DEFAULT private context/captured-node identities and strict remaining entries',
+      'original installed library/configuration/vendor/client identities and transaction contract',
+      'exact locked ordered pair/phase and root-controlled admitted producer/retainer history; no future W permission',
+      'failed/retained-running states are not automatic same-task recovery, success, refund or availability promises'] };
+}
+
 function finiteSelectedGuideSourceModel(ts, context, rollbackContext, collected) {
+  const oldContract = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/agent/workspace-guide-contract.ts'));
+  const assets = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/assets/presentation-asset.ts'));
+  if (oldContract?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readWorkspaceGuidePayloadWithSelectedImage')
+    && assets?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readSelectedImageGenerationChild'))
+    return finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext, collected);
   const residual = finiteSelectedGuideSourceResidual(ts, context, rollbackContext, collected);
   const origin = finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, residual);
   if (origin.status !== 'conditional') throw { reason: 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', node: origin.node };

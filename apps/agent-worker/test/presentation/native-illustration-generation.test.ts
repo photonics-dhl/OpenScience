@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
-import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, getAgentTask, listAgentTasks, retryAgentTask } from '../../../../packages/domain/src/agent/agent';
-import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration, recoverCompletedHermesSceneImageResults } from '../../../../packages/domain/src/agent/research-run';
+import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, getAgentTask, listAgentTasks, retryAgentTask, taskToView } from '../../../../packages/domain/src/agent/agent';
+import { getHermesResearchRun, reconcileHermesResearchRuns, retryHermesGeneration, recoverCompletedHermesSceneImageResults, HERMES_AUTHORITY_REARM_MARKER } from '../../../../packages/domain/src/agent/research-run';
 import { serializeDocumentSourceMap, createBlockSourceLocator, readNativeAgentExecution, readNativeImageReviewCheckpoint, requireSceneImageParent } from '@openscience/domain';
 import { workspaceGuideHandler } from '../../src/workspace-guide';
 import * as selectedGuideProduction from '../../src/workspace-guide';
@@ -209,6 +209,62 @@ async function completedSelectedEditFixture(goal?: string, additionalClaim = fal
 }
 
 describe('selected-image Native guide', () => {
+  it.each([['get', false], ['get', true], ['list', false], ['list', true]] as const)(
+    'preserves ordinary opaque image fields through authenticated %s without child I/O (all fields: %s)', async (reader, allFields) => {
+    const f = await fixture();
+    const session = await createAgentSession(f.deps as never, { userId: id(1), researchObjectId: id(3), kind: 'workspace.guide' });
+    const submitted = await submitAgentTask(f.deps as never, { userId: id(1), sessionId: session.id, kind: 'workspace.guide', dispatch: false,
+      idempotencyKey: `ordinary-opaque-${reader}`, payload: { goal: 'Summarize this research', locale: 'en', route: 'research-object-edit', target: null,
+        context: { tasks: [], researchObjects: [], presentation: { researchObjectId: id(3), versionId: id(4) } } } });
+    const row = f.db.agentTasks.find(task => task.id === submitted.id)!;
+    // An admitted historical reader-domain row; no claim about model emission.
+    row.status = 'succeeded';
+    row.result = { summary: 'Retained ordinary research summary', nextSteps: [{ intent: 'open-research-object', targetId: id(3), label: 'Open research' }],
+      selectedImageDraft: { note: 'legacy extension' }, ...(allFields ? { selectedImageContext: { note: 'opaque context' },
+        selectedImageReply: { note: 'opaque reply' }, selectedImageReference: { note: 'opaque reference' } } : {}) };
+    const before = structuredClone({ task: row, ledger: f.db.usageLedger, assets: f.db.presentationAssets });
+    const expected = { ...taskToView(row), researchObjectId: id(3) };
+    const findUnique = f.deps.prisma.agentTask.findUnique.bind(f.deps.prisma.agentTask);
+    let childReads = 0;
+    vi.spyOn(f.deps.prisma.agentTask, 'findUnique').mockImplementation(args => {
+      if (args.where.idempotencyKey === `selected-image:${row.id}:scene:0`) {
+        childReads++;
+        throw new Error('ORDINARY_SELECTED_CHILD_READ_MUST_NOT_RUN');
+      }
+      return findUnique(args);
+    });
+    const view = reader === 'get' ? await getAgentTask(f.deps as never, { userId: id(1), taskId: row.id })
+      : (await listAgentTasks(f.deps as never, { userId: id(1) })).find(task => task.id === row.id);
+    expect(view).toEqual(expected);
+    expect(view?.result).toEqual(row.result);
+    expect(childReads).toBe(0);
+    expect({ task: row, ledger: f.db.usageLedger, assets: f.db.presentationAssets }).toEqual(before);
+    expect(f.fetcher).not.toHaveBeenCalled();
+    expect(f.generate).not.toHaveBeenCalled();
+  });
+  it.each(['get', 'list'] as const)('quarantines an own-null selected request through authenticated %s without child I/O', async reader => {
+    const f = await completedSelectedEditFixture();
+    const row = f.db.agentTasks.find(task => task.id === f.guide.id)!;
+    row.payload.context.presentation.selectedImageAssetId = null;
+    const before = structuredClone({ task: row, ledger: f.db.usageLedger, assets: f.db.presentationAssets });
+    const expected = { ...taskToView(row), researchObjectId: id(3) };
+    const findUnique = f.deps.prisma.agentTask.findUnique.bind(f.deps.prisma.agentTask);
+    let childReads = 0;
+    vi.spyOn(f.deps.prisma.agentTask, 'findUnique').mockImplementation(args => {
+      if (args.where.idempotencyKey === `selected-image:${row.id}:scene:0`) {
+        childReads++;
+        throw new Error('MALFORMED_SELECTED_CHILD_READ_MUST_NOT_RUN');
+      }
+      return findUnique(args);
+    });
+    const view = reader === 'get' ? await getAgentTask(f.deps as never, { userId: id(1), taskId: row.id })
+      : (await listAgentTasks(f.deps as never, { userId: id(1) })).find(task => task.id === row.id);
+    expect(view).toEqual(expected);
+    for (const key of ['selectedImageContext', 'selectedImageReply', 'selectedImageDraft', 'selectedImageReference']) expect(view?.result).not.toHaveProperty(key);
+    expect(childReads).toBe(0);
+    expect({ task: row, ledger: f.db.usageLedger, assets: f.db.presentationAssets }).toEqual(before);
+    expect(f.generate).not.toHaveBeenCalled();
+  });
   it('keeps the full selected request when it exceeds the old presentation instruction limit', async () => {
     const goal = 'Make the left arrow thinner. ' + 'Retain the original scientific relation. '.repeat(30);
     expect(goal.length).toBeGreaterThan(1000);
@@ -690,6 +746,66 @@ async function failedNativeImage() {
 }
 
 describe('automatic original paid Native image admission through the existing Worker', () => {
+  it.each(['fresh', 'completed', 'uncertain', 'late', 'rearm', 'attempt-race'] as const)(
+    'retains the original %s image state through a parent-read failure in the actual poller', async mode => {
+      const rearm = mode === 'rearm' ? await failedNativeImage() : null;
+      const selected = rearm ? null : await completedSelectedEditFixture();
+      const f = (selected ?? rearm)!;
+      const child = selected ? await selected.prepare() : undefined;
+      const row = selected ? f.db.agentTasks.find(task => task.id === child!.id)! : rearm!.image;
+      const parentId = row.payload.sceneImage.storyboardAssetId;
+      Object.assign(row, { status: 'pending', error: null });
+      if (mode === 'completed' || mode === 'uncertain' || rearm) row.executionAttempt = 1;
+      if (rearm) {
+        // A retained legacy server-owned pre-provider role, not a new grant.
+        row.retryCount = 1;
+        row.result = { hermesRecovery: HERMES_AUTHORITY_REARM_MARKER, nativeImageReview: { mode: 'model-native', state: 'not_started' } };
+        Object.assign(rearm.run, { status: 'generating_scene_images', lastReconciledAt: null });
+        Object.assign(f.db.hermesResearchSteps.find(step => step.agentTaskId === row.id)!, { status: 'running', error: null });
+      }
+      let receiptAvailable = mode === 'completed';
+      f.canResume.mockImplementation(async requestId => requestId === row.id && receiptAvailable);
+      const beforeSubmission = vi.spyOn(f.gateway, 'canResumeImageBeforeSubmission').mockResolvedValue(Boolean(rearm));
+      const before = structuredClone({ payload: row.payload, key: row.idempotencyKey, result: row.result,
+        ledger: f.db.usageLedger, assets: f.db.presentationAssets, others: f.db.agentTasks.filter(task => task.id !== row.id) });
+      const storedObjects = f.putObject.mock.calls.length;
+      const nativeCalls = f.fetcher.mock.calls.length;
+      const findUnique = f.deps.prisma.agentTask.findUnique.bind(f.deps.prisma.agentTask);
+      let failedReads = 0;
+      vi.spyOn(f.deps.prisma.agentTask, 'findUnique').mockImplementation(args => {
+        if (args.where.id === parentId && !args.include && !args.select) {
+          failedReads++;
+          if (mode === 'attempt-race') row.executionAttempt++;
+          if (mode === 'late') receiptAvailable = true;
+          throw new Error('EXACT_PARENT_READ_FAILED');
+        }
+        return findUnique(args);
+      });
+      const processing: string[] = [];
+      let queued = true;
+      const redis = { brpoplpush: async () => { if (!queued) return null; queued = false; processing.push(row.id); return row.id; },
+        lrem: async (_key: string, _count: number, taskId: string) => { const index = processing.indexOf(taskId); if (index < 0) return 0; processing.splice(index, 1); return 1; } };
+      const deps = { ...f.deps, redis, nativeSceneImageEnabled: true, sceneImageEnabled: true } as unknown as WorkerDeps;
+      const poll = await createPollOnce({ 'presentation.generate': f.handler }, { runMaintenance: false });
+      expect(await poll(deps)).toBe(true);
+      expect(processing).toEqual([]);
+      expect(failedReads).toBe(mode === 'uncertain' ? 0 : 1);
+      if (mode === 'attempt-race') expect(row).toMatchObject({ status: 'running', executionAttempt: 2, error: null });
+      else expect(row).toMatchObject({ status: 'failed', error: mode === 'uncertain'
+        ? '[blocked] Previous paid image attempt has no saved result; explicit new generation is required' : 'EXACT_PARENT_READ_FAILED' });
+      expect(row.payload).toEqual(before.payload);
+      expect(row.idempotencyKey).toBe(before.key);
+      expect(row.result).toEqual(rearm ? { nativeImageReview: before.result.nativeImageReview } : before.result);
+      expect(f.db.usageLedger).toEqual(before.ledger);
+      expect(f.db.presentationAssets).toEqual(before.assets);
+      expect(f.db.agentTasks.filter(task => task.id !== row.id)).toEqual(before.others);
+      expect(f.putObject).toHaveBeenCalledTimes(storedObjects);
+      expect(f.fetcher).toHaveBeenCalledTimes(nativeCalls);
+      expect(f.generate).not.toHaveBeenCalled();
+      expect(f.resume).not.toHaveBeenCalled();
+      if (rearm) expect(beforeSubmission).toHaveBeenCalledWith(row.id);
+      if (mode === 'late') expect(await f.gateway.canResumeImageFromCompletedResult(row.id)).toBe(true);
+    });
   it('reclaims startup attempt2, then admits one private original PNG through default maintenance, outbox and actual handler', async () => {
     const f = await failedNativeImage();
     Object.assign(f.deps.prisma.usageLedger, { findUnique: async ({ where }: { where: { idempotencyKey: string } }) =>

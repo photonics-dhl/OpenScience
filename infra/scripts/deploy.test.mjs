@@ -1593,6 +1593,11 @@ function selectedGuideSourceComponents() {
     illustration: finiteSelectedGuideIllustrationTerms, illustrationResidual: finiteSelectedGuideIllustrationResidualTerms,
     dormant: finiteSelectedGuideDormantModuleTerms, ingestion: finiteSelectedGuideIngestionReaderTerms, publicReader: finiteSelectedGuidePublicReaderTerms,
     agent: finiteSelectedGuideAgentResidualTerms,
+    maintenanceWorker: finiteSelectedGuideMaintenanceWorkerTerms,
+    maintenanceView: finiteSelectedGuideMaintenanceViewTerms,
+    maintenanceQualification: finiteSelectedGuideMaintenanceQualificationTerms,
+    maintenanceRemainder: finiteSelectedGuideMaintenanceRemainderTerms,
+    maintenanceBooking: finiteSelectedGuideMaintenanceBookingTerms,
     sourceModel: finiteSelectedGuideSourceModel,
     sourceResidual: finiteSelectedGuideSourceResidual,
     resultOrigin: finiteSelectedGuideResultOriginTerms,
@@ -1614,6 +1619,170 @@ function selectedGuideSourceContext(actual) {
 function retainedSelectedGuideProgram(changes = new Map()) {
   return videoIngressProgram(changes, { sourceRef: '4cc78008f86da811aeb695b5d3639a5b52891d57' });
 }
+
+// Complete composed R2 source with the frozen ordinary-view correction.
+// This is an actual-Program oracle, never a successful installed collector.
+function capableSelectedGuideProgram(changes = new Map()) {
+  const agent = 'packages/domain/src/agent/agent.ts';
+  const overlay = new Map([[agent, readFileSync(new URL(`../../${agent}`, import.meta.url), 'utf8')]]);
+  for (const [file, change] of changes) overlay.set(file, file === agent && typeof change === 'function' ? change(overlay.get(agent)) : change);
+  return videoIngressProgram(overlay, { sourceRef: '852c6eaef9df6acbded36ff8194ff4e8392e65ea', trackedSourceOnly: true });
+}
+
+test('selected guide capable fresh closure binds the real changed booking callback and rejects rebound transaction effects', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
+  const baseline = selectedGuideSourceContext(previous);
+  const modelFor = actual => {
+    const context = components.supplemental(actual.ts, selectedGuideSourceContext(actual), { ui: false });
+    const old = components.supplemental(actual.ts, baseline, { ui: false });
+    const decoder = components.decoder(actual.ts, context, old);
+    return components.fresh(actual.ts, context, decoder, old);
+  };
+  const actual = await capableSelectedGuideProgram();
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh, 'legacy');
+  for (const [file, change] of [
+    ['packages/domain/src/assets/presentation-asset.ts', text => text.replace('const parentOwner = await tx.agentTask.findUnique(', 'const parentOwner = await tx.agentTask.deleteMany(')],
+    ['packages/domain/src/assets/presentation-asset.ts', text => text.replace('const parentOwner = await tx.agentTask.findUnique(', 'const parentOwner = await deps.prisma.agentTask.findUnique(')],
+    ['packages/domain/src/agent/agent.ts', text => text.replace('await beforePersist?.(tx);', 'await beforePersist?.(deps.prisma);')],
+    ['packages/domain/src/agent/agent.ts', text => text.replace("if ((code === 'P2034' || idempotencyConflict) && attempt < 2)", "if ((code === 'P2034' || idempotencyConflict) && attempt < 3)")],
+  ]) {
+    const changed = await capableSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => ['SELECTED_GUIDE_FRESH_WRITER_UNKNOWN', 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN'].includes(error.reason));
+  }
+});
+
+test('selected guide capable Worker effects bind actual claimed prefix and original failure CAS and reject early completed recovery', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
+  const modelFor = actual => components.maintenanceWorker(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  const actual = await capableSelectedGuideProgram();
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.deepEqual(videoPairRuntime(actual.ts, model.ordinaryText), videoPairRuntime(previous.ts, model.previous.getText()));
+  for (const [file, change] of [
+    ['apps/agent-worker/src/presentation/handler.ts', text => text.replace('const parentRow = await deps.prisma.presentationAsset.findUnique(', 'const parentRow = await deps.prisma.presentationAsset.updateMany(')],
+    ['apps/agent-worker/src/index.ts', text => text.replace('if (handlerCompleted && (e as', 'if (!handlerCompleted && (e as')],
+    ['packages/domain/src/agent/agent.ts', text => text.replace('status: currentStatus,', "status: 'running',")],
+  ]) {
+    const changed = await capableSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_MAINTENANCE_WORKER_UNKNOWN');
+  }
+});
+
+test('selected guide capable live view retains ordinary opaque rows and rejects lost selection or guessed children', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
+  const modelFor = actual => components.maintenanceView(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  const actual = await capableSelectedGuideProgram();
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.calls.length, 2);
+  assert.deepEqual(videoPairRuntime(actual.ts, model.text), videoPairRuntime(previous.ts, model.previous.text));
+  const file = 'packages/domain/src/agent/agent.ts';
+  for (const change of [
+    text => text.replace("if (!isJsonRecord(presentation) || !Object.hasOwn(presentation, 'selectedImageAssetId')) return view;", ''),
+    text => text.replace('guideTaskId: task.id }), { isolationLevel:', 'guideTaskId: task.sessionId }), { isolationLevel:'),
+    text => text.replace("nextSteps: [{ intent: 'open-task', targetId: child.id,", "nextSteps: [{ intent: 'open-task', targetId: task.id,"),
+  ]) {
+    const changed = await capableSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_MAINTENANCE_VIEW_UNKNOWN');
+  }
+});
+
+test('selected guide capable qualifications bind actor paid checkpoint source and exact child body', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
+  const modelFor = actual => components.maintenanceQualification(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
+  const actual = await capableSelectedGuideProgram();
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.roles.length, 3);
+  const file = 'packages/domain/src/assets/presentation-asset.ts';
+  for (const change of [
+    text => text.replace('session.userId !== input.userId', 'session.userId === input.userId'),
+    text => text.replace("cp.state !== 'completed'", "cp.state !== 'started'"),
+    text => text.replace('storyboardAssetId: input.guideTaskId, sceneIndex: 0', 'storyboardAssetId: child.id, sceneIndex: 0'),
+    text => text.replace('nativeAgentTerminalResult, requireNativeIllustrationTerminalSource, requireNativeAgentExecutionAuthority',
+      'nativeAgentTerminalResult, requireNativeIllustrationTerminalSource')
+      + "\nimport { isDirectNativeVideoStoryboard as requireNativeAgentExecutionAuthority } from './presentation-asset';\n",
+  ]) {
+    const changed = await capableSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => error.reason === 'SELECTED_GUIDE_MAINTENANCE_QUALIFICATION_UNKNOWN');
+  }
+});
+
+test('selected guide capable full remainder retains readers and closes dormant aliases namespaces and activation', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
+  const old = selectedGuideSourceContext(previous);
+  const modelFor = actual => {
+    const current = selectedGuideSourceContext(actual);
+    const models = { booking: components.maintenanceBooking(actual.ts, current, old), worker: components.maintenanceWorker(actual.ts, current, old),
+      view: components.maintenanceView(actual.ts, current, old), qualification: components.maintenanceQualification(actual.ts, current, old) };
+    return components.maintenanceRemainder(actual.ts, current, old, models);
+  };
+  const actual = await capableSelectedGuideProgram();
+  let model;
+  try { model = modelFor(actual); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 150)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.projected.size, 6);
+  for (const value of model.projected.values()) assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text));
+  for (const [file, change] of [
+    ['apps/agent-worker/src/workspace-guide.ts', text => text + '\nprepareSelectedImageGeneration({} as never, {} as never);\n'],
+    ['packages/domain/src/agent/workspace-guide-contract.ts', text => text.replace("'selectedImageAssetId'", "'lostSelectedImageAssetId'")],
+    ['apps/agent-worker/src/workspace-guide.ts', text => text + "\nimport * as escapedGuide from './workspace-guide'; export const leakedNamespace = escapedGuide;\n"],
+    ['packages/domain/src/agent/workspace-guide-contract.ts', text => text.replace('const text = masked.trim()', "globalThis.stolenGoal = goal; const text = masked.trim()")],
+    ['packages/domain/src/agent/workspace-guide-contract.ts', text => "import { isExplicitFirstImageRequest as Boolean } from './workspace-guide-contract';\n" + text],
+    ['packages/domain/src/agent/workspace-guide-contract.ts', text => text.replace('export function selectedImageProductionIntent(', 'export async function selectedImageProductionIntent(')],
+    ['packages/domain/src/agent/workspace-guide-contract.ts', text => text.replace('const quotePairs:', "import Boolean = require('effectful-module'); const quotePairs:")],
+  ]) {
+    const changed = await capableSelectedGuideProgram(new Map([[file, change]]));
+    assert.throws(() => modelFor(changed), error => ['SELECTED_GUIDE_MAINTENANCE_REMAINDER_UNKNOWN',
+      'SELECTED_GUIDE_MAINTENANCE_QUALIFICATION_UNKNOWN'].includes(error.reason));
+  }
+});
+
+test('selected guide actual capable maintenance composes the complete retained-state source without minting an installed permit', async () => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '5979840b31d6aa02e5350b0e63c8c2c8b049b133', trackedSourceOnly: true });
+  const actual = await capableSelectedGuideProgram();
+  const baseline = selectedGuideSourceContext(previous);
+  let model;
+  try { model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}: ${error.node?.getText().slice(0, 100)}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.projected.size, 6);
+  assert.equal(model.fresh.fresh, 'legacy');
+  assert.equal(model.origin.domain, 'authenticated-ordinary-opaque-and-capable-selected-retained');
+  for (const [key, value] of model.projected) {
+    assert.equal(value.source, actual.program.getSourceFile(resolve(actual.projectRoot, key)));
+    assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text));
+  }
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+  const api = 'apps/api/src/routes/agent.ts';
+  const activated = await capableSelectedGuideProgram(new Map([[api, text => text.replace('parseWorkspaceGuidePayload, requireSelectedImageSource',
+    'parseWorkspaceGuidePayload, readWorkspaceGuidePayloadWithSelectedImage, requireSelectedImageSource')
+    .replace('return parseWorkspaceGuidePayload(payload);', 'return readWorkspaceGuidePayloadWithSelectedImage(payload);')]]));
+  assert.throws(() => components.sourceModel(activated.ts, selectedGuideSourceContext(activated), baseline), error =>
+    ['SELECTED_GUIDE_MAINTENANCE_ACTIVATION_UNKNOWN', 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN',
+      'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN'].includes(error.reason)
+      && error.node?.getSourceFile().fileName.replaceAll('\\', '/').endsWith(api));
+  const loss = await capableSelectedGuideProgram(new Map([['packages/domain/src/agent/workspace-guide-contract.ts', text =>
+    text.replace('export function readWorkspaceGuidePayloadWithSelectedImage(', 'export function lostWorkspaceGuidePayloadWithSelectedImage(')]]));
+  assert.throws(() => components.sourceModel(loss.ts, selectedGuideSourceContext(loss), baseline), error => error.reason === 'SELECTED_GUIDE_LEGACY_DECODER_CHANGED');
+});
 
 // Complete selected+voice transition, independent of later SDF additions.
 function retainedSelectedVoiceProgram(changes = new Map()) {

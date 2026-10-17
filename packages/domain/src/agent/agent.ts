@@ -1100,6 +1100,11 @@ async function selectedImageChildTaskView(deps: AgentDeps, task: Parameters<type
   const view = taskToView(task, canRetry);
   if (task.kind !== 'workspace.guide' || !isJsonRecord(task.result) || !isJsonRecord(task.result.selectedImageDraft)
     || !isJsonRecord(view.result?.selectedImageDraft)) return view;
+  const context = isJsonRecord(task.payload) ? task.payload.context : undefined;
+  const presentation = isJsonRecord(context) ? context.presentation : undefined;
+  // Own-presence only routes a selected request; its draft must also survive
+  // the strict same-row projector above. Ordinary opaque names stay ordinary.
+  if (!isJsonRecord(presentation) || !Object.hasOwn(presentation, 'selectedImageAssetId')) return view;
   const zh = isJsonRecord(task.payload) && task.payload.locale === 'zh';
   try {
     const child = await deps.prisma.$transaction(tx => readSelectedImageGenerationChild(tx, { userId, guideTaskId: task.id }), { isolationLevel: 'Serializable' });
