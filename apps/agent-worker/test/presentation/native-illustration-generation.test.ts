@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakePrisma, seedUser } from '../../../../packages/domain/test/helpers/fakes';
 import { createAgentSession, submitAgentTask, markTaskProgress, claimAgentTask, getAgentTask, listAgentTasks, retryAgentTask, taskToView } from '../../../../packages/domain/src/agent/agent';
@@ -167,7 +170,31 @@ async function fixture(automaticRun = false, nativeVideo = false, additionalClai
     useLocalVideoScene: (index: number) => { localVideoScene = index; }, transactionError: () => transactionError };
 }
 
-async function selectedGuideFixture(goal = 'Clarify the left connecting line', additionalClaim = false) {
+let publishedGuide: Promise<typeof import('../../src/workspace-guide')> | undefined;
+function publishedReaderGuide() {
+  return publishedGuide ??= (async () => {
+    const source = execFileSync('git', ['show', '2877a739d39f3b6fe304096b7c8a9ad01ee6b76c:apps/agent-worker/src/workspace-guide.ts'],
+      { cwd: fileURLToPath(new URL('../../../../', import.meta.url)), encoding: 'utf8' });
+    const sourceUrl = new URL('../../src/workspace-guide.ts', import.meta.url);
+    const ast = ts.createSourceFile(sourceUrl.pathname, source, ts.ScriptTarget.ES2022, true);
+    const imports = new Map<string, unknown>();
+    for (const statement of ast.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue;
+      const name = statement.moduleSpecifier.text;
+      const address = name.startsWith('.') ? fileURLToPath(new URL(`${name.replace(/\.js$/u, '')}.ts`, sourceUrl)) : name;
+      imports.set(name, await vi.importActual(address));
+    }
+    const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const module = { exports: {} as typeof import('../../src/workspace-guide') };
+    new Function('require', 'exports', code)((name: string) => {
+      if (!imports.has(name)) throw new Error(`Unexpected published reader dependency: ${name}`);
+      return imports.get(name);
+    }, module.exports);
+    return module.exports;
+  })();
+}
+
+async function selectedGuideFixture(goal = 'Clarify the left connecting line', additionalClaim = false, stage: 'reader' | 'writer' = 'reader') {
   const f = await fixture(false, false, additionalClaim);
   const plan = await f.handler(f.deps as never, f.task() as never);
   await markTaskProgress(f.deps as never, { taskId: f.owner.id, expectedExecutionAttempt: 1, status: 'succeeded', result: plan });
@@ -192,7 +219,12 @@ async function selectedGuideFixture(goal = 'Clarify the left connecting line', a
     return new Response(JSON.stringify({ model: 'MiniMax-M3', content: step ? [{ type: 'tool_use', id: step[0], name: step[1], input: step[2] }]
       : [{ type: 'text', text: '{"reviewToolCallId":"review"}' }], stop_reason: step ? 'tool_use' : 'end_turn', usage: { input_tokens: 20, output_tokens: 20 } }));
   });
-  const run = (executionAttempt = claimed!.executionAttempt) => workspaceGuideHandler(f.gateway, f.deps as never, { id: task.id, payload, executionAttempt },
+  const handler = stage === 'reader' ? (await publishedReaderGuide()).workspaceGuideHandler : workspaceGuideHandler;
+  if (stage === 'writer') {
+    Object.assign(f.deps, { sceneImageEnabled: true, nativeSceneImageEnabled: true });
+    f.deps.prisma.hermesResearchRun.findFirst = (async args => (await f.deps.prisma.hermesResearchRun.findMany(args))[0] ?? null) as typeof f.deps.prisma.hermesResearchRun.findFirst;
+  }
+  const run = (executionAttempt = claimed!.executionAttempt) => handler(f.gateway, f.deps as never, { id: task.id, payload, executionAttempt },
     { gateway: f.gateway, inboxRoot: '/unused-test-socket', renderPages: async () => [] });
   const runThroughFactory = () => createHandlers(f.gateway, { nativeAgentInboxRoot: '/unused-test-socket',
     parserCascade: { renderPages: async () => ({ pages: [] }) } as never })['workspace.guide']!(f.deps as never,
@@ -209,6 +241,64 @@ async function completedSelectedEditFixture(goal?: string, additionalClaim = fal
 }
 
 describe('selected-image Native guide', () => {
+  it.each(['redis', 'mailer'] as const)('refuses actual W without normal %s dependency before Native or any new debit', async dependency => {
+    const f = await selectedGuideFixture(undefined, false, 'writer');
+    const tasks = f.db.agentTasks.length, assets = f.db.presentationAssets.length, ledger = f.db.usageLedger.length;
+    Object.assign(f.deps, { [dependency]: undefined });
+    await expect(f.run()).rejects.toThrow('[blocked] Native selected-image host is unavailable');
+    expect(f.fetcher).not.toHaveBeenCalled(); expect(f.generate).not.toHaveBeenCalled();
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.presentationAssets).toHaveLength(assets);
+    expect(f.db.usageLedger).toHaveLength(ledger);
+  });
+  it.each(['Explain why the left arrow is thin', 'Do not change the left arrow', '请把第二张图换成水彩风格'])(
+    'keeps actual W accepted nonproduction goal without a parent child or image debit: %s', async goal => {
+      const f = await selectedGuideFixture(goal, false, 'writer');
+      const tasks = f.db.agentTasks.length, assets = f.db.presentationAssets.length, ledger = f.db.usageLedger.length;
+      const result = await f.run();
+      expect(result.selectedImageDraft).toHaveProperty('source.assetId', f.image.id);
+      expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.presentationAssets).toHaveLength(assets);
+      expect(f.db.usageLedger).toHaveLength(ledger);
+      expect(f.db.agentTasks.find(row => row.id === f.guide.id)!.payload.goal).toBe(goal);
+      expect(f.fetcher).toHaveBeenCalledTimes(6); expect(f.generate).not.toHaveBeenCalled();
+    });
+  it('stops actual W adoption when the accepted paid result CAS loses its lease', async () => {
+    const f = await selectedGuideFixture(undefined, false, 'writer');
+    const tasks = f.db.agentTasks.length, assets = f.db.presentationAssets.length, ledger = f.db.usageLedger.length;
+    const update = f.deps.prisma.agentTask.updateMany.bind(f.deps.prisma.agentTask);
+    f.deps.prisma.agentTask.updateMany = async args => {
+      const incoming = args.data.result as Record<string, unknown> | undefined;
+      return incoming?.selectedImageReply ? { count: 0 } : update(args);
+    };
+    await expect(f.run()).rejects.toThrow('[blocked] Selected-image result changed');
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.presentationAssets).toHaveLength(assets);
+    expect(f.db.usageLedger).toHaveLength(ledger);
+    expect(f.fetcher).toHaveBeenCalledTimes(6); expect(f.generate).not.toHaveBeenCalled();
+  });
+  it('automatically adopts the actual W accepted result into one normal child after its paid result CAS', async () => {
+    const f = await selectedGuideFixture(undefined, false, 'writer');
+    const ledger = f.db.usageLedger.length;
+    const result = await f.run();
+    expect(result.selectedImageDraft).toHaveProperty('source.assetId', f.image.id);
+    const parent = f.db.presentationAssets.find(row => row.id === f.guide.id);
+    expect(parent).toMatchObject({ status: 'approved', kind: 'interactive_html', provenance: { taskId: f.guide.id } });
+    const child = f.db.agentTasks.find(row => row.idempotencyKey === `selected-image:${f.guide.id}:scene:0`);
+    expect(child).toMatchObject({ kind: 'presentation.generate', payload: { sceneImage: { storyboardAssetId: f.guide.id, sceneIndex: 0 } } });
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
+    expect(f.fetcher).toHaveBeenCalledTimes(6);
+    expect(f.generate).not.toHaveBeenCalled();
+    const replay = await selectedGuideProduction.prepareSelectedImageGeneration(f.deps as never,
+      { userId: id(1), guideTaskId: f.guide.id, executionAttempt: 1 });
+    expect(replay?.id).toBe(child!.id);
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
+    expect(f.db.agentTasks.filter(row => row.idempotencyKey === child!.idempotencyKey)).toHaveLength(1);
+    const resumed = await f.run();
+    expect(resumed.selectedImageDraft).toEqual(result.selectedImageDraft);
+    expect(f.fetcher).toHaveBeenCalledTimes(6);
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
+    expect(f.db.agentTasks.filter(row => row.idempotencyKey === child!.idempotencyKey)).toHaveLength(1);
+    expect(f.image.deletedAt).toBeNull();
+    expect(f.image.contentHash).toBe(sha(f.bytes));
+  });
   it.each([['get', false], ['get', true], ['list', false], ['list', true]] as const)(
     'preserves ordinary opaque image fields through authenticated %s without child I/O (all fields: %s)', async (reader, allFields) => {
     const f = await fixture();
@@ -506,9 +596,12 @@ describe('selected-image Native guide', () => {
     expect(f.oldPlan).not.toHaveBeenCalled();
   });
   it('uses the actual existing Worker factory Native configuration', async () => {
-    const f = await selectedGuideFixture();
+    const f = await selectedGuideFixture(undefined, false, 'writer');
+    const ledger = f.db.usageLedger.length;
     expect(await f.runThroughFactory()).toMatchObject({ selectedImageDraft: { source: { assetId: f.image.id } } });
     expect(f.fetcher).toHaveBeenCalledTimes(6);
+    expect(f.db.agentTasks.filter(row => row.idempotencyKey === `selected-image:${f.guide.id}:scene:0`)).toHaveLength(1);
+    expect(f.db.usageLedger).toHaveLength(ledger + 1);
   });
   it('reads exact saved PNG and original brief through real Native history and returns a private proposal, not an image', async () => {
     const f = await selectedGuideFixture();
@@ -545,8 +638,10 @@ describe('selected-image Native guide', () => {
     expect(f.fetcher).not.toHaveBeenCalled();
     expect(f.db.presentationAssets).toHaveLength(2); expect(f.generate).not.toHaveBeenCalled();
   });
-  it.each(['question', 'explanation'] as const)('returns a bounded %s only after real image and original context reads', async kind => {
-    const f = await selectedGuideFixture();
+  it.each([['reader', 'question'], ['reader', 'explanation'], ['writer', 'question'], ['writer', 'explanation']] as const)(
+    'returns a bounded %s %s only after real image and original context reads', async (stage, kind) => {
+    const f = await selectedGuideFixture(undefined, false, stage);
+    const tasks = f.db.agentTasks.length, ledger = f.db.usageLedger.length;
     const text = kind === 'question' ? 'Which of the two left-hand connecting lines should change?' : 'The connecting line represents the source-supported relation between the two regions.';
     const steps = [responses[0], ['selected-view', 'paper_image_view', {}], ['reply', 'paper_selected_image_reply', { kind, text }]] as const;
     f.fetcher.mockImplementation(async () => {
@@ -563,6 +658,8 @@ describe('selected-image Native guide', () => {
     expect(publicTask.result).not.toHaveProperty('selectedImageContext');
     expect(publicTask.result).not.toHaveProperty('selectedImageReply');
     expect(f.fetcher).toHaveBeenCalledTimes(4); expect(f.db.presentationAssets).toHaveLength(2);
+    expect(f.db.agentTasks).toHaveLength(tasks); expect(f.db.usageLedger).toHaveLength(ledger);
+    expect(f.generate).not.toHaveBeenCalled();
   });
   it('refuses a text-only plan that never actually views the selected PNG', async () => {
     const f = await selectedGuideFixture();

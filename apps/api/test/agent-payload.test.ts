@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
@@ -7,7 +8,7 @@ import * as domain from '@openscience/domain';
 import * as zod from 'zod';
 import { createSession } from '@openscience/auth';
 import { plannedFixture, id, hash } from '../../../packages/domain/test/agent/first-image-continuation-fixture';
-import { selectedGuidePresentationContext, buildGuidePresentationContext } from '../../web/components/hermes/HermesAssistantDrawer';
+import { buildGuidePresentationContext } from '../../web/components/hermes/HermesAssistantDrawer';
 import { buildApp } from '../src/app';
 import { httpStatusForError } from '../src/error-map';
 import * as sessionGuard from '../src/routes/session-guard';
@@ -18,28 +19,27 @@ import { agentSessionBodySchema, agentTaskBodySchema } from '../src/routes/agent
 const selectedApps: FastifyInstance[] = [];
 afterEach(async () => { await Promise.all(selectedApps.splice(0).map(app => app.close())); });
 
-function changeOnce(source: string, before: string, after: string) {
-  expect(source.split(before)).toHaveLength(2);
-  const changed = source.replace(before, after);
-  expect(changed).toBe(source.slice(0, source.indexOf(before)) + after + source.slice(source.indexOf(before) + before.length));
-  return changed;
+function publishedReaderSource(file: string) {
+  return execFileSync('git', ['show', `2877a739d39f3b6fe304096b7c8a9ad01ee6b76c:${file}`],
+    { cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8' });
 }
-function writerOverlay() {
-  const source = readFileSync(new URL('../../web/components/hermes/HermesAssistantDrawer.tsx', import.meta.url), 'utf8');
+function publishedReaderWriter() {
+  const source = publishedReaderSource('apps/web/components/hermes/HermesAssistantDrawer.tsx');
   const ast = ts.createSourceFile('drawer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const writer = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'buildGuidePresentationContext');
-  if (!writer) throw new Error('Actual UI writer was not found');
-  const changed = changeOnce(writer.getText(ast), 'return legacyGuidePresentationContext(input);', 'return selectedGuidePresentationContext(input);');
-  const code = ts.transpileModule(changed, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const names = ['legacyGuidePresentationContext', 'buildGuidePresentationContext'];
+  const retained = names.map(name => {
+    const node = ast.statements.find(value => ts.isFunctionDeclaration(value) && value.name?.text === name);
+    if (!node) throw new Error(`Published reader function missing: ${name}`);
+    return node.getText(ast);
+  }).join('\n');
+  const code = ts.transpileModule(retained, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} as { buildGuidePresentationContext: typeof buildGuidePresentationContext } };
-  new Function('exports', 'selectedGuidePresentationContext', code)(module.exports, selectedGuidePresentationContext);
+  new Function('exports', code)(module.exports);
   return module.exports.buildGuidePresentationContext;
 }
-function routeOverlay() {
-  const source = readFileSync(new URL('../src/routes/agent.ts', import.meta.url), 'utf8');
-  const changed = changeOnce(source, 'listAgentTasks, parseWorkspaceGuidePayload,',
-    'listAgentTasks, readWorkspaceGuidePayloadWithSelectedImage as parseWorkspaceGuidePayload,');
-  const code = ts.transpileModule(changed, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+function publishedReaderRoutes() {
+  const source = publishedReaderSource('apps/api/src/routes/agent.ts');
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} as typeof import('../src/routes/agent') };
   const imports: Record<string, unknown> = { '@openscience/domain': domain, zod, './session-guard': sessionGuard };
   new Function('require', 'exports', code)((name: string) => {
@@ -61,16 +61,16 @@ async function selectedApiFixture(writerStage: boolean) {
   const deps = { ...f.deps, prisma: f.prisma, redis, audit: f.deps.audit!, mailer: createFakeMailer() };
   const session = await domain.createAgentSession(deps, { userId: id(1), researchObjectId: id(3), kind: 'workspace.guide' });
   let app: FastifyInstance;
-  if (writerStage) {
+  if (!writerStage) {
     app = Fastify({ logger: false });
     await app.register(cookie, { secret: 'test-secret' });
     app.setErrorHandler((error, request, reply) => { const mapped = httpStatusForError(error, String(request.id)); void reply.status(mapped.status).send(mapped.body); });
-    routeOverlay().registerAgentRoutes(app, deps);
+    publishedReaderRoutes().registerAgentRoutes(app, deps);
   } else app = await buildApp({ ...deps, cookieSecret: 'test-secret', secureCookies: false });
   selectedApps.push(app);
   const input = { actorId: id(1), goal: 'Make the left line clearer', presentation: { researchObjectId: id(3), versionId: id(4) },
     imageContext: { actorId: id(1), researchObjectId: id(3), versionId: id(4), selectedImageAssetId: image.id, images: [{ assetId: image.id, label: 'Relation' }] } };
-  const projection = (writerStage ? writerOverlay() : buildGuidePresentationContext)(input);
+  const projection = (writerStage ? buildGuidePresentationContext : publishedReaderWriter())(input);
   const payload = { goal: input.goal, locale: 'en', route: 'research-object-edit', target: null,
     context: { tasks: [], researchObjects: [], presentation: projection.presentation } };
   const body = { sessionId: session.id, kind: 'workspace.guide', payload };
@@ -79,7 +79,7 @@ async function selectedApiFixture(writerStage: boolean) {
   return { ...f, app, image, body, send, redis, token };
 }
 
-describe('selected-image reader stage and actual writer overlay HTTP', () => {
+describe('selected-image published reader and actual writer HTTP', () => {
   it('keeps actual R UI emission legacy and rejects a manual selected member before charge', async () => {
     const f = await selectedApiFixture(false);
     expect(f.body.payload.context.presentation).not.toHaveProperty('selectedImageAssetId');

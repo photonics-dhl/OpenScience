@@ -1614,6 +1614,64 @@ function selectedGuideSourceContext(actual) {
   return { ...videoPairContext(actual), canonical, sourceHost: actual.sourceHost, resolveSource: actual.resolveSource };
 }
 
+test('selected guide actual selected W 2877 composes exact caller activation with retained R readers', async t => {
+  const components = selectedGuideSourceComponents();
+  const previous = await videoIngressProgram(new Map(), { sourceRef: '2877a739d39f3b6fe304096b7c8a9ad01ee6b76c', trackedSourceOnly: true });
+  const roots = [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']];
+  const contextFor = actual => ({ ...selectedGuideSourceContext(actual), roots });
+  const baseline = contextFor(previous);
+  const actual = await videoIngressProgram(new Map(), { trackedSourceOnly: true });
+  let model;
+  try { model = components.sourceModel(actual.ts, contextFor(actual), baseline); }
+  catch (error) { assert.fail(`${error.reason}/${error.initializationSite ?? ''}: ${relative(actual.projectRoot, error.node?.getSourceFile().fileName ?? '')}`); }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.fresh.fresh, 'selected');
+  assert.equal(model.origin.domain, 'authenticated-selected-guide-activation-and-retained-R');
+  assert.equal(model.projected.size, 1);
+  const guide = 'apps/agent-worker/src/workspace-guide.ts';
+  const projection = model.projected.get(guide);
+  assert.equal(projection.source, actual.program.getSourceFile(resolve(actual.projectRoot, guide)));
+  assert.deepEqual(videoPairRuntime(actual.ts, projection.text), videoPairRuntime(previous.ts, projection.previous.text));
+  assert.deepEqual(Array.from(model.initialization.ordering, value => value.entry), roots.map(([entry]) => entry));
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+  const rooted = owner => {
+    const program = owner.ts.createProgram(roots.map(([entry]) => resolve(owner.projectRoot, entry)), owner.program.getCompilerOptions(), owner.sourceHost);
+    assert.equal(program.getSyntacticDiagnostics().length, 0);
+    assert.equal(program.getSourceFile(resolve(owner.projectRoot, 'apps/api/src/routes/agent.ts')), undefined,
+      'the actual Worker/first-image reader roots do not supply the HTTP writer');
+    return contextFor({ ...owner, program });
+  };
+  const rootModel = components.sourceModel(actual.ts, rooted(actual), rooted(previous));
+  assert.equal(rootModel.origin.domain, model.origin.domain);
+  const wire = 'if (accepted) await prepareSelectedImageGeneration({ ...deps, storage, redis: deps.redis, mailer: deps.mailer }, { userId, guideTaskId: task.id, executionAttempt: task.executionAttempt! });';
+  const changeOnce = (text, before, after) => { assert.equal(text.split(before).length, 2); return text.replace(before, after); };
+  const mutations = [
+    ['unguarded producer', guide, text => changeOnce(text, wire, wire.replace('if (accepted) ', ''))],
+    ['before result CAS', guide, text => changeOnce(text, wire, '').replace('    const question = actual.kind', `    ${wire}\n    const question = actual.kind`)],
+    ['callback bypass', guide, text => changeOnce(text, wire, `if (accepted) await Promise.resolve().then(async () => ${wire.slice('if (accepted) await '.length, -1)});`)],
+    ['wrong task', guide, text => changeOnce(text, wire, wire.replace('guideTaskId: task.id', 'guideTaskId: userId'))],
+    ['wrong attempt', guide, text => changeOnce(text, wire, wire.replace('executionAttempt: task.executionAttempt!', 'executionAttempt: 1'))],
+    ['lost queue preflight', guide, text => changeOnce(text, '!deps.storage || !deps.redis ||', '!deps.storage ||')],
+    ['weakened CAS', guide, text => changeOnce(text, 'if (update.count !== 1)', 'if (update.count > 1)')],
+    ['rebound transaction', guide, text => changeOnce(text, "}, { isolationLevel: 'Serializable' });\n    " + wire,
+      "}, { isolationLevel: 'ReadCommitted' });\n    " + wire)],
+    ['lost UI activation', 'apps/web/components/hermes/HermesAssistantDrawer.tsx', text => changeOnce(text,
+      'export function buildGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {\n  return selectedGuidePresentationContext(input);',
+      'export function buildGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {\n  return legacyGuidePresentationContext(input);')],
+    ['lost HTTP activation', 'apps/api/src/routes/agent.ts', text => changeOnce(text,
+      'readWorkspaceGuidePayloadWithSelectedImage as parseWorkspaceGuidePayload', 'parseWorkspaceGuidePayload')],
+    ['ordinary side effect', guide, text => changeOnce(text, '  const requestedWriting = writingIntent(', '  console.error("unexpected ordinary effect");\n  const requestedWriting = writingIntent(')],
+    ['changed child key', 'packages/domain/src/assets/presentation-asset.ts', text => changeOnce(text,
+      '`selected-image:${guideId}:scene:0`', '`selected-image:${guideId}:scene:1`')],
+  ];
+  for (const [name, path, mutate] of mutations) await t.test(name, async () => {
+    // Native line endings are input storage, not the mutation under test.
+    const changed = await videoIngressProgram(new Map([[path, text => mutate(text.replaceAll('\r\n', '\n'))]]), { trackedSourceOnly: true });
+    assert.throws(() => components.sourceModel(changed.ts, contextFor(changed), baseline), error =>
+      /^SELECTED_GUIDE_/u.test(error.reason), name);
+  });
+});
+
 // Original selected-component positives and mutations use the same complete
 // image4cc inventory and source host; they are not the live combined candidate.
 function retainedSelectedGuideProgram(changes = new Map()) {
@@ -2366,7 +2424,13 @@ test('selected guide current combination closes the whole source over the exact 
 test('selected guide initialization consumes original collected module equality without reclassifying root metadata', async t => {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const ts = createRequire(import.meta.url)('typescript');
-  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const localClient = join(projectRoot, 'packages/search/generated/client/index.js');
+  // A source-only worktree may use the already installed workspace dependency
+  // as fixture DATA. CI prefers its own generated file. No client is installed
+  // or substituted in either original collector's release-root input.
+  const client = existsSync(localClient) ? localClient
+    : join(dirname(createRequire(import.meta.url).resolve('@openscience/search/package.json')), 'generated/client/index.js');
+  const genuine = readFileSync(client, 'utf8');
   const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
   const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
     ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
@@ -2378,9 +2442,12 @@ test('selected guide initialization consumes original collected module equality 
   const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
     deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
   assert.ok(collector && metadata && consumer && initialization);
+  const writerRemainder = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideWriterRemainderTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideWriterSourceModel('));
+  assert.ok(writerRemainder.startsWith('function finiteSelectedGuideWriterRemainderTerms('));
   const contexts = new WeakMap(), defaultRoots = [], vendorCalls = [];
-  const functions = runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization};
-    ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms })`, {
+  const functions = runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization}; ${writerRemainder};
+    ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms, remainder: finiteSelectedGuideWriterRemainderTerms })`, {
     resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
     rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: defaultRoots,
     // This custom-root component fixture isolates the existing vendor boundary;
@@ -2393,7 +2460,7 @@ test('selected guide initialization consumes original collected module equality 
   const fixture = await mkdtemp(join(parent, 'selected-collected-runtime-'));
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const candidate = join(fixture, 'candidate'), previous = join(fixture, 'previous');
-  const modulePath = 'packages/search/generated/client/index.js', roots = [[modulePath]];
+  const modulePath = 'packages/search/generated/client/index.js', ordinaryPath = 'apps/ordinary.ts', roots = [[modulePath], [ordinaryPath]];
   const input = directory => {
     const config = structuredClone(original);
     config.generator.output.value = join(directory, 'packages/search/generated/client');
@@ -2405,6 +2472,8 @@ test('selected guide initialization consumes original collected module equality 
     await writeFile(join(directory, 'tsconfig.json'), '{}');
     await writeFile(join(directory, modulePath), input(directory));
     await writeFile(join(directory, 'packages/search/generated/client/runtime/library.js'), 'module.exports = {};');
+    await mkdir(join(directory, 'apps'), { recursive: true });
+    await writeFile(join(directory, ordinaryPath), 'export function readOrdinary() { return { value: 1 }; }');
   }
   const collect = directory => functions.collect(ts, directory, roots, {});
   const current = collect(candidate), old = collect(previous);
@@ -2413,24 +2482,57 @@ test('selected guide initialization consumes original collected module equality 
   assert.equal(JSON.stringify(new Map(current).get(key)), JSON.stringify(new Map(old).get(key)));
   assert.notEqual(left.modules.get(resolve(candidate, modulePath)).text, right.modules.get(resolve(previous, modulePath)).text);
   assert.equal(functions.initialize(ts, left, right, { current, previous: old }).status, 'conditional');
+  assert.equal(functions.remainder(ts, left, right, new Set(), { current, previous: old }).status, 'conditional',
+    'the actual W remainder must retain the original two-location equality');
+  const pair = deployLockSource.match(/function finiteSelectedGuidePairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(pair);
+  const remaining = pair.slice(pair.indexOf('    for (const key of new Set'), pair.indexOf('    // Existing production callers'));
+  assert.ok(remaining.startsWith('    for (const key of new Set'));
+  const strictRemaining = runInNewContext(`(current, previous) => {
+    const a = new Map(current), b = new Map(previous), affected = new Set(), runtime = new Map();
+    const model = { projected: new Map() }, reject = () => false; let site, moduleKey;
+    ${remaining}
+    return true;
+  }`, { ts, builtinModules });
+  assert.equal(strictRemaining(current, old), true, 'original remaining-entry equality accepts lawful relocation');
   const refuses = action => assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  const refusesRemainder = (a = left, b = right, collected) => assert.throws(
+    () => functions.remainder(ts, a, b, new Set(), collected),
+    error => ['SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN'].includes(error.reason));
+  refusesRemainder(); // No collected arrays means no captured-equality premise.
+  refusesRemainder({ ...left, modules: new Map(left.modules) }, right);
   refuses(() => functions.initialize(ts, left, right)); // Source-only equality cannot mint the captured proof.
-  for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }])
+  for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }]) {
     refuses(() => functions.initialize(ts, left, right, collected));
+    refusesRemainder(left, right, collected);
+  }
   refuses(() => functions.initialize(ts, { ...left }, right, { current, previous: old }));
+  refusesRemainder({ ...left }, right, { current, previous: old });
   const capturedPath = resolve(candidate, modulePath), capturedSource = left.modules.get(capturedPath);
   left.modules.set(capturedPath, ts.createSourceFile(capturedPath, capturedSource.text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS));
   refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  refusesRemainder(left, right, { current, previous: old });
   left.modules.set(capturedPath, capturedSource);
   const position = current.findIndex(([name]) => name === key), [missing] = current.splice(position, 1);
   refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  refusesRemainder(left, right, { current, previous: old });
   current.splice(position, 0, missing);
+  left.modules.delete(capturedPath);
+  refusesRemainder(left, right, { current, previous: old });
+  left.modules.set(capturedPath, capturedSource);
+  await writeFile(join(candidate, ordinaryPath), 'export function readOrdinary() { return { value: 2 }; }');
+  const ordinaryChange = collect(candidate);
+  assert.equal(functions.remainder(ts, contexts.get(ordinaryChange), right, new Set(), { current: ordinaryChange, previous: old }).status, 'conditional');
+  assert.equal(strictRemaining(ordinaryChange, old), false, 'deferred captured runtime change is still refused by the ORIGINAL remaining loop');
+  await writeFile(join(candidate, ordinaryPath), 'export function readOrdinary() { return { value: 1 }; }');
   const changedRuntime = input(candidate).replace(JSON.stringify(original.inlineSchemaHash), JSON.stringify(`${original.inlineSchemaHash}-changed`));
   assert.notEqual(changedRuntime, input(candidate));
   await writeFile(join(candidate, modulePath), changedRuntime);
   const changed = collect(candidate);
   assert.notEqual(JSON.stringify(new Map(changed).get(key)), JSON.stringify(new Map(old).get(key)));
+  assert.equal(strictRemaining(changed, old), false, 'nonlocation generated metadata must remain unequal');
   refuses(() => functions.initialize(ts, contexts.get(changed), right, { current: changed, previous: old }));
+  refusesRemainder(contexts.get(changed), right, { current: changed, previous: old });
   for (const bad of [input(candidate).replace(JSON.stringify(join(candidate, 'infra/search/schema.prisma')), JSON.stringify(join(candidate, 'wrong/schema.prisma'))),
     `${input(candidate)}\nexports.configObserver = config;`]) {
     await writeFile(join(candidate, modulePath), bad);

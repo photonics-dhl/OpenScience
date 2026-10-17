@@ -9035,6 +9035,183 @@ function finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, resi
     projection: residual.publicReader.ordinaryRelation, transfers, marker, terminalGate: terminal.body.statements.slice(gate, gate + 2) };
 }
 
+// Activate only the three retained callers. R already owns the qualified
+// parent, normal charged child and their readers; deleting those definitions
+// as in first installation would erase the history this pair must preserve.
+function finiteSelectedGuideWriterRemainderTerms(ts, context, rollbackContext, exceptions, collected) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN', node }; };
+  const original = context.originalContext ?? context, previousOriginal = rollbackContext.originalContext ?? rollbackContext;
+  // This validates the ORIGINAL WeakMap array/context, captured SourceFile and
+  // module-key premises before any captured entry is deferred. The ordinary
+  // outer pair comparison still checks every nonprojected emitted fingerprint.
+  const initialization = finiteSelectedGuideInitializationTerms(ts, original, previousOriginal, collected);
+  const source = (owner, path) => { const parsed = owner.program.getSourceFile(resolve(owner.root, path));
+    if (!parsed || parsed.isDeclarationFile) fail(parsed); return parsed; };
+  const runtime = (parsed, owner) => {
+    const compiled = ts.transpileModule(parsed.text, { fileName: parsed.fileName, reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX, removeComments: true } });
+    if (compiled.diagnostics?.some(value => value.category === ts.DiagnosticCategory.Error)) fail(parsed);
+    const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    if (emitted.parseDiagnostics.length) fail(parsed); return JSON.stringify(owner.canonical(emitted));
+  };
+  for (const parsed of context.program.getSourceFiles()) {
+    if (parsed.isDeclarationFile || exceptions.has(parsed)) continue;
+    const path = relative(context.root, parsed.fileName).replaceAll('\\', '/');
+    if (!/^(?:apps|packages)\//u.test(path)) continue;
+    const previous = source(rollbackContext, path);
+    if (collected !== undefined && original.modules?.has(resolve(parsed.fileName))) {
+      if (original.modules.get(resolve(parsed.fileName)) !== parsed
+        || original.program.getSourceFile(parsed.fileName) !== parsed
+        || previousOriginal.modules?.get(resolve(previous.fileName)) !== previous
+        || previousOriginal.program.getSourceFile(previous.fileName) !== previous) fail(parsed);
+      // Keep the collector's emitted literal identities. Re-transpiling here
+      // would discard its proven generated-client location/consumer mapping.
+      continue;
+    }
+    if (parsed.text.replaceAll('\r\n', '\n') !== previous.text.replaceAll('\r\n', '\n') && runtime(parsed, context) !== runtime(previous, rollbackContext)) fail(parsed);
+  }
+  for (const parsed of rollbackContext.program.getSourceFiles()) {
+    const path = relative(rollbackContext.root, parsed.fileName).replaceAll('\\', '/');
+    if (!parsed.isDeclarationFile && /^(?:apps|packages)\//u.test(path)) source(context, path);
+  }
+  return initialization;
+}
+
+function finiteSelectedGuideWriterSourceModel(ts, context, rollbackContext, collected) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN', node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const left = finiteSelectedGuideSupplementaryTerms(ts, context);
+  const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext);
+  const decoder = finiteSelectedGuideDecoderTerms(ts, left, right);
+  const fresh = finiteSelectedGuideFreshTerms(ts, left, decoder, right);
+  need(fresh.fresh === 'selected', fresh.strictCall);
+  const qualification = finiteSelectedGuideMaintenanceQualificationTerms(ts, left, right);
+  const nodes = (scope, predicate) => { const result = []; const visit = node => {
+    if (ts.isTypeNode(node)) return;
+    if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
+  }; visit(scope); return result; };
+  const one = (values, node) => { need(values.length === 1, node); return values[0]; };
+  const symbol = node => {
+    let value = ts.isShorthandPropertyAssignment(node.parent) ? left.checker.getShorthandAssignmentValueSymbol(node.parent)
+      : ts.isExportSpecifier(node.parent) ? left.checker.getExportSpecifierLocalTargetSymbol(node.parent) : left.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = left.checker.getAliasedSymbol(value); return value;
+  };
+  const source = (owner, path) => { const parsed = owner.program.getSourceFile(resolve(owner.root, path));
+    need(parsed && !parsed.isDeclarationFile, parsed); return parsed; };
+  const fn = (parsed, name) => one(parsed.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name && node.body), parsed);
+  const same = (node, text) => {
+    const parsed = ts.createSourceFile('selected-writer-term.ts', text, ts.ScriptTarget.ES2022, true);
+    need(!parsed.parseDiagnostics.length && parsed.statements.length === 1
+      && JSON.stringify(left.canonical(node)) === JSON.stringify(left.canonical(parsed.statements[0])), node);
+  };
+  const runtime = (text, parsed, owner) => {
+    const compiled = ts.transpileModule(text, { fileName: parsed.fileName, reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX, removeComments: true } });
+    need(!compiled.diagnostics?.some(value => value.category === ts.DiagnosticCategory.Error), parsed);
+    const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!emitted.parseDiagnostics.length, parsed); return JSON.stringify(owner.canonical(emitted));
+  };
+  const project = (parsed, replace, removed = new Set()) => {
+    const transformed = ts.transform(parsed, [factory => {
+      const visit = node => removed.has(node) ? undefined : replace(node) ?? ts.visitEachChild(node, visit, factory);
+      return root => ts.visitNode(root, visit);
+    }]);
+    try { return ts.createPrinter().printFile(transformed.transformed[0]); } finally { transformed.dispose(); }
+  };
+  const guidePath = 'apps/agent-worker/src/workspace-guide.ts';
+  const guide = source(left, guidePath), oldGuide = source(right, guidePath);
+  const handler = fn(guide, 'workspaceGuideHandler'), prepare = fn(guide, 'prepareSelectedImageGeneration');
+  const adopt = fn(qualification.source, 'adoptSelectedImageGuide');
+  same(prepare.body, '{ return adoptSelectedImageGuide({ ...deps, renderStoryboard }, input); }');
+  need(symbol(one(nodes(prepare, ts.isCallExpression), prepare).expression)?.valueDeclaration === adopt, prepare);
+  const calls = nodes(handler, node => ts.isCallExpression(node) && symbol(node.expression)?.valueDeclaration === prepare);
+  const call = one(calls, handler), activation = call.parent?.parent?.parent;
+  need(ts.isAwaitExpression(call.parent) && ts.isExpressionStatement(call.parent.parent)
+    && ts.isIfStatement(activation) && activation.thenStatement === call.parent.parent && !activation.elseStatement, call);
+  same(activation, 'if (accepted) await prepareSelectedImageGeneration({ ...deps, storage, redis: deps.redis, mailer: deps.mailer }, { userId, guideTaskId: task.id, executionAttempt: task.executionAttempt! });');
+  const selected = activation.parent;
+  need(ts.isBlock(selected) && ts.isIfStatement(selected.parent) && selected.parent.thenStatement === selected
+    && selected.parent.parent === handler.body, selected);
+  const resourceGuard = selected.statements[0];
+  same(resourceGuard, `if (!nativeAgent || !deps.storage || !deps.redis || !deps.mailer || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt! < 1)
+    throw new Error('[blocked] Native selected-image host is unavailable');`);
+  const queueGuard = one(nodes(resourceGuard.expression, node => ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.BarBarToken && ts.isPrefixUnaryExpression(node.right)
+    && node.right.operator === ts.SyntaxKind.ExclamationToken && ts.isPropertyAccessExpression(node.right.operand)
+    && node.right.operand.name.text === 'redis' && symbol(node.right.operand.expression) === symbol(handler.parameters[1].name)), resourceGuard);
+  const normalDepsGuard = queueGuard.parent;
+  need(ts.isBinaryExpression(normalDepsGuard) && normalDepsGuard.left === queueGuard
+    && ts.isPrefixUnaryExpression(normalDepsGuard.right) && ts.isPropertyAccessExpression(normalDepsGuard.right.operand)
+    && normalDepsGuard.right.operand.name.text === 'mailer'
+    && symbol(normalDepsGuard.right.operand.expression) === symbol(handler.parameters[1].name), normalDepsGuard);
+  const position = selected.statements.indexOf(activation);
+  need(position >= 2 && position === selected.statements.length - 2 && ts.isReturnStatement(selected.statements[position + 1]), activation);
+  // Match the actual accepted decision and the entire current-lease, paid CP
+  // and result CAS immediately preceding activation. A callback or textual
+  // occurrence inside some earlier transaction is not this awaited boundary.
+  const accepted = one(nodes(selected, node => ts.isVariableDeclaration(node) && node.name.text === 'accepted'), selected);
+  same(accepted.parent.parent, "const accepted = !question && actual.review.decision === 'accepted';");
+  const question = one(nodes(selected, node => ts.isVariableDeclaration(node) && node.name.text === 'question'), selected);
+  same(question.parent.parent, "const question = actual.kind === 'reply';");
+  same(selected.statements[position - 1], `await deps.prisma.$transaction(async tx => {
+    await authorize(tx);
+    const current = await tx.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+    const cp = readNativeAgentExecution(current.result)?.checkpoint;
+    if (!cp || cp.state !== 'completed' || cp.finishReason !== 'stop' || cp.hasToolCalls
+      || cp.responseHash !== paid.responseHash || !isDeepStrictEqual(cp.target, selectedImageReply.target)) throw new Error('[blocked] Selected-image paid completion changed');
+    const stored = current.result as Record<string, unknown>;
+    const update = await tx.agentTask.updateMany({ where: { id: task.id, status: 'running', deletedAt: null, executionAttempt: task.executionAttempt!, result: { equals: current.result! } },
+      data: { result: { ...stored, selectedImageReply, ...(selectedImageDraft ? { selectedImageDraft } : {}),
+        ...(!question ? { storyboardReview: actual.review, nativeIllustration: actual.nativeAgent } : {}) } as unknown as Prisma.InputJsonObject } });
+    if (update.count !== 1) throw new Error('[blocked] Selected-image result changed');
+  }, { isolationLevel: 'Serializable' });`);
+  const ownBinding = (name, declaration) => {
+    const refs = nodes(activation, node => ts.isIdentifier(node) && node.text === name);
+    need(refs.length && refs.every(node => symbol(node) === symbol(declaration.name)), activation);
+  };
+  ownBinding('accepted', accepted);
+  ownBinding('deps', handler.parameters[1]); ownBinding('task', handler.parameters[2]);
+  for (const name of ['storage', 'userId']) ownBinding(name,
+    one(nodes(handler, node => ts.isVariableDeclaration(node) && node.name.text === name), handler));
+  // No alias, property access, namespace escape or second call may activate
+  // this old exported producer. Retained imports/exports alone do not call it.
+  for (const ref of nodes(guide, ts.isIdentifier)) if (symbol(ref)?.valueDeclaration === prepare && ref !== prepare.name)
+    need(ref === call.expression, ref);
+  // Outside this module the complete old modules are retained below, including
+  // every existing importer/alias and namespace use. No changed outside caller
+  // is projected or accepted on the strength of its spelling.
+  const projectedText = project(guide, node => node === normalDepsGuard ? queueGuard.left : undefined, new Set([activation]));
+  // Use no substitute SourceFile in either Program or collector. Captured
+  // nodes remain the originals; only this proven statement is projected out.
+  need(runtime(projectedText, guide, left) === runtime(oldGuide.text, oldGuide, right), guide);
+  const drawer = left.drawer, oldDrawer = right.drawer;
+  const build = fn(drawer, 'buildGuidePresentationContext'), selectedWriter = fn(drawer, 'selectedGuidePresentationContext');
+  same(build.body, '{ return selectedGuidePresentationContext(input); }');
+  const buildCall = one(nodes(build, ts.isCallExpression), build);
+  need(symbol(buildCall.expression)?.valueDeclaration === selectedWriter && build.parameters.length === 1
+    && symbol(buildCall.arguments[0]) === symbol(build.parameters[0].name), buildCall);
+  const drawerText = project(drawer, node => node === buildCall.expression ? ts.factory.createIdentifier('legacyGuidePresentationContext') : undefined);
+  need(runtime(drawerText, drawer, left) === runtime(oldDrawer.text, oldDrawer, right), drawer);
+  const parserImport = one(nodes(left.api, node => ts.isImportSpecifier(node)
+    && node.name.text === 'parseWorkspaceGuidePayload' && node.propertyName?.text === decoder.reader.name.text), left.api);
+  need(symbol(parserImport.name)?.valueDeclaration === decoder.reader, parserImport);
+  const apiText = project(left.api, node => node === parserImport
+    ? ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier(decoder.legacyParser.name.text)) : undefined);
+  need(runtime(apiText, left.api, left) === runtime(right.api.text, right.api, right), left.api);
+  // Every retained dependency and caller is the complete old runtime, not
+  // selected names or bodies. The successful collector still enforces strict
+  // packages/vendor/generated clients/config entries after this source proof.
+  const exceptions = new Set([guide, drawer, left.api]);
+  const initialization = finiteSelectedGuideWriterRemainderTerms(ts, left, right, exceptions, collected);
+  return { status: 'conditional', decoder, fresh, qualification, initialization,
+    projected: new Map([[guidePath, { source: guide, previous: oldGuide, text: projectedText }]]),
+    origin: { status: 'conditional', domain: 'authenticated-selected-guide-activation-and-retained-R',
+      activation, accepted, prepare, adopt, api: fresh.strictCall, drawer: buildCall },
+    outstanding: ['successful original DEFAULT private collection and strict complete remainder',
+      'installed package/vendor/generated client and exact locked producer/history assumptions',
+      'source activation is not a browser, paid PNG, natural-language or image-quality acceptance'] };
+}
+
 function finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext, collected) {
   const left = finiteSelectedGuideSupplementaryTerms(ts, context, { ui: false });
   const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext, { ui: false });
@@ -9069,8 +9246,21 @@ function finiteSelectedGuideSourceModel(ts, context, rollbackContext, collected)
   const oldContract = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/agent/workspace-guide-contract.ts'));
   const assets = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/assets/presentation-asset.ts'));
   if (oldContract?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readWorkspaceGuidePayloadWithSelectedImage')
-    && assets?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readSelectedImageGenerationChild'))
+    && assets?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readSelectedImageGenerationChild')) {
+    // The real reader closure need not include the HTTP/UI sources. Select
+    // this alternative from its captured Worker consumer, then prove both
+    // supplemental suppliers inside it; this occurrence grants no authority.
+    const guide = context.program.getSourceFile(resolve(context.root, 'apps/agent-worker/src/workspace-guide.ts'));
+    let activation = false;
+    const visit = node => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'prepareSelectedImageGeneration') activation = true;
+      ts.forEachChild(node, visit);
+    };
+    if (guide) visit(guide);
+    if (activation)
+      return finiteSelectedGuideWriterSourceModel(ts, context, rollbackContext, collected);
     return finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext, collected);
+  }
   const residual = finiteSelectedGuideSourceResidual(ts, context, rollbackContext, collected);
   const origin = finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, residual);
   if (origin.status !== 'conditional') throw { reason: 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', node: origin.node };

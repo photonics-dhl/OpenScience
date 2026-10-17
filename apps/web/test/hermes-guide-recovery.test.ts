@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { resultFromTask, selectRestorableGuide, buildGuidePresentationContext, selectedGuidePresentationContext, applyFirstImageReady } from '../components/hermes/HermesAssistantDrawer';
 import type { AgentTaskView } from '../lib/api';
 import * as imageObserver from '../components/hermes/HermesFirstImageResult';
 import { currentFirstImageGoal, loadPendingFirstImageSubmission, savePendingFirstImageSubmission, loadPendingSelectedImageSubmission, savePendingSelectedImageSubmission } from '../lib/hermes/draft-state';
 import { parseWorkspaceGuidePayload } from '@openscience/domain/workspace-guide-contract';
+
+function publishedReaderWriter(): typeof buildGuidePresentationContext {
+  const source = execFileSync('git', ['show', '2877a739d39f3b6fe304096b7c8a9ad01ee6b76c:apps/web/components/hermes/HermesAssistantDrawer.tsx'],
+    { cwd: fileURLToPath(new URL('../../../', import.meta.url)), encoding: 'utf8' });
+  const ast = ts.createSourceFile('published-reader.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const retained = ['legacyGuidePresentationContext', 'buildGuidePresentationContext'].map(name => {
+    const node = ast.statements.find(value => ts.isFunctionDeclaration(value) && value.name?.text === name);
+    if (!node) throw new Error(`Published reader function missing: ${name}`);
+    return node.getText(ast);
+  }).join('\n');
+  const code = ts.transpileModule(retained, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const module = { exports: {} as { buildGuidePresentationContext: typeof buildGuidePresentationContext } };
+  new Function('exports', code)(module.exports);
+  return module.exports.buildGuidePresentationContext;
+}
 
 it('reads only a server-bound normal child alongside the unchanged selected proposal', () => {
   const guide = '10000000-0000-4000-8000-000000000011', child = '10000000-0000-4000-8000-000000000012';
@@ -54,8 +72,9 @@ describe('exact image reference in the actual guide writer', () => {
   const input = { actorId: 'u', goal: '把左边箭头画细一点', presentation: { researchObjectId: 'ro', versionId: 'v' },
     imageContext: { actorId: 'u', researchObjectId: 'ro', versionId: 'v', selectedImageAssetId: b,
       images: [{ assetId: a, label: 'Mechanism' }, { assetId: b, label: 'Overview' }] } };
-  it('keeps the production R writer legacy and the capable writer exact', () => {
-    expect(buildGuidePresentationContext(input)).toEqual({ presentation: input.presentation });
+  it('keeps the published R writer legacy and uses the actual W binding for the exact image', () => {
+    expect(publishedReaderWriter()(input)).toEqual({ presentation: input.presentation });
+    expect(buildGuidePresentationContext(input)).toEqual({ presentation: { ...input.presentation, selectedImageAssetId: b } });
     expect(selectedGuidePresentationContext(input)).toEqual({ presentation: { ...input.presentation, selectedImageAssetId: b } });
   });
   it('lets an explicit unique name or displayed ordinal win over the active image', () => {

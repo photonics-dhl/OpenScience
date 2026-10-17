@@ -149,7 +149,7 @@ function legacyGuidePresentationContext(input: GuidePresentationInput): GuidePre
 }
 /** Actual production R emitter. W changes this binding only after the capable readers are deployed. */
 export function buildGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {
-  return legacyGuidePresentationContext(input);
+  return selectedGuidePresentationContext(input);
 }
 /** Capable adjacent-writer implementation; not called by the production R emitter. */
 export function selectedGuidePresentationContext(input: GuidePresentationInput): GuidePresentationResolution {

@@ -498,7 +498,7 @@ export async function workspaceGuideHandler(
   if (!ownerTask || ownerTask.kind !== 'workspace.guide') throw new Error('workspace.guide 服务端任务上下文无效');
   const userId = ownerTask.session.userId;
   if (payload.context.presentation?.selectedImageAssetId) {
-    if (!nativeAgent || !deps.storage || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt! < 1)
+    if (!nativeAgent || !deps.storage || !deps.redis || !deps.mailer || !Number.isSafeInteger(task.executionAttempt) || task.executionAttempt! < 1)
       throw new Error('[blocked] Native selected-image host is unavailable');
     const storage = deps.storage;
     const authority = await deps.prisma.$transaction(tx => requireNativeAgentExecutionAuthority(tx,
@@ -569,6 +569,7 @@ export async function workspaceGuideHandler(
           ...(!question ? { storyboardReview: actual.review, nativeIllustration: actual.nativeAgent } : {}) } as unknown as Prisma.InputJsonObject } });
       if (update.count !== 1) throw new Error('[blocked] Selected-image result changed');
     }, { isolationLevel: 'Serializable' });
+    if (accepted) await prepareSelectedImageGeneration({ ...deps, storage, redis: deps.redis, mailer: deps.mailer }, { userId, guideTaskId: task.id, executionAttempt: task.executionAttempt! });
     return { summary, nextSteps: [], needsMoreInformation: question ? actual.reply.kind === 'question' : !accepted,
       selectedImageReference: workspaceSelectedImageDraftSource(selected.binding), ...(selectedImageDraft ? { selectedImageDraft } : {}),
       sourceMapRef: narrative.reference, selectedImageReply, ...(!question ? { storyboardReview: actual.review } : {}) };
