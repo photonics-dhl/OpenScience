@@ -10,7 +10,12 @@ describe('selected-image production intent', () => {
     '请把文字“不要”移到右下角', 'Change the left arrow, but do not publish anything',
     '把图中左边的箭头改细一点并解释原因',
     'Change the left arrow and explain why', '把图中左边的箭头改细一点',
-    '把“MQED”移到右下角'])('accepts an explicit current imperative: %s', goal => {
+    '把“MQED”移到右下角', '请把第二张图换成水彩风格', '把当前图片的风格改成钢笔淡彩',
+    '请把第二张图换成“水彩”风格', '把第二张图换成 editorial 风格', '重画第二张图',
+    '把当前图片的风格改成 editorial', '把当前图片的风格改成“钢笔淡彩”',
+    '修改这张图的右上角', '为我们重画第二张图的右上角', '请给我把左边箭头改细一点',
+    '将图中左边的箭头改细一点', '请把右上角图例移动到左下角',
+    '修改这张图右上角的箭头，将它改成向右'])('accepts an explicit current imperative: %s', goal => {
     expect(selectedImageProductionIntent(goal)).toBe(true);
   });
   it.each(['Can you explain how to modify the arrow?', 'Tell me how to redraw this', 'Suggest a plan to improve the image',
@@ -27,12 +32,18 @@ describe('selected-image production intent', () => {
     '把图中左边的箭头改细一点后告诉我原因', '把标签“改细一点”告诉我',
     '把改细一点', '把“”改细一点', '请把左边箭头千万别改细', '把箭头不改细',
     '给我示范把箭头改细一点', 'Modify the arrow but do not redraw it',
-    '将来再把箭头改细一点'])('does not turn discussion into production: %s', goal => {
+    '将来再把箭头改细一点', '以后把第二张图换成水彩风格', '下次修改这张图的右上角',
+    '如果需要，把第二张图换成水彩风格', '不要把第二张图换成水彩风格',
+    '解释如何把第二张图换成水彩风格', '修改这张图的右上角可以吗？',
+    '修改这张图的右上角后告诉我原因', '修改这张图之前先看论文',
+    '修改这张图的方法有几种', '把第二张图换成水彩风格的方法发给我',
+    '把当前图片的风格改成钢笔淡彩的方法发给我', '修改这张图的右上角有几种做法',
+    '把第二张图换成水彩风格要多久', '修改这张图的右上角的教程寄给我',
+    '把当前图片的风格改成钢笔淡彩有几种方法',
+    '“把第二张图换成水彩风格”'])('does not turn discussion into production: %s', goal => {
     expect(selectedImageProductionIntent(goal)).toBe(false);
   });
-  it.each(['给这张图修改左边箭头', '给这张图修改左边箭头并解释原因',
-    '请把第二张图换成水彩风格', '修改这张图的右上角', '为我们重画第二张图的右上角',
-    '请给我把左边箭头改细一点', '将图中左边的箭头改细一点'])(
+  it.each(['给这张图修改左边箭头', '给这张图修改左边箭头并解释原因'])(
     'retains an unsupported complete-argument form without production authority: %s', goal => {
       expect(selectedImageProductionIntent(goal)).toBe(false);
     });

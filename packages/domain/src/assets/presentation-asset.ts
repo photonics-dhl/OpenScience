@@ -35,8 +35,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 const selectedImageChildKey = (guideId: string) => `selected-image:${guideId}:scene:0`;
 
-/** Server-only retained source reader. No raw proposal or caller approval is accepted. */
-export async function requireSelectedImageGuideProduction(tx: Prisma.TransactionClient, input: { userId: string; guideTaskId: string; executionAttempt?: number }) {
+/** Authentic saved proposal, not permission to create or charge another task. */
+async function readSelectedImageGuideProposal(tx: Prisma.TransactionClient, input: { userId: string; guideTaskId: string; executionAttempt?: number }) {
   function fail(): never { throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production source changed'); }
   const task = await tx.agentTask.findUnique({ where: { id: input.guideTaskId } });
   if (!task || task.deletedAt || task.kind !== 'workspace.guide' || !['succeeded', 'failed', 'running'].includes(task.status)) fail();
@@ -60,7 +60,7 @@ export async function requireSelectedImageGuideProduction(tx: Prisma.Transaction
   incoming.summary = reply.summary; incoming.nextSteps = []; incoming.needsMoreInformation = reply.kind !== 'proposal' && reply.kind !== 'explanation';
   incoming.selectedImageReference ??= workspaceSelectedImageDraftSource(saved.selectedImageContext as unknown as SelectedImageBinding);
   nativeAgentTerminalResult(task, 'succeeded', incoming);
-  if (reply.kind !== 'proposal' || !selectedImageProductionIntent(payload.goal)) return undefined;
+  if (reply.kind !== 'proposal') return undefined;
   const draft = readWorkspaceSelectedImageDraft(saved.selectedImageDraft);
   const document = parseStoryboardDocument(draft.document, draft.source.sourceClaimIds, 'image');
   const source = await requireSelectedImageSource(tx, { userId: input.userId, researchObjectId: scope.researchObjectId,
@@ -84,10 +84,16 @@ export async function requireSelectedImageGuideProduction(tx: Prisma.Transaction
   return { task, session, payload, scope: { researchObjectId: scope.researchObjectId, versionId: scope.versionId }, source, document, settings, review, native };
 }
 
+/** New production still requires the original user's current imperative. */
+export async function requireSelectedImageGuideProduction(tx: Prisma.TransactionClient, input: { userId: string; guideTaskId: string; executionAttempt?: number }) {
+  const authority = await readSelectedImageGuideProposal(tx, input);
+  return authority && selectedImageProductionIntent(authority.payload.goal) ? authority : undefined;
+}
+
 export async function requireSelectedImageGuideParent(tx: Prisma.TransactionClient,
   input: { userId: string; guideTaskId: string; executionAttempt?: number }, expected?: { contentHash: string; objectKey: string }) {
-  const authority = await requireSelectedImageGuideProduction(tx, input);
-  if (!authority) throw new PresentationAssetError('VALIDATION_ERROR', 'Selected guide does not authorize image production');
+  const authority = await readSelectedImageGuideProposal(tx, input);
+  if (!authority) throw new PresentationAssetError('VALIDATION_ERROR', 'Selected guide has no authentic image proposal');
   const asset = await tx.presentationAsset.findUnique({ where: { id: input.guideTaskId } });
   const p = recordValue(asset?.provenance);
   const links = await tx.presentationAssetClaim.findMany({ where: { presentationAssetId: input.guideTaskId } });
@@ -655,6 +661,8 @@ export async function submitPresentationGeneration(deps: AgentDeps & HermesVideo
       if (parentOwner?.kind === 'workspace.guide' || recordValue(lockedParent.provenance).nativeIllustration !== undefined) {
         if (parentOwner?.kind !== 'workspace.guide') throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image parent has no original guide owner');
         const selected = await requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: parentOwner.id, executionAttempt: parentOwner.executionAttempt });
+        if (!selectedImageProductionIntent(selected.payload.goal))
+          throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production intent is required for a new child');
         if (selected.asset.status !== 'approved' || payload.sceneImage!.sceneIndex !== 0
           || input.idempotencyKey !== selectedImageChildKey(parentOwner.id)
           || !isDeepStrictEqual(payload.sourceClaimIds, selected.source.binding.sourceClaimIds)

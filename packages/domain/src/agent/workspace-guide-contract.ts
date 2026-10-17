@@ -24,7 +24,7 @@ export function selectedImageProductionIntent(goal: string): boolean {
   const text = masked.trim().replace(/\s+/gu, ' ');
   if (!text) return false;
   const command = text.replace(/^(?:(?:please|can you|could you|would you|help me|i want you to|i need you to)\s+)+/iu, '')
-    .replace(/^(?:请(?:你|帮我)?|帮我|麻烦(?:你)?|劳驾|我想(?:请你|让你)?|我需要你?|我希望你?)\s*/u, '');
+    .replace(/^(?:(?:请(?:你|帮我)?|给我|帮我|麻烦(?:你)?|劳驾|为我们|我想(?:请你|让你)?|我需要你?|我希望你?)\s*)+/u, '');
   // Only this explicit trailing coordination is ancillary; ambiguous attachment stays unsupported.
   const primary = command.replace(/(?:并解释原因|\s+and explain why)[。.!！]?$/iu, '')
     .replace(/[，,；;]\s*不要修改其他内容[。！!]?$/u, '')
@@ -32,15 +32,30 @@ export function selectedImageProductionIntent(goal: string): boolean {
   // Polarity belongs to the whole unquoted request, including its object span.
   if (/(?:如果|假如|不|别|勿|无需)/u.test(primary)
     || /\b(?:if|unless|whether|not|never|don't|no need to)\b/iu.test(primary)) return false;
+  if (/(?:将来|以后|稍后|明天|下次|之后再|之前|可以吗|能否|能不能|告诉我|是什么|[？?])/u.test(primary) && /[\p{Script=Han}]/u.test(primary)) return false;
   if (/(?:解释|说明|讲解|讨论|建议|介绍|分析|为什么|为何|如何|怎么|是否|方案|计划)/u.test(primary)
     || /\b(?:explain|explanation|advice|advise|suggest|suggestion|discuss|discussion|how|plan|proposal|outline)\b/iu.test(primary)) return false;
   if (/^(?:不要|别|无需|不用|不需要|先不|暂不|仅讨论|只讨论|只解释|只需解释|只要方案|是否|为什么|为何|如何|怎么|解释|讨论|告诉我)/u.test(primary)
     || /^(?:do not|don't|no need|not yet|only explain|plan only|explain|describe|discuss|suggest|advise|tell me|plan|should|why|how|what)\b/iu.test(primary)
     || /^(?:generate|prepare|make|write)\s+(?:(?:a|the)\s+)?(?:plan|proposal|outline)\b/iu.test(primary)) return false;
   if (/^(?:modify|edit|change|redraw|regenerate|generate|draw|improve|clarify|remove|add|move|replace|make)\b/iu.test(primary)) return true;
-  // A complete object-fronted form binds the actual terminal predicate outside
-  // its object. Direct/recipient-head forms with unbounded complements do not fall back.
-  const edit = /^把([^，。；！？,;.!?]+?)(?:(?:改细|改粗|画细|画粗)(?:一点|一些|些)?|(?:移到|移动到)(?:左上角|右上角|左下角|右下角|左侧|右侧|上方|下方|中央|中间))[。！!]?$/u.exec(primary);
+  // Bind the WHOLE primary action, not an edit phrase embedded in another
+  // request. A region is a complete selected-image target. A style result is
+  // a nominal identifier, not a relative clause (的...) or a delivery tail.
+  // Unsupported wording is retained verbatim for Hermes; it grants no spend.
+  const image = '(?:这(?:张|幅)(?:图片|配图|图)|该图|当前(?:图片|配图|图)|选中(?:的)?(?:图片|配图|图)|第[一二三四五六七八九十百\\d]+张(?:图片|配图|图))';
+  const region = '(?:左上角|右上角|左下角|右下角|左侧|右侧|上方|下方|中央|中间)';
+  const direction = '(?:向左|向右|向上|向下)';
+  const styleName = '(?:\\uFFFC|(?:(?!的)[\\p{L}\\p{N}_·-])+)';
+  // An explicit style object may omit 风格 only with a quoted name, an ASCII
+  // catalogue identifier, or a marked Chinese medium/style noun. It cannot
+  // consume an arbitrary clause after an otherwise valid style description.
+  const styleResult = '(?:\\uFFFC|[A-Za-z][A-Za-z0-9_-]*|(?:(?!的)[\\p{Script=Han}\\p{N}_·-])+(?:风格|画|彩|绘|稿|墨|主义|艺术))';
+  const wholeImageEdit = new RegExp(`^(?:重画|重绘|优化)${image}[。！!]?$`, 'u');
+  const regionEdit = new RegExp(`^(?:修改|重画|重绘|调整|优化)${image}(?:的)?${region}(?:(?:的)?箭头[，,]\\s*(?:把|将)它改成${direction})?[。！!]?$`, 'u');
+  const styleEdit = new RegExp(`^(?:把|将)(?:${image}\\s*(?:换成|改成|更换为|调整为)\\s*${styleName}\\s*风格|${image}(?:的)?风格\\s*(?:换成|改成|更换为|调整为)\\s*${styleResult})[。！!]?$`, 'u');
+  if (wholeImageEdit.test(primary) || regionEdit.test(primary) || styleEdit.test(primary)) return true;
+  const edit = /^(?:把|将)([^，。；！？,;.!?]+?)(?:(?:改细|改粗|画细|画粗)(?:一点|一些|些)?|(?:移到|移动到)(?:左上角|右上角|左下角|右下角|左侧|右侧|上方|下方|中央|中间))[。！!]?$/u.exec(primary);
   return Boolean(edit?.[1]?.trim());
 }
 

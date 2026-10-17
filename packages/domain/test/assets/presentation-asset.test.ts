@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import type { AuditLog, Prisma } from '@prisma/client';
 import { createFakePrisma, seedUser } from '../helpers/fakes';
 import { claimAgentTask, createAgentSession, submitAgentTask } from '../../src/agent/agent';
@@ -10,6 +14,7 @@ import { presentationClaimContent, presentationEvidenceIdentity, readVisualNarra
 import { requireNativeVideoStoryboard } from '../../src/assets/video';
 import { requireSelectedImageSource, requireSceneImageParent } from '../../src/assets/scene-image';
 import { describeIllustrationBrief, type IllustrationBrief } from '../../src/assets/illustration-brief';
+import { workspaceSelectedImageDraftSource } from '../../src/agent/workspace-guide-contract';
 import {
   parsePresentationGenerationPayload,
   listPresentationAssets,
@@ -18,6 +23,9 @@ import {
   submitExistingSceneImageReview,
   requireManualSceneImageReviewReceipt,
   transitionPresentationAsset,
+  adoptSelectedImageGuide,
+  requireSelectedImageGuideParent,
+  readSelectedImageGenerationChild,
 } from '../../src/assets/presentation-asset';
 
 const USER = '10000000-0000-4000-8000-000000000001';
@@ -583,6 +591,165 @@ async function nativeLocalFixture(mode: 'historical-external' | 'marked-external
     storyboard: { ...payload.storyboard, locale: 'en' as const, output: 'video' as const, baseAssetId: ASSET, revisionSceneIndex: 1 }, idempotencyKey: 'new-local-' + mode };
   return { ...f, nativeAgentRuntime: runtime, runtime, parent, parentTask, input, hash };
 }
+
+// These are real saved Domain rows and real source/CP validators; no model or
+// Provider runs. The original Chinese request is present before any saved result.
+async function selectedGuideProposalFixture(goal: string, retainedParent = false) {
+  const f = await selectedImageFixture();
+  const source = await requireSelectedImageSource(f.prisma, f.selected);
+  const session = await createAgentSession(f as never, { userId: USER, researchObjectId: RO, kind: 'workspace.guide' });
+  const payload = { goal, locale: 'zh', route: 'research-object-edit', target: null,
+    context: { tasks: [], researchObjects: [], presentation: { researchObjectId: RO, versionId: VERSION, selectedImageAssetId: f.image.id } } };
+  const submitted = await submitAgentTask(f as never, { userId: USER, sessionId: session.id, kind: 'workspace.guide',
+    payload, idempotencyKey: 'chinese-guide', dispatch: false });
+  const guide = f.db.agentTasks.find(row => row.id === submitted.id)!;
+  const document = parseStoryboardDocument({ schemaVersion: 1, title: 'Selected transfer',
+    narrative: { mainMessage: f.db.claimNodes[0].statement, audience: 'Researchers' },
+    scenes: [structuredClone(f.parent.provenance.storyboardDocument.scenes[1])] }, [CLAIM], 'image');
+  const initial = initialNativeAgentExecution(f.runtime, 'paper-illustration')!;
+  const checkpoint = { ...structuredClone(f.parentTask.result.nativeAgentExecution.checkpoint), taskId: guide.id };
+  const review = { ...structuredClone(f.parentTask.result.storyboardReview), requestId: guide.id,
+    candidateHash: f.hash(document), sourceEvidenceIdentity: source.binding.sourceEvidenceIdentity };
+  const native = { ...f.runtime, planToolCallId: 'selected-plan', reviewToolCallId: 'selected-review' };
+  const reply = { kind: 'proposal', sourceBinding: source.binding, target: checkpoint.target,
+    responseHash: checkpoint.responseHash, summary: 'Prepared the requested private revision.', reviewToolCallId: native.reviewToolCallId };
+  Object.assign(guide, { status: 'succeeded', executionAttempt: 1, progress: 100, result: {
+    ...initial, nativeAgentExecution: { ...initial.nativeAgentExecution, checkpoint },
+    selectedImageContext: source.binding, selectedImageReply: reply,
+    selectedImageDraft: { status: 'private-proposal', source: workspaceSelectedImageDraftSource(source.binding), document },
+    sourceMapRef: source.source.reference, storyboardReview: review, nativeIllustration: native,
+    summary: reply.summary, nextSteps: [], needsMoreInformation: false } });
+  const settings = { locale: 'zh', style: source.settings.style,
+    instruction: 'Revise only the selected image. Read the complete userRequest and original scientific brief in context.selectedImage.',
+    output: 'image', narrative: true, narrativeSceneLimit: 1 };
+  if (retainedParent) {
+    f.db.presentationAssets.push({ id: guide.id, researchObjectId: RO, versionId: VERSION, kind: 'interactive_html', status: 'approved', deletedAt: null,
+      contentHash: '9'.repeat(64), objectKey: 'private/saved-guide.html', label: 'presentation_not_evidence',
+      generator: 'OpenScience Hermes storyboard planner', generatorVersion: '1', createdAt: new Date(), updatedAt: new Date(),
+      provenance: { source: 'verified_claims', subtype: 'sourced_storyboard', taskId: guide.id,
+        sourceEvidenceIdentity: source.binding.sourceEvidenceIdentity, sourceEvidenceIds: source.evidence.map(row => row.id),
+        sourceClaimIds: source.binding.sourceClaimIds, storyboardDocument: document, storyboardSettings: settings,
+        illustrationReview: review, nativeIllustration: native, contentType: 'text/html; charset=utf-8' } });
+    f.db.presentationAssetClaims.push({ presentationAssetId: guide.id, claimId: CLAIM, researchObjectId: RO, versionId: VERSION });
+  }
+  const storage = { putObject: vi.fn(async () => {}) };
+  const deps = { ...f, storage, sceneImageEnabled: true, nativeSceneImageEnabled: true,
+    renderStoryboard: () => Buffer.from('<html>Selected transfer</html>') };
+  return { ...f, deps, guide, input: { userId: USER, guideTaskId: guide.id }, document };
+}
+
+// Real complete modules: deployed 2877 reader + old contract, and the new
+// reader-only stage + that SAME old contract. No synthetic classifier overlay.
+async function selectedGuideReaderStage(stage: 'published' | 'reader-only') {
+  const root = fileURLToPath(new URL('../../../..', import.meta.url));
+  const oldSource = (path: string) => execFileSync('git', ['show', `2877a739d39f3b6fe304096b7c8a9ad01ee6b76c:${path}`], { cwd: root, encoding: 'utf8' });
+  async function load(source: string, url: URL, oldContract?: unknown) {
+    const ast = ts.createSourceFile(url.pathname, source, ts.ScriptTarget.ES2022, true);
+    const imports = new Map<string, unknown>();
+    for (const statement of ast.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue;
+      const name = statement.moduleSpecifier.text;
+      imports.set(name, name === '../agent/workspace-guide-contract' ? oldContract
+        : await vi.importActual(name.startsWith('.') ? fileURLToPath(new URL(`${name.replace(/\.js$/u, '')}.ts`, url)) : name));
+    }
+    const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const module = { exports: {} };
+    new Function('require', 'exports', code)((name: string) => {
+      if (!imports.has(name)) throw new Error(`Unexpected selected-guide stage import: ${name}`);
+      return imports.get(name);
+    }, module.exports);
+    return module.exports;
+  }
+  const contractPath = 'packages/domain/src/agent/workspace-guide-contract.ts';
+  const contract = await load(oldSource(contractPath), new URL('../../src/agent/workspace-guide-contract.ts', import.meta.url));
+  const assetPath = 'packages/domain/src/assets/presentation-asset.ts', assetUrl = new URL('../../src/assets/presentation-asset.ts', import.meta.url);
+  return await load(stage === 'published' ? oldSource(assetPath) : readFileSync(assetUrl, 'utf8'), assetUrl, contract) as typeof import('../../src/assets/presentation-asset');
+}
+
+describe('selected Chinese guide admission and retained reading', () => {
+  it.each(['请把第二张图换成水彩风格', '修改这张图的右上角', '请把右上角图例移动到左下角'])(
+    'adopts the exact current Chinese request once: %s', async goal => {
+      const f = await selectedGuideProposalFixture(goal);
+      const original = structuredClone(f.image), receipt = structuredClone(f.guide.result), payload = structuredClone(f.guide.payload);
+      const debits = f.db.usageLedger.filter(row => row.delta < 0).length;
+      const child = await adoptSelectedImageGuide(f.deps as never, f.input);
+      expect(child?.id).toBeTruthy();
+      expect((await adoptSelectedImageGuide(f.deps as never, f.input))?.id).toBe(child!.id);
+      expect(f.db.agentTasks.filter(row => row.idempotencyKey === `selected-image:${f.guide.id}:scene:0`)).toHaveLength(1);
+      expect(f.db.usageLedger.filter(row => row.delta < 0)).toHaveLength(debits + 1);
+      expect(f.guide.payload).toEqual(payload); expect(f.guide.result).toEqual(receipt); expect(f.image).toEqual(original);
+      expect((await readSelectedImageGenerationChild(f.prisma, f.input))?.id).toBe(child!.id);
+    });
+  it('reads an authentic saved parent without reinterpreting its original wording', async () => {
+    const f = await selectedGuideProposalFixture('请把第二张图换成水彩风格', true);
+    const before = structuredClone(f.db.usageLedger), tasks = f.db.agentTasks.length;
+    expect((await requireSelectedImageGuideParent(f.prisma, f.input)).asset.id).toBe(f.guide.id);
+    expect(f.db.usageLedger).toEqual(before); expect(f.db.agentTasks).toHaveLength(tasks);
+    expect(f.deps.storage.putObject).not.toHaveBeenCalled();
+  });
+  it('requires the reader-only stage before broader Chinese writer admission and preserves saved child recovery', async () => {
+    const f = await selectedGuideProposalFixture('请把第二张图换成水彩风格');
+    const child = await adoptSelectedImageGuide(f.deps as never, f.input);
+    expect(child).toBeDefined();
+    const published = await selectedGuideReaderStage('published');
+    await expect(published.readSelectedImageGenerationChild(f.prisma, f.input)).rejects.toThrow('does not authorize image production');
+    const reader = await selectedGuideReaderStage('reader-only');
+    const ledger = structuredClone(f.db.usageLedger), tasks = f.db.agentTasks.length;
+    expect((await reader.readSelectedImageGenerationChild(f.prisma, f.input))?.id).toBe(child!.id);
+    expect(await reader.adoptSelectedImageGuide(f.deps as never, f.input)).toBeUndefined();
+    expect(f.db.usageLedger).toEqual(ledger); expect(f.db.agentTasks).toHaveLength(tasks);
+  });
+  it('does not turn an authentic saved-parent read into fresh admission on the reader-only stage', async () => {
+    const f = await selectedGuideProposalFixture('请把第二张图换成水彩风格', true);
+    const reader = await selectedGuideReaderStage('reader-only');
+    const ledger = structuredClone(f.db.usageLedger), tasks = f.db.agentTasks.length;
+    expect((await reader.requireSelectedImageGuideParent(f.prisma, f.input)).asset.id).toBe(f.guide.id);
+    expect(await reader.adoptSelectedImageGuide(f.deps as never, f.input)).toBeUndefined();
+    await expect(reader.submitPresentationGeneration(f.deps as never, { userId: USER, researchObjectId: RO, versionId: VERSION,
+      kind: 'image', sourceClaimIds: [CLAIM], sceneImage: { storyboardAssetId: f.guide.id, sceneIndex: 0 },
+      idempotencyKey: `selected-image:${f.guide.id}:scene:0` })).rejects.toThrow('production intent is required');
+    expect(f.db.usageLedger).toEqual(ledger); expect(f.db.agentTasks).toHaveLength(tasks);
+  });
+  it.each(['actor', 'ro', 'version', 'asset', 'content', 'own-null', 'malformed', 'checkpoint', 'review'])(
+    'refuses changed saved %s authority without a task or debit', async change => {
+      const f = await selectedGuideProposalFixture('请把第二张图换成水彩风格', true);
+      const input = { ...f.input };
+      if (change === 'actor') input.userId = ASSET;
+      if (change === 'ro') f.guide.payload.context.presentation.researchObjectId = ASSET;
+      if (change === 'version') f.guide.payload.context.presentation.versionId = ASSET;
+      if (change === 'asset') f.guide.payload.context.presentation.selectedImageAssetId = ASSET;
+      if (change === 'content') f.image.contentHash = 'f'.repeat(64);
+      if (change === 'own-null') f.guide.payload.context.presentation = null;
+      if (change === 'malformed') f.guide.payload.context.presentation.selectedImageAssetId = 'not-an-asset';
+      if (change === 'checkpoint') f.guide.result.nativeAgentExecution.checkpoint.responseHash = '0'.repeat(64);
+      if (change === 'review') f.guide.result.storyboardReview.candidateHash = '0'.repeat(64);
+      const ledger = structuredClone(f.db.usageLedger), tasks = f.db.agentTasks.length;
+      await expect(requireSelectedImageGuideParent(f.prisma, input)).rejects.toThrow();
+      await expect(adoptSelectedImageGuide(f.deps as never, input)).rejects.toThrow();
+      expect(f.db.usageLedger).toEqual(ledger); expect(f.db.agentTasks).toHaveLength(tasks);
+    });
+  it.each(['以后把第二张图换成水彩风格', '不要把第二张图换成水彩风格', '解释如何把第二张图换成水彩风格',
+    '修改这张图的方法有几种', '把第二张图换成水彩风格的方法发给我',
+    '把当前图片的风格改成钢笔淡彩有几种方法'])(
+    'does not admit a proposed draft for a nonproduction request: %s', async goal => {
+      const f = await selectedGuideProposalFixture(goal);
+      const ledger = structuredClone(f.db.usageLedger), tasks = f.db.agentTasks.length;
+      expect(await adoptSelectedImageGuide(f.deps as never, f.input)).toBeUndefined();
+      expect(f.db.usageLedger).toEqual(ledger); expect(f.db.agentTasks).toHaveLength(tasks);
+      expect(f.db.presentationAssets.some(asset => asset.id === f.guide.id)).toBe(false);
+      expect(f.deps.storage.putObject).not.toHaveBeenCalled();
+    });
+  it.each(['question', 'explanation'])(
+    'leaves the existing Native %s path without a generated child', async kind => {
+      const f = await selectedGuideProposalFixture('修改这张图的右上角');
+      Object.assign(f.guide.result.selectedImageReply, { kind, replyToolCallId: 'selected-clarification' });
+      Reflect.deleteProperty(f.guide.result, 'selectedImageDraft');
+      const ledger = structuredClone(f.db.usageLedger), tasks = f.db.agentTasks.length;
+      expect(await adoptSelectedImageGuide(f.deps as never, f.input)).toBeUndefined();
+      expect(f.db.usageLedger).toEqual(ledger); expect(f.db.agentTasks).toHaveLength(tasks);
+      expect(f.deps.storage.putObject).not.toHaveBeenCalled();
+    });
+});
 
 describe('ordinary Native video revision parent contract', () => {
   it.each([['marked-external', 'full'], ['marked-external', 'selected'], ['marked-native', 'full'], ['marked-native', 'selected']] as const)(
