@@ -64,3 +64,71 @@ describe('getUsageSnapshot 用户侧聚合', () => {
   });
 
 });
+
+describe('trusted persisted level snapshot', () => {
+  it('reads persisted level instead of extra caller properties while preserving signed credit totals', async () => {
+    const { prisma, db } = createFakePrisma();
+    const user = seedUser(db, { level: 'pro' });
+    const at = new Date();
+    db.quotaPolicies.push(
+      { id: 'global', scope: 'global', scopeKey: null, resource: 'ai_credit', limitValue: 50, createdAt: at, updatedAt: at },
+      { id: 'pro', scope: 'user_level', scopeKey: 'pro', resource: 'ai_credit', limitValue: 700, createdAt: at, updatedAt: at },
+      { id: 'team', scope: 'user_level', scopeKey: 'team', resource: 'ai_credit', limitValue: 1300, createdAt: at, updatedAt: at },
+    );
+    await prisma.$transaction(async tx => {
+      await recordEntry(tx, { userId: user.id, resource: 'ai_credit', delta: 900, kind: 'admin_topup' });
+      await recordEntry(tx, { userId: user.id, resource: 'ai_credit', delta: -120, kind: 'consume' });
+    });
+    const before = structuredClone(db.usageLedger);
+    const untrustedExtra = { prisma, userLevel: 'team' };
+    const credit = (await getUsageSnapshot(untrustedExtra, user.id)).user.find(item => item.resource === 'ai_credit');
+    expect(credit).toMatchObject({ scope: 'user_level', limit: 700, used: 120, remaining: 780, allowed: true });
+    user.level = 'team';
+    expect((await getUsageSnapshot({ prisma }, user.id)).user.find(item => item.resource === 'ai_credit'))
+      .toMatchObject({ limit: 1300, used: 120, remaining: 780 });
+    expect(db.usageLedger).toEqual(before);
+  });
+
+  it('keeps workspace priority, then persisted level, then global fallback', async () => {
+    const { prisma, db } = createFakePrisma();
+    seedUser(db, { level: 'pro' });
+    const at = new Date();
+    for (const id of ['ws-own', 'ws-level']) {
+      db.workspaces.push({ id, type: 'team', name: id, ownerId: 'user-1', status: 'active', createdAt: at, updatedAt: at });
+      db.memberships.push({ id: `m-${id}`, workspaceId: id, userId: 'user-1', role: 'owner', createdAt: at, updatedAt: at });
+    }
+    db.quotaPolicies.push(
+      { id: 'global-storage', scope: 'global', scopeKey: null, resource: 'storage_bytes', limitValue: 100, createdAt: at, updatedAt: at },
+      { id: 'pro-storage', scope: 'user_level', scopeKey: 'pro', resource: 'storage_bytes', limitValue: 600, createdAt: at, updatedAt: at },
+      { id: 'workspace-storage', scope: 'workspace', scopeKey: 'ws-own', resource: 'storage_bytes', limitValue: 1000, createdAt: at, updatedAt: at },
+      { id: 'global-upload', scope: 'global', scopeKey: null, resource: 'upload_bytes_month', limitValue: 900, createdAt: at, updatedAt: at },
+    );
+    for (const workspaceId of ['ws-own', 'ws-level']) {
+      await prisma.$transaction(tx => recordEntry(tx, { workspaceId, resource: 'storage_bytes', delta: 300, kind: 'consume' }));
+    }
+    const snap = await getUsageSnapshot({ prisma }, 'user-1');
+    expect(snap.workspaces.find(ws => ws.workspaceId === 'ws-own')?.items.find(item => item.resource === 'storage_bytes'))
+      .toMatchObject({ scope: 'workspace', limit: 1000, used: 300, remaining: 700 });
+    expect(snap.workspaces.find(ws => ws.workspaceId === 'ws-level')?.items.find(item => item.resource === 'storage_bytes'))
+      .toMatchObject({ scope: 'user_level', limit: 600, used: 300, remaining: 300 });
+    expect(snap.workspaces[1].items.find(item => item.resource === 'upload_bytes_month'))
+      .toMatchObject({ scope: 'global', limit: 900, remaining: 900 });
+  });
+
+  it('absent or unmatched persisted level retains global fallback', async () => {
+    const { prisma, db } = createFakePrisma();
+    seedUser(db);
+    seedUser(db, { level: 'unmatched' });
+    const at = new Date();
+    db.quotaPolicies.push({ id: 'global', scope: 'global', scopeKey: null, resource: 'ai_credit', limitValue: 50, createdAt: at, updatedAt: at });
+    for (const user of db.users) {
+      expect((await getUsageSnapshot({ prisma }, user.id)).user.find(item => item.resource === 'ai_credit'))
+        .toMatchObject({ scope: 'global', limit: 50, remaining: 0, allowed: false });
+    }
+  });
+
+  it('does not expose a snapshot for an absent persisted user', async () => {
+    const { prisma } = createFakePrisma();
+    await expect(getUsageSnapshot({ prisma }, 'missing-user')).rejects.toThrow(/用户|user/i);
+  });
+});
