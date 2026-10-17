@@ -3,8 +3,8 @@
 > 精确版本、CI、资产、写权与下一步只见 [Hermes CURRENT](handoff/2026-09-10-hermes-web-image-handoff.md)；历史实施、失败与发布留在 Git 和原回执。
 
 - 图片R2已完成2877→597完整六job CI、唯一备份/原发布及独立after；actual2877/rollback597、三服务RO挂载一致、无journalfailed，服务窗关闭。旧597十张站内观察为历史，不代新2877浏览器或产品验收。
-- 图片selected W唯一generated-client余项P1已由两infra最小纠正，原SameHigh增量0/0/0；真实RED→GREEN、受影响source14/14/两MJS syntax与diff0，原7文件和业务证据未变未重跑。root收完整9path为f50b8aef clean/pushed、源窗关闭；后继须按实际祖先组合/精确pair/CI。最新原始人类要求同步修中文风格/位置，原owner四Domain范围已STARTED，先分离旧reader真实性与新生产准入，原九文件冻结；最终整包High与reader先行发布仍待完成。三入口体验、自然改图/位置理解、PRIVATE proposal与新PNG科学质量费用仍未验，Provider HOLD保持。
-- 视频9645与阅读UI291机械合为2a0f，原High0/0/0/源码冻结；完整38996302423因主job70分钟上限CANCELLED。5siblings/defaultself/actualpair/早期11通过，工具测试无完整终态、65尾项跳过，不能发布。原唯一collector收口、旧RED/原log保留；SameHigh2095已给有界诊断，原owner单natural PASS约0.68s后正跑邻接三例/独立CPU-RSS；SETUP与CI平台差异保留，不盲扩预算/整套重跑。原组合发布包未执行、actual2877不变。UI六Web291已独立跑完整39001330625→2877，唯一UIcollector82340；原8准备载体SameHigh2117零项，通过完整CI后直接原备份发布及五图。视频按届时实际UI祖先再收最小差额/完整CI/发布及唯一私有修订，不等图片W/成本。
+- 图片selected W f50原两infra修复及七冻结文件已收；中文四Domain误把信息请求当生成的P1已修，原两fixture292/292、SameHigh2173零项，收2493 clean/pushed。后继保旧准入reader在291候选准备：原161/161与当前reader/未来writer分区成立，完整sourceModel仍明确UNKNOWN，原SameHigh待审其精确frontier，后继两infra完整有限关系未交付。Provider HOLD、三旅程/位置理解/PNG质量费用仍未验。
+- 视频原2a0f完整CI70分钟取消，旧RED/65尾项跳过保留。有界单例及邻接三例均通过，根因UNKNOWN；原观察写异常P2已闭，workflow observer清理P2已按身份/有界退出纠正，0/7/TERM小控制通过，SameHigh2207零项后收d682 clean/pushed，不重跑重型实验。UI六Web291独立完整39001330625仍进行，soleUI82340；准备High2117零项，完整CI后原一次备份发布及线上五图。视频按实际UI祖先再最小组合/完整CI/发布及唯一私有修订，不等图片W。
 - WAV-only五path与费用预存分离已完成actual2877 source关系、原SameVoiceHigh0/0/0，收9169 clean/pushed；无Domain填费例外或新submitted预存。按当前必要配对发布窗后的实际祖先继续精确pair/CI/发布及原paid-ID恢复、真实ASR/标准TTS；旧1262六job/600仅历史，音质/麦克风/新费用未验，费用生产/回填仍禁。
 - 可信level五path收a595 clean/pushed，34定向/scoped sourceTC0/原High0/0/0；Lint初始化exit2未验，CI/PG/生产未执行。全成本P1、预算与旧点仍OPEN。
 - UI格式writer bf29历史CI成功但未部署，旧功能上线不代新视觉认可；beautiful-notes仅PATTERN_ONLY，不作已审布局前置。
