@@ -3239,7 +3239,7 @@ test('current host message alias rejects changed history and suppliers using act
   });
 });
 
-test('current and exact capable video ingress stop at the bound selected saved-state frontier', async () => {
+test('current and exact capable video ingress locate the authenticated retained tool seed', async () => {
   // Actual597's original prover/fixture established EXTRA_MATERIALIZER_CALLER.
   // This changed contract checks the newly factored ACTUAL entry witness only;
   // it never upgrades the remaining selected-state family to a successful edge.
@@ -3261,13 +3261,99 @@ test('current and exact capable video ingress stop at the bound selected saved-s
     assert.ok(entry.selectedCoreCall.arguments[0].getSourceFile() === file, 'selected argument must belong to the exact actual SourceFile');
     const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
     assert.equal(result.status, 'unknown');
-    assert.equal(result.reason, 'SELECTED_VIDEO_SAVED_STATE_UNPROVEN');
-    assert.equal(result.at.file, 'apps/agent-worker/src/native-agent/illustration-task.ts');
-    assert.equal(result.at.line, file.getLineAndCharacterOfPosition(entry.profile.getStart()).line + 1);
+    assert.equal(result.reason, 'SELECTED_VIDEO_RETAINED_TOOL_SEED_UNPROVEN');
+    const storeSource = input.program.getSourceFile(resolve(input.projectRoot, 'apps/agent-worker/src/native-agent/task-store.ts'));
+    const factory = storeSource.statements.find(node => input.ts.isFunctionDeclaration(node) && node.name?.text === 'createNativeTaskStore');
+    const returned = factory.body.statements.find(input.ts.isReturnStatement);
+    const read = returned.expression.properties.find(node => input.ts.isMethodDeclaration(node) && node.name?.text === 'read');
+    const seed = read.body.statements.filter(input.ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
+      .find(node => node.name?.text === 'cp');
+    assert.ok(seed.getSourceFile() === storeSource, 'seed belongs to the original store SourceFile');
+    assert.ok(input.program.getTypeChecker().getSymbolAtLocation(seed.name)?.valueDeclaration === seed, 'seed belongs to this original checker');
+    assert.equal(result.at.file, 'apps/agent-worker/src/native-agent/task-store.ts');
+    assert.equal(result.at.line, storeSource.getLineAndCharacterOfPosition(seed.getStart()).line + 1);
     assert.ok(!result.proven.includes('materializer-host'));
     assert.ok(!result.proven.includes('host-before-session'));
     assert.equal(result.releaseCompatible, false);
   }
+});
+
+test('selected video source data producers refuse foreign paper claims style and pixels', async t => {
+  const file = 'apps/agent-worker/src/workspace-guide.ts', code = 'SELECTED_VIDEO_SOURCE_DATA_UNKNOWN';
+  const cases = [
+    ['scope-version', 'versionId: selected.binding.versionId, sourceClaimIds: selected.binding.sourceClaimIds', 'versionId: otherVersion, sourceClaimIds: selected.binding.sourceClaimIds'],
+    ['narrative-evidence', '}, scope, selected.evidence);', '}, scope, otherEvidence);'],
+    ['narrative-identity', 'if (narrative.identity !== selected.binding.narrativeSourceIdentity)', 'if (false)'],
+    ['attachment-mime', 'generatedImageReviewAttachment(pixels, selected.binding.contentHash, selected.binding.mimeType)', 'generatedImageReviewAttachment(pixels, selected.binding.contentHash, otherMime)'],
+    ['pixel-hash', 'const pixels = await readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash,', 'const pixels = await readPresentationInput(storage, selected.binding.objectKey, otherHash,'],
+    ['claim-source', 'selected.claims.filter(claim => selected.binding.sceneSourceClaimIds.includes(claim.id))', 'selected.claims.filter(claim => selected.binding.sourceClaimIds.includes(claim.id))'],
+    ['style-source', 'style: selected.settings.style, output:', 'style: otherStyle, output:'],
+    ['reauthorize-pixel-hash', 'const bytes = await readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash,', 'const bytes = await readPresentationInput(storage, selected.binding.objectKey, otherHash,'],
+  ];
+  for (const [name, before, after] of cases) await t.test(name, async () => {
+    const actual = await videoIngressProgram(new Map([[file, text => {
+      text = text.replaceAll('\r\n', '\n'); assert.ok(text.includes(before), name); return text.replace(before, after);
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(actual.ts, actual.program, actual.projectRoot);
+    assert.equal(result.reason, code, name);
+    assert.ok(!result.proven.includes('materializer-host'), name);
+    assert.equal(result.releaseCompatible, false, name);
+  });
+});
+
+test('selected video saved supplier and retained tools refuse substituted state authority and history', async t => {
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts', workspace = 'apps/agent-worker/src/workspace-guide.ts';
+  const session = 'apps/agent-worker/src/native-agent/session.ts', store = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const saved = 'const saved = await store.read();';
+  // Actual source supplier mutations use the real existing tool definitions.
+  // They are not assertions that such a checkpoint exists online, nor APP runs.
+  const injected = tools => "const saved = { turns: [{ request: { options: { tools: " + tools
+    + ".map(tool => ({ type: 'function', function: tool })) } } }] } as NativeAgentSessionState;";
+  const taskCode = 'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', coreCode = 'SELECTED_VIDEO_CORE_STATE_UNKNOWN';
+  const firstCode = 'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', refCode = 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN';
+  const retainedCode = 'SELECTED_VIDEO_RETAINED_STATE_UNKNOWN';
+  const cases = [
+    ['owner-row-task', workspace, 'all', 'where: { id: task.id },\n    include: { session: true }', 'where: { id: otherTask.id },\n    include: { session: true }', taskCode],
+    ['owner-payload', workspace, 'all', '!isDeepStrictEqual(ownerTask.payload, task.payload)', 'false', taskCode],
+    ['authority-attempt', workspace, 'all', '{ taskId: task.id, executionAttempt: task.executionAttempt! }),', '{ taskId: task.id, executionAttempt: otherTask.executionAttempt! }),', taskCode],
+    ['supplied-result', workspace, 'all', 'result: ownerTask.result },', 'result: task.payload },', taskCode],
+    ['authorizer-source', workspace, 'all', '!isDeepStrictEqual(current.selectedImageSource.binding, selected.binding)', '!isDeepStrictEqual(current.selectedImageSource.binding, otherBinding)', taskCode],
+    ['core-task-scope', illustration, 'core', 'taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize', 'taskId: input.otherTask.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize', coreCode],
+    ['saved-opaque-supplier', illustration, 'core', saved, 'const saved = await otherStore.read();', coreCode],
+    ['saved-video-tools-image-label', illustration, 'core', saved, injected('OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS'), coreCode],
+    ['saved-mixed-tools-image-label', illustration, 'core', saved, injected('[...OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS, ...SELECTED_IMAGE_TOOLS]'), coreCode],
+    ['saved-profile-reset', illustration, 'core', 'nativeIllustrationToolProfile(saved, input.settings.output, execution.planningContract)', 'nativeIllustrationToolProfile(null, input.settings.output, execution.planningContract)', coreCode],
+    ['materializer-saved', illustration, 'core', 'savedState: saved, nativeVideo,', 'savedState: null, nativeVideo,', coreCode],
+    ['materializer-flag', illustration, 'core', 'savedState: saved, nativeVideo,', 'savedState: saved, nativeVideo: false,', coreCode],
+    ['different-session-store', illustration, 'core', 'binding, store, authorize });', 'binding, store: otherStore, authorize });', 'SELECTED_VIDEO_STORE_SUPPLIER_UNKNOWN'],
+    ['output-only-video-flag', illustration, 'profile', 'const nativeVideo = videoContext || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION\n    && contextDescription === CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, ORIGINAL_VIDEO_SCIENCE_SCHEMA));', "const nativeVideo = output === 'video';", firstCode],
+    ['selected-output-bypass', illustration, 'core', 'if (input.selectedImage && (!input.selectedImageAttachment || SELECTED_IMAGE_TOOLS.some(expected =>', "if (input.settings.output === 'video' && (!input.selectedImageAttachment || SELECTED_IMAGE_TOOLS.some(expected =>", firstCode],
+    ['lost-retained-tools', illustration, 'core', "allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list'", "allowedTools: false ? [...saved.binding.allowedTools] : ['skills_list'", firstCode],
+    ['different-first-tools', session, 'all', 'options.tools, state.turns[0]?.request.options.tools', 'options.tools, state.turns.at(-1)?.request.options.tools', firstCode],
+    ['missing-first-tools-guard', session, 'all', "if (state && !isDeepStrictEqual(options.tools, state.turns[0]?.request.options.tools)) blocked('tool definitions changed');", "if (false) blocked('tool definitions changed');", firstCode],
+    ['lost-prior-paid-turns', session, 'ordinary', '(state?.turns ?? []).map(turn =>', '(state?.turns ?? []).slice(-1).map(turn =>', retainedCode],
+    ['late-paid-live-authorization', session, 'ordinary', 'await input.store.complete(started, completed);', 'await input.store.compareAndSet(started, completed);', retainedCode],
+    ['cross-task-checkpoint', store, 'all', 'if (cp.taskId !== input.taskId) blocked();', 'if (cp.taskId !== cp.taskId) blocked();', refCode],
+    ['changed-SHA-validation', store, 'all', 'size !== cp.size || sha(bytes) !== cp.serializedSha256', 'size !== cp.size || false', refCode],
+    ['lost-known-membership', store, 'all', 'known.set(cp.serializedSha256, cp); return state;', 'return state;', refCode],
+  ];
+  const region = (text, scope) => {
+    if (scope === 'core') return [text.indexOf('async function runNativeIllustrationTaskCore('), text.length];
+    if (scope === 'profile') return [text.indexOf('export function nativeIllustrationToolProfile('), text.indexOf('export async function replayNativeVideoPlan(')];
+    if (scope === 'ordinary') return [text.indexOf('const started: NativeAgentSessionState = retry?.started'), text.indexOf('\n          break;', text.indexOf('const started: NativeAgentSessionState = retry?.started'))];
+    return [0, text.length];
+  };
+  for (const [name, file, scope, before, after, code] of cases) await t.test(name, async () => {
+    const actual = await videoIngressProgram(new Map([[file, text => {
+      text = text.replaceAll('\r\n', '\n'); const [start, end] = region(text, scope);
+      assert.ok(start >= 0 && end > start, name); const selected = text.slice(start, end);
+      assert.ok(selected.includes(before), name); return text.slice(0, start) + selected.replace(before, after) + text.slice(end);
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(actual.ts, actual.program, actual.projectRoot);
+    assert.equal(result.reason, code, name);
+    assert.ok(!result.proven.includes('materializer-host'), name);
+    assert.equal(result.releaseCompatible, false, name);
+  });
 });
 
 test('actual video wrapper witness refuses changed ownership input and paper delegation', async t => {

@@ -1531,15 +1531,6 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     const fn = (scope, name) => one(walk(scope, value => ts.isFunctionDeclaration(value) && value.name?.text === name), `FUNCTION_${name}_UNKNOWN`);
     const materializer = fn(illustration, 'createNativeIllustrationMaterializer');
     const live = fn(illustration, 'runNativeIllustrationTask'), replay = fn(illustration, 'replayNativeVideoPlan');
-    if (illustration.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'runNativeIllustrationTaskCore')) {
-      // Shared finite analysis uses this actual Program/checker/root, not a
-      // projected old Program or a successful collector authority/context.
-      const entry = finiteSelectedGuideIllustrationWitness(ts, { program, checker, root: sourceRoot });
-      // Do not erase the selected caller to make the old two-owner proof pass.
-      // Its output guard alone cannot exclude saved native-video tool families.
-      // Until that state/caller obligation closes, no materializer edge is granted.
-      fail('SELECTED_VIDEO_SAVED_STATE_UNPROVEN', entry.profile);
-    }
     const hostFactory = fn(host, 'runHostedNativeTask'), sessionFactory = fn(sessionFile, 'createNativeAgentSession');
     const storeFactory = fn(storeFile, 'createNativeTaskStore');
     const enclosing = node => {
@@ -1615,6 +1606,197 @@ export function proveNativeVideoReceiptIngress(ts, program, sourceRoot) {
     };
     const hostStop = fn(host, 'blocked'), sessionStop = fn(sessionFile, 'blocked');
     for (const stop of [hostStop, sessionStop]) need(stop.body?.statements.length === 1 && ts.isThrowStatement(stop.body.statements[0]), 'REJECTION_NOT_TERMINAL', stop);
+
+    if (illustration.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'runNativeIllustrationTaskCore')) {
+      const entry = finiteSelectedGuideIllustrationWitness(ts, { program, checker, root: sourceRoot });
+      const core = entry.core, coreInput = core.parameters[0].name;
+      const workspace = entry.selectedCalls[0].getSourceFile(), owner = enclosing(entry.selectedCalls[0]);
+      need(owner?.name?.text === 'workspaceGuideHandler' && owner.parameters.length === 4,
+        'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', owner);
+      const task = owner.parameters[2].name, deps = owner.parameters[1].name;
+      const ownerTask = variable(owner, 'ownerTask'), payload = variable(owner, 'payload');
+      const authority = variable(owner, 'authority'), selected = variable(owner, 'selected');
+      const authorityFn = fn(file('packages/domain/src/agent/native-agent-execution.ts'), 'requireNativeAgentExecutionAuthority');
+      const equal = importOf(workspace, 'node:util', 'isDeepStrictEqual');
+      const ownerRoles = { task, deps, ownerTask: ownerTask.name, payload: payload.name,
+        authority: authority.name, selected: selected.name, requireNativeAgentExecutionAuthority: authorityFn.name, isDeepStrictEqual: equal };
+      need(ts.isAwaitExpression(ownerTask.initializer)
+        && match(ownerTask.initializer, 'deps.prisma.agentTask.findUnique({ where: { id: task.id }, include: { session: true } })', ownerRoles)
+        && ts.isAwaitExpression(authority.initializer)
+        && match(authority.initializer, "deps.prisma.$transaction(tx => requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt }), { isolationLevel: 'Serializable' })", ownerRoles)
+        && match(selected.initializer, 'authority.selectedImageSource', ownerRoles), 'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', authority);
+      const selectedCall = entry.selectedCalls[0], supplied = selectedCall.arguments[0], suppliedTask = objectProperty(supplied, 'task');
+      need(match(suppliedTask, '{ id: task.id, executionAttempt: task.executionAttempt, result: ownerTask.result }', ownerRoles)
+        && match(objectProperty(supplied, 'selectedImage'), '{ binding: selected.binding, illustration: selected.illustration, userRequest: payload.goal }', ownerRoles),
+      'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', suppliedTask);
+      const throwingGuard = (statement, expression, roles) => ts.isIfStatement(statement) && !statement.elseStatement
+        && match(statement.expression, expression, roles) && ts.isThrowStatement(statement.thenStatement);
+      need(owner.body.statements.some(statement => throwingGuard(statement, "!ownerTask || ownerTask.kind !== 'workspace.guide'", ownerRoles)),
+        'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', ownerTask);
+      let selectedBranch = selectedCall.parent;
+      while (selectedBranch && !ts.isIfStatement(selectedBranch)) selectedBranch = selectedBranch.parent;
+      need(selectedBranch && ts.isBlock(selectedBranch.thenStatement)
+        && match(selectedBranch.expression, 'payload.context.presentation?.selectedImageAssetId', ownerRoles)
+        && selectedBranch.thenStatement.statements.some(statement => throwingGuard(statement,
+          "!('selectedImageSource' in authority) || !authority.selectedImageSource || !isDeepStrictEqual(ownerTask.payload, task.payload)", ownerRoles)),
+      'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', selectedBranch);
+      const authorizer = variable(owner, 'authorize'), attachment = variable(owner, 'attachment'), narrative = variable(owner, 'narrative');
+      need(same(objectProperty(supplied, 'authorize'), authorizer.name)
+        && same(objectProperty(supplied, 'selectedImageAttachment'), attachment.name)
+        && match(objectProperty(supplied, 'sourceMap'), 'narrative.sourceMap', { narrative: narrative.name })
+        && match(objectProperty(supplied, 'sourceMapRef'), 'narrative.reference', { narrative: narrative.name })
+        && match(objectProperty(supplied, 'sourceEvidenceIdentity'), 'selected.binding.sourceEvidenceIdentity', ownerRoles)
+        && ts.isArrowFunction(authorizer.initializer) && authorizer.initializer.parameters.length === 1,
+      'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', authorizer);
+      const currentAuthority = variable(authorizer.initializer, 'current');
+      need(ts.isAwaitExpression(currentAuthority.initializer)
+        && match(currentAuthority.initializer, 'requireNativeAgentExecutionAuthority(tx, { taskId: task.id, executionAttempt: task.executionAttempt })',
+          { ...ownerRoles, tx: authorizer.initializer.parameters[0].name })
+        && authorizer.initializer.body.statements.some(statement => throwingGuard(statement,
+          "!('selectedImageSource' in current) || !current.selectedImageSource || !isDeepStrictEqual(current.selectedImageSource.binding, selected.binding) || !isDeepStrictEqual(current.task.payload, ownerTask.payload)",
+          { ...ownerRoles, current: currentAuthority.name })), 'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', currentAuthority);
+
+      const storage = variable(owner, 'storage'), scope = variable(owner, 'scope'), userId = variable(owner, 'userId');
+      const pixels = variable(owner, 'pixels'), evidence = variable(owner, 'evidence'), claims = variable(owner, 'claims');
+      const dataRoles = { ...ownerRoles, storage: storage.name, scope: scope.name, userId: userId.name, pixels: pixels.name,
+        narrative: narrative.name, evidence: evidence.name, claims: claims.name,
+        resolveVisualNarrativeSource: importOf(workspace, './scientific-writing-source', 'resolveVisualNarrativeSource'),
+        readPresentationInput: importOf(workspace, './presentation/generated-image-review', 'readPresentationInput'),
+        generatedImageReviewAttachment: importOf(workspace, './presentation/generated-image-review', 'generatedImageReviewAttachment'),
+        canonicalPresentationClaims: importOf(workspace, './presentation/chart-generator', 'canonicalPresentationClaims'),
+        projectIllustrationEvidence: importOf(workspace, '@openscience/domain', 'projectIllustrationEvidence') };
+      need(match(storage.initializer, 'deps.storage', dataRoles) && match(userId.initializer, 'ownerTask.session.userId', dataRoles)
+        && match(scope.initializer, '{ userId, workspaceId: authority.researchObject.workspaceId, researchObjectId: selected.binding.researchObjectId, versionId: selected.binding.versionId, sourceClaimIds: selected.binding.sourceClaimIds }', dataRoles)
+        && ts.isAwaitExpression(narrative.initializer)
+        && match(narrative.initializer, 'resolveVisualNarrativeSource({ prisma: deps.prisma, storage }, scope, selected.evidence)', dataRoles)
+        && selectedBranch.thenStatement.statements.some(statement => throwingGuard(statement, 'narrative.identity !== selected.binding.narrativeSourceIdentity', dataRoles))
+        && ts.isAwaitExpression(evidence.initializer) && match(evidence.initializer, 'projectIllustrationEvidence(storage, selected.evidence)', dataRoles)
+        && match(claims.initializer, 'canonicalPresentationClaims(selected.claims.filter(claim => selected.binding.sceneSourceClaimIds.includes(claim.id)).map(claim => ({ ...claim, sourcePassages: evidence.filter(row => row.claimId === claim.id).map(row => ({ evidenceId: row.id, text: row.exactQuote, relation: row.relation })) })))', dataRoles)
+        && same(objectProperty(supplied, 'claims'), claims.name)
+        && match(objectProperty(supplied, 'settings'), "{ locale: payload.locale, style: selected.settings.style, output: 'image', narrative: true, narrativeSceneLimit: 1, instruction: 'Revise only the selected image. Read the complete userRequest and original scientific brief in context.selectedImage.' }", { payload: payload.name, selected: selected.name })
+        && ts.isAwaitExpression(pixels.initializer)
+        && match(pixels.initializer, 'readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES)', dataRoles)
+        && match(attachment.initializer, 'generatedImageReviewAttachment(pixels, selected.binding.contentHash, selected.binding.mimeType)', dataRoles),
+      'SELECTED_VIDEO_SOURCE_DATA_UNKNOWN', narrative);
+      const authorizedBytes = variable(authorizer.initializer, 'bytes');
+      need(ts.isAwaitExpression(authorizedBytes.initializer)
+        && match(authorizedBytes.initializer, 'readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash, ILLUSTRATION_IMAGE_REVIEW_MAX_ATTACHMENT_BYTES)', dataRoles)
+        && authorizer.initializer.body.statements.some(statement => ts.isExpressionStatement(statement)
+          && match(statement.expression, 'generatedImageReviewAttachment(authorizedBytes, selected.binding.contentHash, selected.binding.mimeType)',
+            { ...dataRoles, authorizedBytes: authorizedBytes.name })), 'SELECTED_VIDEO_SOURCE_DATA_UNKNOWN', authorizedBytes);
+
+      // Reuse the same actual factory/CAS/mode witnesses; do not replace the
+      // private serializer, its paid/late domains or original inverse contracts.
+      const flow = finiteImageStoreFlowTerms(ts, { program, checker, root: sourceRoot });
+      need(same(flow.factory.name, storeFactory.name), 'SELECTED_VIDEO_STORE_SUPPLIER_UNKNOWN', flow.factory);
+      const execution = variable(core, 'execution'), store = variable(core, 'store'), saved = variable(core, 'saved');
+      const profile = variable(core, 'profile'), session = variable(core, 'session'), native = variable(core, 'native');
+      const coreMaterializer = variable(core, 'materializer'), paper = variable(core, 'paper');
+      const executionReader = importOf(illustration, '@openscience/domain', 'readNativeAgentExecution');
+      const coreRoles = { input: coreInput, execution: execution.name, store: store.name, saved: saved.name, profile: profile.name,
+        readNativeAgentExecution: executionReader, createNativeTaskStore: storeFactory.name, nativeIllustrationToolProfile: entry.profile.name };
+      need(match(execution.initializer, 'readNativeAgentExecution(input.task.result)', coreRoles)
+        && match(store.initializer, 'createNativeTaskStore({ ...input.deps, taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize })', coreRoles)
+        && ts.isAwaitExpression(saved.initializer) && match(saved.initializer, 'store.read()', coreRoles)
+        && match(profile.initializer, 'nativeIllustrationToolProfile(saved, input.settings.output, execution.planningContract)', coreRoles)
+        && same(objectProperty(unwrap(coreMaterializer.initializer).arguments[0], 'savedState'), saved.name),
+      'SELECTED_VIDEO_CORE_STATE_UNKNOWN', saved);
+      const flags = entry.profileBinding.name.elements;
+      for (const name of ['nativeVideo', 'videoContext']) {
+        const flag = one(flags.filter(element => element.name.text === name), 'SELECTED_VIDEO_CORE_STATE_UNKNOWN');
+        need(same(objectProperty(unwrap(coreMaterializer.initializer).arguments[0], name), flag.name), 'SELECTED_VIDEO_CORE_STATE_UNKNOWN', flag);
+      }
+      need(callOf(session.initializer, sessionFactory) && same(objectProperty(unwrap(session.initializer).arguments[0], 'store'), store.name)
+        && callOf(native.initializer, hostFactory) && same(objectProperty(unwrap(native.initializer).arguments[0], 'session'), session.name)
+        && same(objectProperty(unwrap(native.initializer).arguments[0], 'store'), store.name)
+        && same(objectProperty(unwrap(native.initializer).arguments[0], 'paper'), paper.name), 'SELECTED_VIDEO_STORE_SUPPLIER_UNKNOWN', native);
+      const selectedGuard = core.body.statements.find(statement => ts.isIfStatement(statement)
+        && match(statement.expression, "input.selectedImage && (!input.selectedImageAttachment || SELECTED_IMAGE_TOOLS.some(expected => sourceTools.filter(tool => isDeepStrictEqual(tool, expected)).length !== 1))",
+          { input: coreInput, sourceTools: entry.sourceTools.name, isDeepStrictEqual: importOf(illustration, 'node:util', 'isDeepStrictEqual') }));
+      need(selectedGuard && callOf(selectedGuard.thenStatement.expression, fn(illustration, 'stopped')),
+        'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', core);
+      const originalTools = variable(entry.profile, 'originalTools'), profileInput = entry.profile.parameters[0].name;
+      need(match(originalTools.initializer, "saved?.turns[0]?.request.options.tools?.filter(tool => tool.function.name.startsWith('paper_')).map(tool => { if (typeof tool.function.description !== 'string') stopped(); return { ...structuredClone(tool.function), description: tool.function.description }; })",
+        { saved: profileInput, stopped: fn(illustration, 'stopped').name }), 'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', originalTools);
+      const originalScience = variable(entry.profile, 'originalScience'), scienceDescription = variable(entry.profile, 'scienceDescription');
+      const contextDescription = variable(entry.profile, 'contextDescription');
+      const audioFlag = variable(entry.profile, 'nativeVideoAudio'), contextFlag = variable(entry.profile, 'videoContext'), videoFlag = variable(entry.profile, 'nativeVideo');
+      const flagRoles = { saved: profileInput, output: entry.profile.parameters[1].name, planningContract: entry.profile.parameters[2].name,
+        originalTools: originalTools.name, originalScience: originalScience.name, scienceDescription: scienceDescription.name,
+        contextDescription: contextDescription.name, nativeVideoAudio: audioFlag.name, videoContext: contextFlag.name,
+        isDeepStrictEqual: importOf(illustration, 'node:util', 'isDeepStrictEqual') };
+      need(match(originalScience.initializer, "originalTools?.find(tool => tool.name === 'paper_illustration_science')", flagRoles)
+        && match(scienceDescription.initializer, 'originalScience?.description', flagRoles)
+        && match(contextDescription.initializer, "originalTools?.find(tool => tool.name === 'paper_illustration_context')?.description", flagRoles)
+        && match(audioFlag.initializer, "!saved ? output === 'video' && planningContract === 'video-optional-audio-v1' : scienceDescription === OPTIONAL_AUDIO_VIDEO_SCIENCE_DESCRIPTION && contextDescription === OPTIONAL_AUDIO_VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, OPTIONAL_AUDIO_VIDEO_SCIENCE_SCHEMA)", flagRoles)
+        && match(contextFlag.initializer, "(!saved && output === 'video') || nativeVideoAudio || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION && contextDescription === VIDEO_CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, VIDEO_SCIENCE_SCHEMA))", flagRoles)
+        && match(videoFlag.initializer, "videoContext || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION && contextDescription === CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, ORIGINAL_VIDEO_SCIENCE_SCHEMA))", flagRoles)
+        && match(entry.sourceTools.initializer, 'input.selectedImage && !saved ? [...profile.sourceTools, ...SELECTED_IMAGE_TOOLS] : profile.sourceTools', coreRoles),
+      'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', videoFlag);
+      const complete = fn(sessionFactory, 'completeOnce'), state = variable(complete, 'state'), names = variable(complete, 'names');
+      const stateReads = complete.body.statements.filter(statement => ts.isVariableStatement(statement)
+        && statement.declarationList.declarations.includes(state));
+      need(stateReads.length === 1 && ts.isAwaitExpression(state.initializer)
+        && match(state.initializer, 'read()', { read: fn(sessionFactory, 'read').name })
+        && match(names.initializer, 'options.tools?.map(t => t.function.name).sort()')
+        && complete.body.statements.some(statement => guard(statement, "!isDeepStrictEqual(names, [...binding.allowedTools].sort())",
+          { isDeepStrictEqual: importOf(sessionFile, 'node:util', 'isDeepStrictEqual'), names: names.name, binding: variable(sessionFactory, 'binding').name }, sessionStop))
+        && complete.body.statements.some(statement => guard(statement, "state && !isDeepStrictEqual(options.tools, state.turns[0]?.request.options.tools)",
+          { isDeepStrictEqual: importOf(sessionFile, 'node:util', 'isDeepStrictEqual'), state: state.name }, sessionStop)),
+      'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', state);
+      const binding = variable(core, 'binding'), sourceTools = entry.sourceTools;
+      const allowed = one(binding.initializer.properties.filter(property => ts.isPropertyAssignment(property) && property.name?.text === 'allowedTools'), 'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN');
+      // The actual later context-window literal cannot overwrite allowedTools.
+      // Keep the generic objectProperty late-spread rejection unchanged.
+      for (const property of binding.initializer.properties.slice(binding.initializer.properties.indexOf(allowed) + 1)) {
+        if (ts.isSpreadAssignment(property)) need(match(property.expression, "execution.model === 'MiniMax-M3' ? { contextWindowTokens: 512_000 } : {}", { execution: execution.name }),
+          'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', property);
+        else need((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) && entry.key(property.name)
+          && entry.key(property.name) !== 'allowedTools', 'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', property);
+      }
+      need(match(allowed.initializer, "saved ? [...saved.binding.allowedTools] : ['skills_list', 'skill_view', ...sourceTools.map(tool => tool.name)]",
+        { saved: saved.name, sourceTools: sourceTools.name }), 'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', binding);
+      const started = one(walk(complete, node => ts.isVariableDeclaration(node) && node.name?.text === 'started'
+        && ts.isBinaryExpression(node.initializer) && node.initializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken),
+      'SELECTED_VIDEO_RETAINED_STATE_UNKNOWN');
+      const retainedRoles = { priorState: state.name, binding: variable(sessionFactory, 'binding').name,
+        retry: variable(complete, 'retry').name, input: sessionFactory.parameters[0].name, started: started.name };
+      need(match(started.initializer, "retry?.started ?? { kind: 'hermes-native-agent', binding, initialMessages: priorState?.initialMessages ?? structuredClone(messages), turns: [...(priorState?.turns ?? []).map(turn => ({ ...turn, request: { ...turn.request, messages: [] } })), { state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions }] }", retainedRoles),
+      'SELECTED_VIDEO_RETAINED_STATE_UNKNOWN', started);
+      const paid = one(walk(complete, node => ts.isCallExpression(node) && match(node.expression, 'input.store.complete', retainedRoles)
+        && node.arguments.length === 2 && same(node.arguments[0], started.name)), 'SELECTED_VIDEO_RETAINED_STATE_UNKNOWN');
+      const completed = symbol(paid.arguments[1])?.valueDeclaration;
+      need(completed && ts.isVariableDeclaration(completed)
+        && match(completed.initializer, "{ ...started, turns: [...started.turns.slice(0, -1), { state: 'completed', target, request: { messages, options }, effectiveOptions: boundedOptions, ...(retry ? { rejectedAttempt: retry.receipt } : {}), response: { ...response, provider: target.provider, promptHash: target.promptHash } }] }", retainedRoles)
+        && ts.isAwaitExpression(paid.parent), 'SELECTED_VIDEO_RETAINED_STATE_UNKNOWN', completed);
+      const storeReturn = one(storeFactory.body.statements.filter(ts.isReturnStatement), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN');
+      const readMethod = one(storeReturn.expression.properties.filter(node => ts.isMethodDeclaration(node) && node.name?.text === 'read'), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN');
+      const cp = variable(readMethod, 'cp'), loaded = variable(readMethod, 'state');
+      const bytes = one(readMethod.body.statements.filter(ts.isVariableStatement).flatMap(statement => [...statement.declarationList.declarations])
+        .filter(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'bytes'), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN');
+      const marker = fn(storeFactory, 'marker'), markerTask = variable(marker, 'task'), markerExecution = variable(marker, 'execution');
+      const storeInput = storeFactory.parameters[0].name, markerDb = marker.parameters[0].name;
+      const storeRoles = { input: storeInput, marker: marker.name, cp: cp.name, bytes: bytes.name,
+        sha: one(walk(storeFile, node => ts.isVariableDeclaration(node) && node.name?.text === 'sha'), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN').name, blocked: fn(storeFile, 'blocked').name };
+      need(ts.isAwaitExpression(markerTask.initializer)
+        && match(markerTask.initializer, 'db.agentTask.findUnique({ where: { id: input.taskId } })', { db: markerDb, input: storeInput })
+        && match(markerExecution.initializer, 'readNativeAgentExecution(task?.result)', { task: markerTask.name, readNativeAgentExecution: importOf(storeFile, '@openscience/domain', 'readNativeAgentExecution') })
+        && ts.isPropertyAccessExpression(cp.initializer) && ts.isAwaitExpression(entry.unwrap(cp.initializer.expression))
+        && match(cp.initializer, '(await marker(input.prisma)).checkpoint', storeRoles)
+        && readMethod.body.statements.some(statement => guard(statement, 'cp.taskId !== input.taskId', storeRoles, fn(storeFile, 'blocked')))
+        && readMethod.body.statements.some(statement => guard(statement, 'size !== cp.size || sha(bytes) !== cp.serializedSha256',
+          { ...storeRoles, size: variable(readMethod, 'size').name }, fn(storeFile, 'blocked')))
+        && match(loaded.initializer, "JSON.parse(bytes.toString('utf8'))", storeRoles), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN', cp);
+      const known = variable(storeFactory, 'known'), tail = readMethod.body.statements.slice(-2);
+      need(tail.length === 2 && ts.isExpressionStatement(tail[0]) && ts.isReturnStatement(tail[1])
+        && match(tail[0].expression, 'known.set(cp.serializedSha256, cp)', { known: known.name, cp: cp.name })
+        && same(tail[1].expression, loaded.name), 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN', readMethod);
+      // The actual row/reference/bytes and first-tools equality are bound.
+      // Authentication preserves a seed; it does not prove its original tools
+      // are pure L/H/A or ordinary image rather than a retained hybrid set.
+      // No state/receipt edge or exclusion is granted for that opaque history.
+      fail('SELECTED_VIDEO_RETAINED_TOOL_SEED_UNPROVEN', cp);
+    }
 
     const materializerUses = uses(materializer), liveUses = uses(live), replayUses = uses(replay);
     need(materializerUses.length === 2 && materializerUses.every(call => [live, replay].includes(enclosing(call))), 'EXTRA_MATERIALIZER_CALLER', materializerUses[2]);
