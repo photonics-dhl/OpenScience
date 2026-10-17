@@ -396,13 +396,13 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
         const prompts = document.scenes.flatMap((scene, sceneIndex) => {
           if (scene.paperOriginal) return [];
           const compiler = historicalVideo ? compileHistoricalNativeVideoShotPrompt
-            : approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt;
+            : approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt;
           const prompt = { sceneIndex, prompt: compileIllustrationImagePrompt(scene.illustration!, resources[sceneIndex]!.instructions),
             ...(nativeVideo ? { videoPrompt: compiler(document, scene, input.settings.locale) } : {}),
             ...(videoContext ? { renderResources: resources[sceneIndex]!.usage } : {}) };
           if (revisionSceneIndex !== undefined && sceneIndex !== revisionSceneIndex && input.nativeVideoAudio === true
             && !isDeepStrictEqual(prompt, input.base!.prompts[sceneIndex])) {
-            const alternate = { ...prompt, videoPrompt: (approvedVideoPrompts ? compileShotPrompt : compileApprovedShotPrompt)(document, scene, input.settings.locale) };
+            const alternate = { ...prompt, videoPrompt: (approvedVideoPrompts ? compileApprovedShotPrompt : compileShotPrompt)(document, scene, input.settings.locale) };
             if (isDeepStrictEqual(alternate, input.base!.prompts[sceneIndex])) return [alternate];
           }
           return [prompt];
@@ -459,8 +459,8 @@ export function createNativeIllustrationMaterializer(input: MaterializerInput & 
     const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };
     const rebuilt = evaluate(name, args, sequence, callId);
     if (!recorded || isDeepStrictEqual(rebuilt, recorded)) return rebuilt;
-    // Read an exact approved optional-video receipt without activating that
-    // constructor for fresh art or copying saved fields into a rebuilt result.
+    // Restore the same pre-call state and rebuild with the alternate constructor;
+    // return it only when the whole rebuilt receipt equals the recorded result.
     if (nativeVideo && input.nativeVideoAudio === true && name === 'paper_illustration_art' && recorded.status === 'art_ready') {
       restore();
       const approved = evaluate(name, args, sequence, callId, false, true);
