@@ -1817,6 +1817,41 @@ function retainedSelectedVoiceProgram(changes = new Map()) {
   return videoIngressProgram(changes, { sourceRef: '2ad0aa1b103797dd9f86a005ff3c33050b33ff54', trackedSourceOnly: true });
 }
 
+test('Chinese reader actual 291 Program keeps the unmodelled booking frontier closed', async () => {
+  const components = selectedGuideSourceComponents();
+  const ref = '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063';
+  const path = 'packages/domain/src/assets/presentation-asset.ts';
+  const previous = await videoIngressProgram(new Map(), { sourceRef: ref, trackedSourceOnly: true });
+  const actual = await videoIngressProgram(new Map([[path, readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')]]),
+    { sourceRef: ref, trackedSourceOnly: true });
+  const roots = [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']];
+  const contextFor = owner => {
+    for (const [entry] of roots) assert.equal(owner.program.getSourceFile(resolve(owner.projectRoot, entry)).text,
+      owner.sourceHost.readFile(resolve(owner.projectRoot, entry)));
+    return { ...selectedGuideSourceContext(owner), roots };
+  };
+  let frontier;
+  try { components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); }
+  catch (error) { frontier = error; }
+  assert.equal(frontier?.reason, 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN');
+  const source = actual.program.getSourceFile(resolve(actual.projectRoot, path));
+  assert.equal(frontier.node.getSourceFile(), source);
+  assert.match(frontier.node.getText(), /Selected-image production intent is required for a new child/u);
+  let qualification;
+  try { components.maintenanceQualification(actual.ts,
+    components.supplemental(actual.ts, contextFor(actual), { ui: false }),
+    components.supplemental(previous.ts, contextFor(previous), { ui: false })); }
+  catch (error) { qualification = error; }
+  assert.equal(qualification?.reason, 'SELECTED_GUIDE_MAINTENANCE_QUALIFICATION_UNKNOWN');
+  assert.equal(qualification.node.getSourceFile(), source);
+  assert.equal(qualification.node.name.text, 'requireSelectedImageGuideProduction');
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+  const point = source.getLineAndCharacterOfPosition(frontier.node.getStart());
+  console.log(JSON.stringify({ readerStage: ref, sourceOnly: true, permit: false,
+    reason: frontier.reason, qualification: qualification.reason, path, line: point.line + 1,
+    frontier: 'existing locked selected-child guard now contains the separately preserved production-intent refusal' }));
+});
+
 test('selected guide supplementary writer input retains captured nodes and actual API and Drawer sources', async () => {
   const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
   const narrow = actual.ts.createProgram([resolve(actual.projectRoot, 'apps/agent-worker/src/index.ts')],
