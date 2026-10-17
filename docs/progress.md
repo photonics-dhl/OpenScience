@@ -8,4 +8,5 @@
 - 视频完整hybrid两infra/执行差额获原SameHigh零项，已收edb2622f clean/pushed；前25与最终6分版复用。root原唯一Unix运行实际9PASS/60历史filtered/exit0/未超时，无服务/Provider；原完整edb→实际597 source层已一次闭合conditional、两Program各400/2投影+398余源相等，源码窗关闭无新增修复；完整安装/DEFAULT/pair仍待，图片发布后按真实新祖先继续必要CI。实际配对、CI、发布与一次新私有修订仍待，中间通过不代最终关系。
 - 自然改图、双入口同任务、断线恢复、原资产与位置理解、新 PNG 科学质量和费用仍未验；reader 上线和九个 harness 通过不代产品验收。Provider HOLD 保持，selected writer/adoption 断开。
 - UI格式writer bf29→597完整CI六jobSUCCESS，原9、608/608发布工具、API55及全部必要浏览器/恢复/docs尾项通过；唯一collector完整回执已CLOSED并接收。W尚未部署/真实写验收，图片新2877实际pair已过、完整尾项仍在，保护共同生产597；各线成功证据不互借。
+- 最新语音人类已重申图片收口后连续推进WAV-only实际交付；架构原owner已STARTED在原ignored报告§13收敛剩余成本P1与最小音频验收方案，复用五路径包，仅新未审方案交原High。未新增billing源码/生产/付费窗口。
 - R12整体、R08/R13、三篇论文与普通用户旅程、维护J14/B/C及137失败仍未完成；原图/public/来源/UNKNOWN及安装/cleanup/prune冻结保持。
