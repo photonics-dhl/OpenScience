@@ -27,7 +27,9 @@ export async function ensureMonthlyGrantForUser(
   });
   if (existing) return 'skipped';
 
-  const policy = await resolvePolicy({ prisma: tx }, { resource: MONTHLY_GRANT_RESOURCE });
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { level: true } });
+  if (!user) throw new UsageError('VALIDATION_ERROR', '用户不存在');
+  const policy = await resolvePolicy({ prisma: tx }, { userLevel: user.level, resource: MONTHLY_GRANT_RESOURCE });
   if (!policy) return 'unconfigured';
 
   try {
@@ -60,11 +62,11 @@ export async function generateMonthlyGrants(
   }
   const users = await deps.prisma.user.findMany({
     where: { status: { notIn: ['suspended', 'deleted'] } },
-    select: { id: true },
+    select: { id: true, level: true },
   });
   const grants: Array<{ userId: string; entry: LedgerEntryInput }> = [];
   for (const user of users) {
-    const policy = await resolvePolicy(deps, { userLevel: undefined, workspaceId: undefined, resource: MONTHLY_GRANT_RESOURCE });
+    const policy = await resolvePolicy(deps, { userLevel: user.level, workspaceId: undefined, resource: MONTHLY_GRANT_RESOURCE });
     if (!policy) continue;
     grants.push({
       userId: user.id,

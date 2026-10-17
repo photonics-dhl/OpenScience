@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { checkLimit } from './limits';
-import { getBalance } from './ledger';
+import { getBalance, UsageError } from './ledger';
 import { resolvePolicy, type QuotaResource } from './policies';
 
 /** 用户级资源（按 user 维度记账/授予）。 */
@@ -33,12 +33,14 @@ export async function getUsageSnapshot(
   deps: { prisma: PrismaClient },
   userId: string,
 ): Promise<UsageSnapshot> {
+  const user = await deps.prisma.user.findUnique({ where: { id: userId }, select: { level: true } });
+  if (!user) throw new UsageError('VALIDATION_ERROR', '用户不存在');
   const memberships = await deps.prisma.membership.findMany({ where: { userId } });
   const workspaceIds = memberships.map((m) => m.workspaceId);
 
   const userItems: UsageSnapshotItem[] = [];
   for (const resource of USER_RESOURCES) {
-    const policy = await resolvePolicy(deps, { userLevel: undefined, resource });
+    const policy = await resolvePolicy(deps, { userLevel: user.level, resource });
     const balance = await getBalance(deps, { userId, resource });
     if (resource === 'ai_credit') {
       const consumption = await deps.prisma.usageLedger.aggregate({
@@ -57,7 +59,7 @@ export async function getUsageSnapshot(
   for (const workspaceId of workspaceIds) {
     const items: UsageSnapshotItem[] = [];
     for (const resource of WORKSPACE_RESOURCES) {
-      const policy = await resolvePolicy(deps, { workspaceId, resource });
+      const policy = await resolvePolicy(deps, { workspaceId, userLevel: user.level, resource });
       const used = await getBalance(deps, { workspaceId, resource });
       const { remaining, allowed } = checkLimit({ used, limit: policy ? policy.limitValue : null });
       items.push({ resource, scope: policy?.scope ?? null, limit: policy?.limitValue ?? null, used, remaining, allowed });
