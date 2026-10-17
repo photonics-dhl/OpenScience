@@ -26,6 +26,7 @@ vi.mock('next-intl', () => ({
 import EditorLayout from '../components/editor/EditorLayout';
 import CoreEditor from '../components/editor/CoreEditor';
 import { SdfFieldContent } from '../components/content/SdfFieldContent';
+import { ScientificMarkdown } from '../components/content/ScientificMarkdown';
 import ArtifactUploader from '../components/editor/ArtifactUploader';
 import { ArtifactRow } from '../components/research/ArtifactRow';
 import { ArtifactViewer } from '../components/research/ArtifactViewer';
@@ -213,6 +214,51 @@ describe('Optical Editorial Research Object workspace', () => {
     expect(markup).toContain('**Literal method**');
     expect(markup).not.toContain('<textarea');
     expect(markup).not.toContain('<button');
+  });
+
+  it('renders ordinary summary table cells and lower headings with scientific math and alignment', () => {
+    const body = String.raw`##### Heading \(h_5\)
+
+###### Heading \(h_6\)
+
+| \(H\) | Relation |
+| ---: | :--- |
+| \(x+y\) | \(a+b\) [S12] |`;
+    const markup = renderToStaticMarkup(createElement(ScientificMarkdown, { body, hideSourceMarkers: true }));
+    for (const tag of ['h5', 'h6', 'th', 'td']) {
+      expect(markup.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`))?.[1]).toContain('class="katex"');
+    }
+    expect(markup.match(/class="katex"/g)).toHaveLength(5);
+    for (const expression of ['h_5', 'h_6', 'H', 'x+y', 'a+b']) {
+      expect(markup).toContain(`<annotation encoding="application/x-tex">${expression}</annotation>`);
+    }
+    expect(markup).toMatch(/<th[^>]*(?:align="right"|style="[^"]*text-align:right)/);
+    expect(markup).toMatch(/<td[^>]*(?:align="right"|style="[^"]*text-align:right)/);
+    expect(markup).not.toContain('[S12]');
+  });
+
+  it('keeps summary code literal and retains safe markdown output controls', () => {
+    const body = [String.raw`##### Math \(x+y\)`, '', 'Inline `\\(literal\\)`.', '', '```text',
+      String.raw`\(code\) $literal$`, '```', '', '<script>bad()</script>', '',
+      '![hidden](https://example.org/x.png) [unsafe](javascript:alert(1)) [Source](https://example.org/source)'].join('\n');
+    const markup = renderToStaticMarkup(createElement(ScientificMarkdown, { body }));
+    expect(markup.match(/class="katex"/g)).toHaveLength(1);
+    expect(markup).toContain('<code>\\(literal\\)</code>');
+    expect(markup).toContain('\\(code\\) $literal$');
+    expect(markup).not.toMatch(/<script|<img|href="javascript:/);
+    expect(markup).toContain('href="https://example.org/source"');
+    expect(markup).toContain('rel="noreferrer noopener"');
+  });
+
+  it('shares the summary math budget across headings and ordinary table cells', () => {
+    const body = [String.raw`##### \(h_5\)`, String.raw`###### \(h_6\)`, '', String.raw`| \(H\) |`, '| --- |',
+      ...Array.from({ length: 32 }, (_, index) => `| \\(x_{${index}}\\) |`), '', '```text', 'literal', '```', '',
+      String.raw`| \(J\) |`, '| --- |', ...Array.from({ length: 33 }, (_, index) => `| \\(y_{${index}}\\) |`)].join('\n');
+    const markup = renderToStaticMarkup(createElement(ScientificMarkdown, { body }));
+    expect(markup.match(/class="katex"/g)).toHaveLength(64);
+    const lastCell = Array.from(markup.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)).at(-1)?.[1];
+    expect(lastCell).toContain('y_{32}');
+    expect(lastCell).not.toContain('class="katex"');
   });
 
   it('leaves legacy same-map markup literal and neutralizes invalid or unsafe new content', () => {

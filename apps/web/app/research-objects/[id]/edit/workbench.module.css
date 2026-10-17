@@ -146,10 +146,11 @@
 .contentSection,
 .productSection { padding: 0; }
 
-.leadSection > article,
-.contentSection > article,
+.leadSection > article[data-reading-role='body'],
+.contentSection > article[data-reading-role='body'] { max-width: 840px; width: 100%; margin-inline: auto; }
 .leadSection > article > div,
 .contentSection > article > div { max-width: none; width: 100%; margin-inline: 0; }
+.document article[data-reading-role='body'] :global([data-reading-role='reading']) { max-width: none; }
 .workbenchShell .document article :global([data-reading-role='reading']) { font-family: var(--font-ui, sans-serif); font-size: 18px; line-height: 1.85; }
 .workbenchShell .document :global(textarea[data-reading-role='reading']) { padding: 16px 18px; border: 1px solid var(--craft-rule, #dce5e5); background: #fff; min-height: 96px; }
 .leadSection { padding-bottom: 28px; }

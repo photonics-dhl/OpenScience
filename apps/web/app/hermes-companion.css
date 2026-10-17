@@ -132,12 +132,14 @@ body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { disp
   min-width: 64px;
   min-height: 64px;
 }
-.hermes-workbench-conversation .hermes-conversation-header { padding: 12px 0 16px; gap: 12px; }
+.hermes-workbench-conversation .hermes-conversation-header { padding: 8px 0 12px; gap: 12px; }
 .hermes-workbench-conversation .hermes-conversation-header h2 { font-family: var(--font-ui, sans-serif); font-weight: 600; }
-.hermes-workbench-conversation .hermes-conversation-transcript { padding: 20px 0; }
-.hermes-workbench-conversation .hermes-message { font-size: 17px; line-height: 1.8; }
+.hermes-workbench-conversation .hermes-conversation-transcript { padding: 16px 0; }
+.hermes-workbench-conversation .hermes-message { font-size: 16px; line-height: 1.75; }
 .hermes-inline-assistant.hermes-workbench-conversation { background: transparent; border-radius: 0; box-shadow: none; }
-.hermes-workbench-conversation .hermes-conversation-composer { padding-inline: 0; }
+.hermes-workbench-conversation .hermes-conversation-composer { padding: 8px 0; }
+.hermes-workbench-conversation .hermes-conversation-composer textarea { min-height: 56px; max-height: 120px; padding: 8px 10px; }
+.hermes-workbench-conversation .hermes-conversation-composer > div { margin-top: 6px; gap: 8px; }
 .drawer.hermes-workbench-conversation .hermes-conversation { padding-inline: 16px; }
 .hermes-workbench-conversation [data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
 [data-hermes-global-companion='true'][data-hermes-placement='detached'][data-hermes-dock-ready='false'] {
