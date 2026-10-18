@@ -5,6 +5,11 @@ name: Hermes media pipeline
 on:
   workflow_dispatch:
     inputs:
+      classify_usage_pair:
+        description: 'Diagnostic-only installed 4aac/291 classification; does not approve a release'
+        required: false
+        type: boolean
+        default: false
       rollback_ref:
         description: 'Optional exact deployed commit for the existing rollback-reader pair check'
         required: false
@@ -629,7 +634,63 @@ on:
       - '.github/workflows/hermes-media-skills.yml'
 
 jobs:
+  usage-pair-classification:
+    name: Diagnostic only / installed usage pair
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.classify_usage_pair == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      APP_CANDIDATE_REF: 4aac030b2c9df44bdb6b52d0b4e1cf2f252680a1
+      APP_ROLLBACK_REF: 291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063
+      DIAGNOSTIC_REF: 094d2d9c9dc1103090bb3aee0a0533beed993776
+      PRISMA_CLI_BINARY_TARGETS: debian-openssl-3.0.x,linux-musl
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DIAGNOSTIC_REF }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Prepare the two exact installed application roots
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$DIAGNOSTIC_REF"
+          parent="$RUNNER_TEMP/usage-pair-classification"
+          mkdir "$parent"
+          for role in candidate rollback; do
+            if [ "$role" = candidate ]; then ref="$APP_CANDIDATE_REF"; else ref="$APP_ROLLBACK_REF"; fi
+            git fetch --no-tags --depth=1 origin "$ref"
+            test "$(git rev-parse "$ref^{commit}")" = "$ref"
+            app_root="$parent/$role"
+            mkdir "$app_root"
+            git archive "$ref" | tar -x -C "$app_root"
+            (
+              cd "$app_root"
+              npx pnpm@9.15.0 install --frozen-lockfile
+              npx pnpm@9.15.0 --filter @openscience/database generate
+              npx pnpm@9.15.0 --filter @openscience/search generate
+              npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
+              core_prisma_root="$(node -e "const path = require('node:path'); const root = path.dirname(require.resolve('@prisma/client/package.json')); process.stdout.write(path.join(root, '..', '..', '.prisma', 'client'))")"
+              test -f "$core_prisma_root/libquery_engine-linux-musl.so.node"
+              test -f packages/search/generated/client/libquery_engine-linux-musl.so.node
+            )
+          done
+      - name: Classify once with the reviewed diagnostic verifier and DEFAULT roots
+        shell: bash
+        env:
+          APP_CANDIDATE_ROOT: ${{ runner.temp }}/usage-pair-classification/candidate
+          APP_ROLLBACK_ROOT: ${{ runner.temp }}/usage-pair-classification/rollback
+        run: |
+          node --input-type=module -e "import { verifyApplicationRollbackReaders } from './infra/scripts/production-deploy-lock.mjs'; console.log('R04_CLASSIFICATION', JSON.stringify({ workflow: process.env.GITHUB_SHA, verifier: process.env.DIAGNOSTIC_REF, candidate: process.env.APP_CANDIDATE_REF, rollback: process.env.APP_ROLLBACK_REF })); await verifyApplicationRollbackReaders({ candidateRoot: process.env.APP_CANDIDATE_ROOT, rollbackRoot: process.env.APP_ROLLBACK_ROOT, compilerRoot: process.env.APP_CANDIDATE_ROOT, diagnostics: true });"
+
   usage-level-routing:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.classify_usage_pair == true) }}
     name: User level routing / lint and unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -661,6 +722,7 @@ jobs:
           test/workspace-personal.test.ts test/usage-policies.test.ts
 
   first-image-grant:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.classify_usage_pair == true) }}
     name: First image grant / real PostgreSQL
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -743,6 +805,7 @@ jobs:
           retention-days: 7
 
   skill-path:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.classify_usage_pair == true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 70
     services:
@@ -977,6 +1040,7 @@ jobs:
 
   # Keep complete navigation acceptance in isolated runners with per-case logs.
   browser-entry:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.classify_usage_pair == true) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
