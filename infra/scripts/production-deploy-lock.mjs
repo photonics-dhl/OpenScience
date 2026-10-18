@@ -2706,7 +2706,7 @@ function finiteVideoFamilyClosure(candidate, rollback) {
 
 function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rollbackRoot, roots, branch, site, error, moduleKey, familyCode) {
   try {
-    let code = 'COMPATIBILITY_UNKNOWN', module, initializationSite;
+    let code = 'COMPATIBILITY_UNKNOWN', module, initializationSite, maintenanceSite;
     const stages = ['video', 'selected-guide'];
     const sites = ['context', 'model', 'library', 'projected-keys', 'remaining-entry', 'captured-source',
       'projected-runtime', 'transpile', 'projected-equality', 'ingress', 'family', 'builtin'];
@@ -2731,9 +2731,15 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
         'SELECTED_GUIDE_NATIVE_RESIDUAL_UNKNOWN', 'SELECTED_GUIDE_OVERLAPPING_PROJECTION', 'SELECTED_GUIDE_PUBLIC_READER_UNKNOWN',
         'SELECTED_GUIDE_READER_CAPABILITY_REMOVED_OR_NONIDENTICAL', 'SELECTED_GUIDE_RELOCATION_RESIDUAL_UNKNOWN',
         'SELECTED_GUIDE_RESIDUAL_MISSING', 'SELECTED_GUIDE_RESULT_ORIGIN_UNKNOWN', 'SELECTED_GUIDE_SUPPLEMENTARY_SOURCE_UNKNOWN',
-        'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN', 'IMAGE_CAPTURED_SOURCE_IDENTITY_CHANGED', 'IMAGE_PROJECTED_RUNTIME_INVALID']);
+        'SELECTED_GUIDE_WORKSPACE_RESIDUAL_UNKNOWN', 'IMAGE_CAPTURED_SOURCE_IDENTITY_CHANGED', 'IMAGE_PROJECTED_RUNTIME_INVALID',
+        'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN', 'SELECTED_GUIDE_MAINTENANCE_WORKER_UNKNOWN',
+        'SELECTED_GUIDE_MAINTENANCE_VIEW_UNKNOWN', 'SELECTED_GUIDE_MAINTENANCE_QUALIFICATION_UNKNOWN',
+        'SELECTED_GUIDE_MAINTENANCE_REMAINDER_UNKNOWN', 'SELECTED_GUIDE_MAINTENANCE_READER_MISSING',
+        'SELECTED_GUIDE_MAINTENANCE_ACTIVATION_UNKNOWN']);
       const thrown = data(error, 'reason');
       if ((branch === 'selected-guide' ? selected : new Set(['VIDEO_CONSTRUCTOR_NOT_PURE', 'VIDEO_TRANSFER_UNKNOWN'])).has(thrown)) code = thrown;
+      if (code === 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN'
+        && data(error, 'maintenanceSite') === 'ordinary-body') maintenanceSite = 'ordinary-body';
       if (code === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN') {
         const value = data(error, 'initializationSite');
         if (['capture-context', 'module-identity', 'retained-function', 'declaration-binding', 'retained-declaration',
@@ -2768,7 +2774,8 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
       }
     }
     console.error(`ROLLBACK_COMPATIBILITY_DIAGNOSTIC ${JSON.stringify({ stage: branch, code, site,
-      ...(initializationSite ? { initializationSite } : {}), ...(module ? { module } : {}) })}`);
+      ...(initializationSite ? { initializationSite } : {}), ...(maintenanceSite ? { maintenanceSite } : {}),
+      ...(module ? { module } : {}) })}`);
   } catch { /* Diagnostics never replace the original refusal. */ }
 }
 
@@ -6251,8 +6258,9 @@ function finiteSelectedGuideDecoderTerms(ts, context, rollbackContext) {
 }
 
 function finiteSelectedGuideMaintenanceBookingTerms(ts, context, rollbackContext) {
-  const fail = node => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN', node }; };
-  const need = (value, node) => { if (!value) fail(node); };
+  const fail = (node, maintenanceSite) => { throw { reason: 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN', node,
+    ...(maintenanceSite === 'ordinary-body' ? { maintenanceSite } : {}) }; };
+  const need = (value, node, maintenanceSite) => { if (!value) fail(node, maintenanceSite); };
   const nodes = (root, predicate) => { const result = []; const visit = node => {
     if (predicate(node)) result.push(node); ts.forEachChild(node, visit);
   }; visit(root); return result; };
@@ -6313,7 +6321,7 @@ function finiteSelectedGuideMaintenanceBookingTerms(ts, context, rollbackContext
   try { ordinaryText = ts.createPrinter().printNode(ts.EmitHint.Unspecified, transformed.transformed[0], source); }
   finally { transformed.dispose(); }
   const ordinary = ts.createSourceFile(path, ordinaryText, ts.ScriptTarget.ES2022, true).statements[0];
-  need(JSON.stringify(context.canonical(ordinary.body)) === JSON.stringify(rollbackContext.canonical(previous.body)), target);
+  need(JSON.stringify(context.canonical(ordinary.body)) === JSON.stringify(rollbackContext.canonical(previous.body)), target, 'ordinary-body');
   const agentPath = 'packages/domain/src/agent/agent.ts';
   const agent = module(context, agentPath), oldAgent = module(rollbackContext, agentPath);
   const submit = fn(agent, 'submitAgentTask'), oldSubmit = fn(oldAgent, 'submitAgentTask');

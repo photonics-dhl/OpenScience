@@ -97,7 +97,23 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   assert.equal(run({ reason: known, initializationSite: 'moved-initializer' }).initializationSite, 'moved-initializer');
   assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN', initializationSite: 'moved-initializer' }).initializationSite, undefined);
   assert.equal(run({ reason: 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN' }).code, 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
+  const bookingReason = 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN';
+  for (const reason of ['BOOKING_UNKNOWN', 'WORKER_UNKNOWN', 'VIEW_UNKNOWN', 'QUALIFICATION_UNKNOWN',
+    'REMAINDER_UNKNOWN', 'READER_MISSING', 'ACTIVATION_UNKNOWN']) {
+    const label = `SELECTED_GUIDE_MAINTENANCE_${reason}`;
+    assert.equal(run({ reason: label }).code, label);
+  }
+  assert.equal(run({ reason: bookingReason, maintenanceSite: 'ordinary-body' }).maintenanceSite, 'ordinary-body');
+  for (const reason of [known, 'SELECTED_GUIDE_MAINTENANCE_WORKER_UNKNOWN', 'SECRET'])
+    assert.equal(run({ reason, maintenanceSite: 'ordinary-body' }).maintenanceSite, undefined);
+  assert.equal(run({ reason: bookingReason, maintenanceSite: 'SECRET' }).maintenanceSite, undefined);
+  assert.equal(run({ reason: bookingReason, maintenanceSite: 'ordinary-body' }, undefined, { branch: 'video' }).maintenanceSite, undefined);
+  assert.equal(run({ reason: bookingReason, maintenanceSite: 'ordinary-body' }, key, { current: [...current] }).maintenanceSite, undefined);
   let invoked = 0;
+  assert.equal(run({ reason: bookingReason, get maintenanceSite() { invoked++; return 'ordinary-body'; } }).maintenanceSite, undefined);
+  const siteProxy = new Proxy({}, { get() { invoked++; throw Error('SECRET-site'); },
+    getOwnPropertyDescriptor() { invoked++; throw Error('SECRET-site'); } });
+  assert.equal(run({ reason: bookingReason, maintenanceSite: siteProxy }).maintenanceSite, undefined);
   const bad = { get reason() { invoked++; return 'SECRET'; }, get node() { invoked++; return source; },
     getSourceFile() { invoked++; return source; }, toJSON() { invoked++; return 'SECRET'; } };
   assert.equal(run(bad).code, 'COMPATIBILITY_UNKNOWN');
@@ -148,6 +164,30 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
   const order = ['finiteVideoPairCompatibility','finiteImageCapablePairCompatibility','finiteImageFirstPairCompatibility','finiteVoicePairCompatibility'];
   assert.ok(order.every((name,index)=> index===0 || verifier.indexOf(order[index-1])<verifier.indexOf(name)));
   if (verifier.includes('finiteSelectedGuidePairCompatibility')) assert.ok(verifier.indexOf(order.at(-1))<verifier.indexOf('finiteSelectedGuidePairCompatibility'));
+});
+
+test('private maintenance diagnostics bind the ordinary-body label to the actual rejecting predicate', () => {
+  const booking = deployLockSource.match(/function finiteSelectedGuideMaintenanceBookingTerms\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const start = booking.indexOf('  const fail =');
+  const end = booking.indexOf('  const nodes =');
+  const predicate = booking.split(/\r?\n/u).find(line => line.includes('context.canonical(ordinary.body)'));
+  assert.ok(start > 0 && end > start && predicate);
+  const node = {}, previous = { body: {} }, ordinary = { body: {} };
+  const execute = runInNewContext(`(()=>{${booking.slice(start, end)}\n${predicate}; return 'continued';})`, {
+    target: node, ordinary, previous,
+    context: { canonical: () => ['candidate-body'] },
+    rollbackContext: { canonical: () => ['rollback-body'] },
+  });
+  assert.throws(execute, error => error.reason === 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN'
+    && error.node === node && error.maintenanceSite === 'ordinary-body');
+  const identity = runInNewContext(`(()=>{${booking.slice(start, end)}\n${predicate}; return 'continued';})`, {
+    target: node, ordinary, previous,
+    context: { canonical: () => ['same-body'] }, rollbackContext: { canonical: () => ['same-body'] },
+  });
+  assert.equal(identity(), 'continued');
+  const other = runInNewContext(`(()=>{${booking.slice(start, end)}\nneed(false, target);})`, { target: node });
+  assert.throws(other, error => error.reason === 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN'
+    && error.node === node && error.maintenanceSite === undefined);
 });
 
 test('private eager diagnostics identify the original initialization phase and shallow captured nodes without executing inputs', async t => {
