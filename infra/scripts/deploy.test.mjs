@@ -1797,15 +1797,16 @@ test('voice writer tracked runtime mutations retain exact current bytes and stri
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
 });
 
-function selectedGuideSourceComponents(sourceText = deployLockSource) {
+function selectedGuideSourceComponents(sourceText = deployLockSource, { includeIllustrationWitness = true } = {}) {
   const start = sourceText.indexOf('function finiteSelectedGuideSupplementaryTerms(');
   assert.ok(start !== -1, 'the selected decoder proof must be implemented');
   const component = sourceText.slice(start, sourceText.indexOf('\nfunction rollbackComparisonDiagnostic(', start));
+  const witnessExport = includeIllustrationWitness ? 'illustrationWitness: finiteSelectedGuideIllustrationWitness,' : '';
   return (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 25), runInNewContext(`${component}; ({ supplemental: finiteSelectedGuideSupplementaryTerms, decoder: finiteSelectedGuideDecoderTerms, fresh: finiteSelectedGuideFreshTerms,
     relocation: finiteSelectedGuideRelocationTerms, relocationResidual: finiteSelectedGuideRelocationResidualTerms,
     workspace: finiteSelectedGuideWorkspaceTerms, native: finiteSelectedGuideNativeTerms, handlers: finiteSelectedGuideHandlerTerms,
     illustration: finiteSelectedGuideIllustrationTerms, illustrationResidual: finiteSelectedGuideIllustrationResidualTerms,
-    illustrationWitness: finiteSelectedGuideIllustrationWitness,
+    ${witnessExport}
     dormant: finiteSelectedGuideDormantModuleTerms, ingestion: finiteSelectedGuideIngestionReaderTerms, publicReader: finiteSelectedGuidePublicReaderTerms,
     agent: finiteSelectedGuideAgentResidualTerms,
     maintenanceWorker: finiteSelectedGuideMaintenanceWorkerTerms,
@@ -2033,8 +2034,9 @@ function retainedSelectedVoiceProgram(changes = new Map()) {
 }
 
 test('Chinese reader actual 291 Program keeps the unmodelled booking frontier closed', async () => {
+  assert.equal(typeof selectedGuideSourceComponents().illustrationWitness, 'function', 'the current default source must keep its real wrapper witness');
   const components = selectedGuideSourceComponents(execFileSync('git', ['show',
-    '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063:infra/scripts/production-deploy-lock.mjs'], { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' }));
+    '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063:infra/scripts/production-deploy-lock.mjs'], { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' }), { includeIllustrationWitness: false });
   const ref = '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063';
   const path = 'packages/domain/src/assets/presentation-asset.ts';
   const previous = await videoIngressProgram(new Map(), { sourceRef: ref, trackedSourceOnly: true });
