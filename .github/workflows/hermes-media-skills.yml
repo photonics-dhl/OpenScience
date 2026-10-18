@@ -12,6 +12,14 @@ on:
   push:
     branches: [release/onchip-production-line, frontend/nanqing]
     paths:
+      - 'packages/domain/src/usage/grants.ts'
+      - 'packages/domain/src/usage/snapshot.ts'
+      - 'packages/domain/src/usage/policies.ts'
+      - 'packages/domain/src/workspace/personal.ts'
+      - 'packages/domain/test/usage-grants.test.ts'
+      - 'packages/domain/test/usage-snapshot.test.ts'
+      - 'packages/domain/test/usage-policies.test.ts'
+      - 'packages/domain/test/workspace-personal.test.ts'
       - 'packages/domain/src/agent/voice*.ts'
       - 'packages/domain/test/agent/voice*.test.ts'
       - 'packages/ai-gateway/src/synclip-voice.ts'
@@ -313,6 +321,14 @@ on:
   pull_request:
     branches: [release/onchip-production-line, frontend/nanqing]
     paths:
+      - 'packages/domain/src/usage/grants.ts'
+      - 'packages/domain/src/usage/snapshot.ts'
+      - 'packages/domain/src/usage/policies.ts'
+      - 'packages/domain/src/workspace/personal.ts'
+      - 'packages/domain/test/usage-grants.test.ts'
+      - 'packages/domain/test/usage-snapshot.test.ts'
+      - 'packages/domain/test/usage-policies.test.ts'
+      - 'packages/domain/test/workspace-personal.test.ts'
       - 'packages/domain/src/agent/voice*.ts'
       - 'packages/domain/test/agent/voice*.test.ts'
       - 'packages/ai-gateway/src/synclip-voice.ts'
@@ -613,6 +629,37 @@ on:
       - '.github/workflows/hermes-media-skills.yml'
 
 jobs:
+  usage-level-routing:
+    name: User level routing / lint and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: npx pnpm@9.15.0 install --frozen-lockfile
+      - name: Lint persisted level routing sources and tests
+        run: >-
+          npx pnpm@9.15.0 exec eslint --no-cache --max-warnings 0
+          packages/domain/src/usage/grants.ts packages/domain/src/usage/snapshot.ts
+          packages/domain/test/usage-grants.test.ts packages/domain/test/usage-snapshot.test.ts
+          packages/domain/test/workspace-personal.test.ts
+      - run: npx pnpm@9.15.0 --filter @openscience/database generate
+      - name: Build Domain workspace dependencies
+        run: npx pnpm@9.15.0 --filter "@openscience/domain^..." build
+      - name: Verify persisted level grants, snapshots and registration
+        run: >-
+          npx pnpm@9.15.0 --filter @openscience/domain exec vitest run --config vitest.config.ts
+          test/usage-grants.test.ts test/usage-snapshot.test.ts
+          test/workspace-personal.test.ts test/usage-policies.test.ts
+
   first-image-grant:
     name: First image grant / real PostgreSQL
     runs-on: ubuntu-latest
