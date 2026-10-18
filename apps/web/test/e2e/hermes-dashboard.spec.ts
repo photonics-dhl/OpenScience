@@ -88,6 +88,9 @@ test.beforeEach(async ({ page }) => {
   await page.context().route('**/api/**', (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() === 'GET') {
+      if (url.pathname === '/api/agent/voice/capabilities' && url.searchParams.size === 0) return json(route, {
+        available: false, maxRecordingSeconds: 60, transcriptionCredits: 1, replyMaxUtf8Bytes: 1000, voices: [],
+      });
       if (url.pathname === '/api/auth/me') return json(route, {
         userId: 'hermes-user', email: 'hermes@example.invalid', displayName: 'Ada Researcher', status: 'email_verified', level: 'free',
       });

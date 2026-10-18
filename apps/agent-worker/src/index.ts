@@ -3,6 +3,8 @@ import { startNativeImageReview } from '@openscience/domain';
 import { readNativeSourceReview, startNativeSourceReview, completeNativeSourceReview, readNativeAgentExecution, requireNativeAgentExecutionAuthority } from '@openscience/domain';
 import { runNativePaperTask } from './native-agent/paper-task';
 import { runNativeSourceReviewTask } from './native-agent/source-review-task';
+import { createHermesVoiceHandlers } from './voice';
+export { createHermesVoiceHandlers } from './voice';
 import { isDeepStrictEqual } from 'node:util';
 import { loadGatewayConfig, sceneImageEnabledFromEnv } from '@openscience/config';
 import { requirePartialParserRecovery } from './parsers/recovery-checkpoint';
@@ -14,6 +16,8 @@ import {
   TextProviderError,
   type StructuredGenerationOptions,
   createConfiguredGateway,
+  createConfiguredSynclipVoiceRuntime,
+  type SynclipVoiceRuntime,
   type GatewayImageSubmission,
   type GatewayIllustrationSubmission,
   createNativeVideoReadinessReader,
@@ -586,6 +590,7 @@ export function createHandlers(
     parserCascade?: ParserCascadeRunner;
     externalProcessingPolicy?: ExternalProcessingPolicy;
     sourceRetrieveHandler?: TaskHandler;
+    voiceRuntime?: SynclipVoiceRuntime;
     videoSpool?: PresentationVideoSpool;
     nativeAgentInboxRoot?: string;
     nativeSemanticSearch?: (scope: NativeSemanticSearchScope) => Promise<NativeSemanticSearch | undefined>;
@@ -595,6 +600,7 @@ export function createHandlers(
   // worker, including source authorization after waiting; other handlers stay concurrent.
   let searchIndexTail: Promise<unknown> = Promise.resolve();
   return {
+    ...createHermesVoiceHandlers(options.voiceRuntime),
     'demo.echo': async () => {
       await sleep(300);
       return { echoed: true };
@@ -1533,7 +1539,12 @@ async function main(): Promise<void> {
       process.env.AI_ENABLED === 'true' && process.env.MINIMAX_VISION_ENABLED === 'true',
     );
     deps.nativeImageReaderReady = Boolean(deps.nativeAgentRuntime && process.env.HERMES_NATIVE_AGENT_INBOX?.trim() && parserCascade);
+    const voiceRuntime = await createConfiguredSynclipVoiceRuntime(process.env).catch(() => {
+      console.warn('Hermes voice runtime unavailable; other task handlers remain enabled');
+      return undefined;
+    });
     const handlers = createHandlers(gateway, {
+      voiceRuntime,
       nativeAgentInboxRoot: process.env.HERMES_NATIVE_AGENT_INBOX,
       parserCascade,
       externalProcessingPolicy,

@@ -4,6 +4,20 @@ import test from 'node:test';
 
 const composeUrl = new URL('./docker-compose.prod.yml', import.meta.url);
 
+test('voice credentials are opt-in and confined to read-only API and Worker directories', async () => {
+  const compose = (await readFile(composeUrl, 'utf8')).replaceAll('\r\n', '\n');
+  const mount = '- /opt/openscience-synclip/voice-secrets:/run/openscience-voice:ro';
+  const configured = 'SYNCLIP_API_KEY_FILE: ${SYNCLIP_VOICE_API_KEY_FILE:-}';
+  for (const name of ['api', 'agent-worker']) {
+    const service = compose.split(`\n  ${name}:\n`, 2)[1]?.split(/\n {2}[a-zA-Z0-9_-]+:\n/u, 1)[0] ?? '';
+    assert.ok(service.includes(mount));
+    assert.ok(service.includes(configured), 'No credential path is enabled by default');
+    assert.doesNotMatch(service, /SYNCLIP_API_KEY:\s*[^\n]+/u);
+  }
+  assert.equal(compose.split(mount).length - 1, 2, 'Other services do not receive voice credentials');
+  assert.doesNotMatch(compose, /\/opt\/openscience-synclip\/api-key:/u, 'Original host credential stays private');
+});
+
 test('API observes video readiness through only the existing read-only results directory', async () => {
   const compose = (await readFile(composeUrl, 'utf8')).replaceAll('\r\n', '\n');
   const api = compose.split('\n  api:\n', 2)[1]?.split(/\n {2}[a-zA-Z0-9_-]+:\n/u, 1)[0] ?? '';

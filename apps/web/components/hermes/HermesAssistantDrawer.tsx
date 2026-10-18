@@ -38,6 +38,8 @@ import { HermesMediaReview } from './HermesMediaReview';
 import { ScientificText } from '@/components/content/ScientificText';
 import { HermesWritingDraft, type HermesWritingDraftValue } from './HermesWritingDraft';
 import { useOptionalHermesWorkspaceStage } from './HermesWorkspaceStageContext';
+import { HermesVoiceControls, type HermesVoiceMemory } from './HermesVoiceControls';
+import { mergeVoiceTranscript } from '@/lib/hermes/voice-api';
 
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : React.useLayoutEffect;
 
@@ -300,6 +302,23 @@ function HermesAssistantDrawerContent({
   const deletedTasks = useRef(new Set<string>());
   const suppressAutoRestore = useRef(false);
   const sessionKey = useRef<string | null>(null);
+  const sessionCreation = useRef<{ owner: string; promise: Promise<string> } | null>(null);
+  const voiceMemory = useRef<HermesVoiceMemory>({ scope: currentOwner });
+  const ensureGuideSession = useCallback((sessionGoal: string): Promise<string> => {
+    if (sessionId.current) return Promise.resolve(sessionId.current);
+    if (sessionCreation.current?.owner === currentOwner) return sessionCreation.current.promise;
+    const owner = currentOwner;
+    sessionKey.current ??= crypto.randomUUID();
+    const key = sessionKey.current;
+    const promise = createWorkspaceGuideSession(sessionGoal, key, route === 'research-object-edit' ? routeResearchObjectId : undefined)
+      .then(response => {
+        if (ownerRef.current !== owner || sessionKey.current !== key) throw new DOMException('Conversation changed', 'AbortError');
+        sessionId.current ??= response.session.id;
+        return sessionId.current;
+      }).finally(() => { if (sessionCreation.current?.promise === promise) sessionCreation.current = null; });
+    sessionCreation.current = { owner, promise };
+    return promise;
+  }, [currentOwner, route, routeResearchObjectId]);
   const taskKey = useRef<string | null>(null);
   const pendingPayload = useRef<WorkspaceGuidePayload | null>(null);
   const submittingRef = useRef(false);
@@ -503,7 +522,7 @@ function HermesAssistantDrawerContent({
     preparedTasks.current.clear(); setTurns([]); setSentGoal(''); followTranscript.current = true;
     setPresentationIntent(null); setPresentationSuggestion(undefined); setLiteratureIntent(null); setTask(null); setGoal(''); setError(''); setSubmitting(false); setRestoredTask(false); setGuideStored(false); setWritingDraft(null); setWritingDirty(false);
     setPublicationVersion(''); setMediaReviewVersion(''); setLocalMessage(''); setPublicUrl(''); setPreparing(false); offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
-    sessionId.current = null; sessionKey.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; writingSaveGoal.current = ''; latestWritingTask.current = null; displayOnlyWritingTasks.current.clear(); setActionBusy(false);
+    sessionId.current = null; sessionKey.current = null; sessionCreation.current = null; taskKey.current = null; pendingPayload.current = null; submittingRef.current = false; dismissedInitialTask.current = ''; goalTouched.current = false; writingSaveGoal.current = ''; latestWritingTask.current = null; displayOnlyWritingTasks.current.clear(); setActionBusy(false);
     deletedSessions.current.clear(); deletedTasks.current.clear(); suppressAutoRestore.current = false;
   }, [currentOwner]);
   useEffect(() => {
@@ -520,7 +539,7 @@ function HermesAssistantDrawerContent({
       if (!removesCurrent) return;
       suppressAutoRestore.current = true;
       setTask(null); setRestoredTask(true); setError(''); setSentGoal('');
-      if (detail.kind === 'session') { setTurns([]); sessionId.current = null; sessionKey.current = null; taskKey.current = null; }
+      if (detail.kind === 'session') { setTurns([]); sessionId.current = null; sessionKey.current = null; sessionCreation.current = null; taskKey.current = null; }
       // A removed conversation retains its adopted writing output. Only deleting that task clears it.
       setPresentationIntent(null); setPresentationSuggestion(undefined); setPublicationVersion(''); setMediaReviewVersion('');
       offeredAction.current = null; offeredDraft.current = undefined; assertPrepared.current = null;
@@ -623,7 +642,7 @@ function HermesAssistantDrawerContent({
         : listAgentTasks();
       void loadTasks.then(({ tasks: candidates }) => {
           const tasks = candidates.filter((candidate) => !deletedTasks.current.has(candidate.id) && (!candidate.sessionId || !deletedSessions.current.has(candidate.sessionId)));
-          if (cancelled || submittingRef.current || sessionId.current || (initialTaskId && dismissedInitialTask.current === initialTaskId)) return;
+          if (cancelled || submittingRef.current || sessionId.current || sessionCreation.current || (initialTaskId && dismissedInitialTask.current === initialTaskId)) return;
           const writingTasks = tasks.filter((candidate) => (route === 'research-object-edit'
             ? candidate.researchObjectId === routeResearchObjectId
             : !candidate.researchObjectId) && candidate.status === 'succeeded' && Boolean(resultFromTask(candidate)?.writingDraft))
@@ -735,12 +754,8 @@ function HermesAssistantDrawerContent({
         setLiteratureIntent(routed);
         return;
       }
-      if (!sessionId.current) {
-        sessionKey.current ??= crypto.randomUUID();
-        const response = await createWorkspaceGuideSession(normalized, sessionKey.current, route === 'research-object-edit' ? routeResearchObjectId : undefined);
-        if (ownerRef.current !== owner) return;
-        sessionId.current = response.session.id;
-      }
+      const guideSessionId = await ensureGuideSession(normalized);
+      if (ownerRef.current !== owner) return;
       taskKey.current ??= crypto.randomUUID();
       let firstImageVersion: string | undefined;
       if (!pendingPayload.current && route === 'research-object-edit' && routeResearchObjectId
@@ -776,7 +791,7 @@ function HermesAssistantDrawerContent({
       submittedDraft.current = pendingPayload.current.context.editorDraft;
       submittedPresentationVersion.current = pendingPayload.current.context.presentation?.versionId ?? '';
       const response = await submitWorkspaceGuideTask({
-        sessionId: sessionId.current,
+        sessionId: guideSessionId,
         idempotencyKey: taskKey.current,
         payload: pendingPayload.current,
       });
@@ -908,6 +923,18 @@ function HermesAssistantDrawerContent({
           <div><span>{pendingPayload.current ? tc('retrySame') : tc('inputHint')}</span>
             <button type="submit" disabled={busy || actionBusy || !goal.trim()}>{error && pendingPayload.current ? tc('retry') : tc('send')} <span aria-hidden="true">↑</span></button>
           </div>
+          {viewerId && <HermesVoiceControls key={currentOwner} scope={currentOwner} locale={locale} draft={goal}
+            disabled={busy || actionBusy || Boolean(pendingPayload.current)} sourceTask={task} memory={voiceMemory}
+            ensureSession={() => ensureGuideSession(goal.trim() || 'Hermes')}
+            onApply={(text, scope) => {
+              if (ownerRef.current !== scope || busy || actionBusy || pendingPayload.current) return false;
+              const next = mergeVoiceTranscript({ scope, currentScope: ownerRef.current, currentDraft: goal, transcript: text });
+              if (next === null) return false;
+              goalTouched.current = true; setGoal(next);
+              if (resolvedDraftScope) setGuideStored(saveHermesGuideGoal(draftStorage, resolvedDraftScope, next));
+              composer.current?.querySelector<HTMLTextAreaElement>('#hermes-guide-goal')?.focus();
+              return true;
+            }} />}
           {guideStored && !goal && <span className="sr-only">{t('guide.browserSessionDraft')}</span>}
         </form>
       </section>

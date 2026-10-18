@@ -4,7 +4,7 @@ import { createPrismaAuditSink, createPrismaClient, createRedisClient } from '@o
 import { createPersonalWorkspace, nativeAgentRuntimeFromEnv } from '@openscience/domain';
 import { createClamAvScanner, createStorageAdapter } from '@openscience/storage';
 import { createLogger } from '@openscience/observability';
-import { createGatewayRecoveryReaders, createNativeVideoReadinessReader } from '@openscience/ai-gateway';
+import { createConfiguredSynclipVoiceRuntime, createGatewayRecoveryReaders, createNativeVideoReadinessReader } from '@openscience/ai-gateway';
 import { buildApp } from './app';
 import { buildHybridSearchFromEnv } from './search-runtime';
 import { createSearchPrismaClient, deleteSearchContent, setSearchContentVisibility } from '@openscience/search';
@@ -54,7 +54,12 @@ async function main(): Promise<void> {
     const recoveryReaders = createGatewayRecoveryReaders(env.ai.imageGateway, { logger });
     const nativeAgentRuntime = nativeAgentRuntimeFromEnv(process.env);
     const nativeSceneImageEnabled = env.ai.sceneImageEnabled && env.ai.imageGateway.primary === 'synclip';
+    const voiceRuntime = await createConfiguredSynclipVoiceRuntime(process.env).catch(() => {
+      logger.warn('Hermes voice runtime unavailable; text dialogue remains enabled');
+      return undefined;
+    });
     const app = ownedApp = await buildApp({
+      voiceRuntime,
       nativeAgentRuntime,
       prisma,
       redis,
