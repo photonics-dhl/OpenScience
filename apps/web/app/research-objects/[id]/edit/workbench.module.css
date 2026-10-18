@@ -24,6 +24,10 @@
   .workbenchShell.assistantOpen :global([data-workspace-planes='true']) { grid-template-columns: minmax(0, 1fr) clamp(320px, 26vw, 380px); gap: 28px; }
   .workbenchShell.assistantOpen :global([data-workspace-plane='25']) { padding-left: 24px; }
 }
+@media (min-width: 1024px) and (max-height: 800px) {
+  .workbenchShell[data-os-surface='workspace'] :global([data-object-context-bar='true']) { padding-block: 12px; }
+  .returnLink { margin-bottom: 4px; }
+}
 .mainContent { min-width: 0; padding: 28px 0 64px; }
 .workbenchShell :global([data-workspace-plane='56']) { background: transparent; }
 .workbenchShell :global([data-object-header='true']) { gap: 20px; }

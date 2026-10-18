@@ -142,6 +142,22 @@ body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { disp
 .hermes-workbench-conversation .hermes-conversation-composer > div { margin-top: 6px; gap: 8px; }
 .drawer.hermes-workbench-conversation .hermes-conversation { padding-inline: 16px; }
 .hermes-workbench-conversation [data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
+@media (min-width: 1024px) and (max-height: 800px) {
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-header { padding-block: 4px 8px; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-transcript { padding-block: 12px; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'reference reference' 'input send' 'hint hint' 'voice voice';
+    gap: 6px 8px;
+  }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer > p { grid-area: reference; margin: 0; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer > textarea { grid-area: input; height: 56px; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer > div { display: contents; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer > div > span { grid-area: hint; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer > div > button { grid-area: send; align-self: center; min-width: 44px; }
+  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer > [data-hermes-voice='true'] { grid-area: voice; margin-top: 0; }
+}
 [data-hermes-global-companion='true'][data-hermes-placement='detached'][data-hermes-dock-ready='false'] {
   visibility: hidden;
 }
