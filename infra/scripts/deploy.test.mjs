@@ -1797,10 +1797,10 @@ test('voice writer tracked runtime mutations retain exact current bytes and stri
     error => error.reason === 'VOICE_WRITER_READER_CONTEXT_CHANGED');
 });
 
-function selectedGuideSourceComponents() {
-  const start = deployLockSource.indexOf('function finiteSelectedGuideSupplementaryTerms(');
+function selectedGuideSourceComponents(sourceText = deployLockSource) {
+  const start = sourceText.indexOf('function finiteSelectedGuideSupplementaryTerms(');
   assert.ok(start !== -1, 'the selected decoder proof must be implemented');
-  const component = deployLockSource.slice(start, deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic(', start));
+  const component = sourceText.slice(start, sourceText.indexOf('\nfunction rollbackComparisonDiagnostic(', start));
   return (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 25), runInNewContext(`${component}; ({ supplemental: finiteSelectedGuideSupplementaryTerms, decoder: finiteSelectedGuideDecoderTerms, fresh: finiteSelectedGuideFreshTerms,
     relocation: finiteSelectedGuideRelocationTerms, relocationResidual: finiteSelectedGuideRelocationResidualTerms,
     workspace: finiteSelectedGuideWorkspaceTerms, native: finiteSelectedGuideNativeTerms, handlers: finiteSelectedGuideHandlerTerms,
@@ -2031,6 +2031,513 @@ test('selected guide actual capable maintenance composes the complete retained-s
 function retainedSelectedVoiceProgram(changes = new Map()) {
   return videoIngressProgram(changes, { sourceRef: '2ad0aa1b103797dd9f86a005ff3c33050b33ff54', trackedSourceOnly: true });
 }
+
+test('Chinese reader actual 291 Program keeps the unmodelled booking frontier closed', async () => {
+  const components = selectedGuideSourceComponents(execFileSync('git', ['show',
+    '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063:infra/scripts/production-deploy-lock.mjs'], { cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8' }));
+  const ref = '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063';
+  const path = 'packages/domain/src/assets/presentation-asset.ts';
+  const previous = await videoIngressProgram(new Map(), { sourceRef: ref, trackedSourceOnly: true });
+  const actual = await videoIngressProgram(new Map([[path, readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')]]),
+    { sourceRef: ref, trackedSourceOnly: true });
+  const roots = [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']];
+  const contextFor = owner => {
+    for (const [entry] of roots) assert.equal(owner.program.getSourceFile(resolve(owner.projectRoot, entry)).text,
+      owner.sourceHost.readFile(resolve(owner.projectRoot, entry)));
+    return { ...selectedGuideSourceContext(owner), roots };
+  };
+  let frontier;
+  try { components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); }
+  catch (error) { frontier = error; }
+  assert.equal(frontier?.reason, 'SELECTED_GUIDE_MAINTENANCE_BOOKING_UNKNOWN');
+  const source = actual.program.getSourceFile(resolve(actual.projectRoot, path));
+  assert.equal(frontier.node.getSourceFile(), source);
+  assert.match(frontier.node.getText(), /Selected-image production intent is required for a new child/u);
+  let qualification;
+  try { components.maintenanceQualification(actual.ts,
+    components.supplemental(actual.ts, contextFor(actual), { ui: false }),
+    components.supplemental(previous.ts, contextFor(previous), { ui: false })); }
+  catch (error) { qualification = error; }
+  assert.equal(qualification?.reason, 'SELECTED_GUIDE_MAINTENANCE_QUALIFICATION_UNKNOWN');
+  assert.equal(qualification.node.getSourceFile(), source);
+  assert.equal(qualification.node.name.text, 'requireSelectedImageGuideProduction');
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+  const point = source.getLineAndCharacterOfPosition(frontier.node.getStart());
+  console.log(JSON.stringify({ readerStage: ref, sourceOnly: true, permit: false,
+    reason: frontier.reason, qualification: qualification.reason, path, line: point.line + 1,
+    frontier: 'existing locked selected-child guard now contains the separately preserved production-intent refusal' }));
+});
+
+test('Chinese reader whole separation reconstructs the existing 291 guard and retained state', async () => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const path = 'packages/domain/src/assets/presentation-asset.ts';
+  const previous = await videoIngressProgram(new Map(), options);
+  const actual = await videoIngressProgram(new Map([[path, readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8')]]), options);
+  const roots = [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']];
+  const contextFor = owner => ({ ...selectedGuideSourceContext(owner), roots });
+  let model;
+  try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); }
+  catch (error) {
+    const node = error.node, parsed = node?.getSourceFile();
+    console.log(JSON.stringify({ reason: error.reason, site: error.separationSite, error: error.message, effectSites: error.effectSites, originFacts: error.originFacts, originEvaluation: error.originEvaluation, unresolvedOrigins: error.unresolvedOrigins,
+      path: parsed && relative(actual.projectRoot, parsed.fileName), line: node && parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+      term: node?.getText().slice(0, 250) }));
+    assert.fail(JSON.stringify({ reason: error.reason ?? 'UNKNOWN', site: error.separationSite,
+      path: parsed && relative(actual.projectRoot, parsed.fileName),
+      line: node && parsed.getLineAndCharacterOfPosition(node.getStart()).line + 1 }));
+  }
+  assert.equal(model.status, 'conditional');
+  assert.equal(model.projected.size, 1);
+  const projected = model.projected.get(path);
+  assert.equal(projected.source, actual.program.getSourceFile(resolve(actual.projectRoot, path)));
+  assert.equal(projected.previous, previous.program.getSourceFile(resolve(previous.projectRoot, path)));
+  assert.deepEqual(videoPairRuntime(actual.ts, projected.text), videoPairRuntime(previous.ts, projected.previous.text));
+  assert.equal(model.fresh.fresh, 'legacy');
+  assert.ok([...model.separation.effectFunctions].some(node => node.name?.text === 'requireSelectedImageSource'));
+  assert.ok(model.separation.effectReads.length >= 10);
+  assert.equal(model.origin.domain, 'old-admission-retained-plus-authentic-selected-read-extension');
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+  assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, roots), false);
+  console.log(JSON.stringify({ separation: 'whole-module-reconstruction', projected: model.projected.size,
+    readonlyFunctions: model.separation.effectFunctions.size, databaseReads: model.separation.effectReads.length,
+    referenceSites: model.separation.publicReferences.length, sourceOnlyPermit: false }));
+});
+
+test('Chinese reader separation refuses actual authority, effect and retained-state mutations', async t => {
+  const components = selectedGuideSourceComponents();
+  const ref = '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063';
+  const options = { sourceRef: ref, trackedSourceOnly: true };
+  const path = 'packages/domain/src/assets/presentation-asset.ts', agent = 'packages/domain/src/agent/agent.ts';
+  const native = 'packages/domain/src/agent/native-agent-execution.ts', worker = 'apps/agent-worker/src/index.ts';
+  const current = readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+  const previous = await videoIngressProgram(new Map(), options);
+  const contextFor = owner => ({ ...selectedGuideSourceContext(owner),
+    roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+  const oldContext = contextFor(previous);
+  const once = (text, from, to) => { assert.equal(text.split(from).length, 2, `mutation target: ${from}`); return text.replace(from, to); };
+  const check = "if (!selectedImageProductionIntent(selected.payload.goal))\n          throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production intent is required for a new child');";
+  const cases = [
+    { id: 'remove intent', file: path, site: 'booking-insertion', change: text => once(text, check, '') },
+    { id: 'invert intent', file: path, site: 'booking-insertion', change: text => once(text, '!selectedImageProductionIntent(selected.payload.goal)', 'selectedImageProductionIntent(selected.payload.goal)') },
+    { id: 'wrong goal', file: path, site: 'booking-insertion', change: text => once(text, 'selectedImageProductionIntent(selected.payload.goal)', 'selectedImageProductionIntent(input.idempotencyKey)') },
+    { id: 'callback bypass', file: path, site: 'booking-insertion', change: text => once(text, check, `if (false) { ${check} }`) },
+    { id: 'wrong transaction', file: path, site: 'booking-insertion', change: text => once(text,
+      'requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: parentOwner.id, executionAttempt: parentOwner.executionAttempt })',
+      'requireSelectedImageGuideParent(deps.prisma, { userId: input.userId, guideTaskId: parentOwner.id, executionAttempt: parentOwner.executionAttempt })') },
+    { id: 'weaken source checkpoint', file: path, site: 'reader-frame', change: text => once(text, "|| cp.state !== 'completed'", "|| false") },
+    { id: 'wrong wrapper input', file: path, site: 'production-wrapper', change: text => once(text,
+      'const authority = await readSelectedImageGuideProposal(tx, input);\n  return authority &&',
+      'const authority = await readSelectedImageGuideProposal(tx, {} as never);\n  return authority &&') },
+    { id: 'parent bypass', file: path, site: 'production-wrapper', change: text => once(text,
+      'const authority = await readSelectedImageGuideProposal(tx, input);\n  if (!authority)',
+      'const authority = await requireSelectedImageGuideProduction(tx, input);\n  if (!authority)') },
+    { id: 'private shorthand escape', file: path, site: 'private-reference', change: text => `${text}\nexport const escaped = { readSelectedImageGuideProposal };\n` },
+    { id: 'private namespace escape', file: path, site: 'private-reference', change: text => `${text}\nexport { readSelectedImageGuideProposal as leaked };\n` },
+    { id: 'private default initializer', file: path, site: 'reader-frame', change: text => once(text,
+      'readSelectedImageGuideProposal(tx: Prisma.TransactionClient, input:', 'readSelectedImageGuideProposal(tx: Prisma.TransactionClient = undefined as never, input:') },
+    { id: 'private rest parameter', file: path, site: 'reader-frame', change: text => once(text,
+      'readSelectedImageGuideProposal(tx: Prisma.TransactionClient, input: { userId: string; guideTaskId: string; executionAttempt?: number })',
+      'readSelectedImageGuideProposal(...args: unknown[])') },
+    { id: 'duplicate private declaration', file: path, site: 'source', change: text => `${text}\nasync function readSelectedImageGuideProposal() { globalThis.fetch(); }\n` },
+    { id: 'late beforePersist charge', file: agent, reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN', change: text => {
+      const pattern = /await beforePersist\?\.\(tx\);\s*return persistAgentTaskInTransaction\(deps, tx, persistenceInput, ctx\);/gu;
+      assert.equal([...text.matchAll(pattern)].length, 1);
+      return text.replace(pattern, 'const persisted = await persistAgentTaskInTransaction(deps, tx, persistenceInput, ctx);\n          await beforePersist?.(tx); return persisted;'); } },
+    { id: 'lost failure attempt', file: worker, reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN', change: text => once(text,
+      'expectedExecutionAttempt: claimed?.executionAttempt,', 'expectedExecutionAttempt: undefined,') },
+    { id: 'claim epoch lost', file: agent, reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN', change: text => once(text,
+      "data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } }",
+      "data: { status: 'running', progress: 10, error: null, executionAttempt: { increment: 0 } }") },
+    { id: 'old admission widened', file: 'packages/domain/src/agent/workspace-guide-contract.ts', reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN',
+      change: () => execFileSync('git', ['show', '2493c3d02a82beb8c0a01891ea5c7ceff08cc5a3:packages/domain/src/agent/workspace-guide-contract.ts'], { cwd: previous.projectRoot, encoding: 'utf8' }) },
+    { id: 'writer activation hitchhike', file: 'apps/agent-worker/src/workspace-guide.ts', reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN',
+      change: () => execFileSync('git', ['show', '2493c3d02a82beb8c0a01891ea5c7ceff08cc5a3:apps/agent-worker/src/workspace-guide.ts'], { cwd: previous.projectRoot, encoding: 'utf8' }) },
+    { id: 'unrelated effect', file: path, site: 'whole-presentation', change: text => `${text}\nexport const unexpectedRuntime = Date.now();\n` },
+    { id: 'paired retained CP omission', file: native, site: 'retained-rejection-transfer', paired: true,
+      change: text => once(text, "'selectedImageReply', 'selectedImageDraft', 'sourceMapRef'", "'selectedImageReply', 'sourceMapRef'") },
+    { id: 'paired failure discards result', file: agent, site: 'retained-rejection-transfer', paired: true,
+      change: text => once(text, '...(result !== undefined ? { result: result as never } : {}),', 'result: null,') },
+    { id: 'paired query write', file: 'packages/domain/src/assets/scene-image.ts', site: 'new-validation-effects', paired: true,
+      change: text => once(text, 'const image = await tx.presentationAsset.findUnique({ where: { id: input.assetId }, include: { sourceClaims: true } });',
+        'const image = await tx.presentationAsset.update({ where: { id: input.assetId }, data: {}, include: { sourceClaims: true } });') },
+  ];
+  for (const value of cases) await t.test(value.id, async () => {
+    const base = value.file === path ? current : previous.program.getSourceFile(resolve(previous.projectRoot, value.file)).text;
+    const changed = value.change(base); assert.notEqual(changed, base);
+    const actual = await videoIngressProgram(new Map([[path, current], [value.file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, value.file)).text, changed);
+    const old = value.paired ? await videoIngressProgram(new Map([[value.file, changed]]), options) : previous;
+    let refused;
+    try { components.sourceModel(actual.ts, contextFor(actual), value.paired ? contextFor(old) : oldContext); }
+    catch (error) { refused = error; }
+    assert.ok(refused, 'an actual mutation cannot receive a successful whole model');
+    assert.equal(refused.reason, value.reason ?? 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+    if (value.site) assert.equal(refused.separationSite, value.site);
+    assert.ok(refused.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, value.file)),
+      `the refusal must bind the exact mutated SourceFile: ${value.file}`);
+    console.log(JSON.stringify({ mutation: value.id, reason: refused.reason, site: refused.separationSite, actualSource: value.file }));
+  });
+});
+
+test('Chinese reader newly evaluated effects cannot borrow a method name as purity', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const anchor = '  const version = await requirePresentationWriteScope(tx, input);';
+  assert.equal(base.split(anchor).length, 2);
+  const cases = [
+    ['hidden get I/O', "  const remote = { get: globalThis.fetch }; await remote.get('https://example.invalid/never-called');\n", ''],
+    ['named callback I/O', "  const remote = globalThis.fetch; [input.assetId].map(remote);\n", ''],
+    ['global Set write', "  EXTRA_SET.add(input.assetId);\n", '\nconst EXTRA_SET = new Set<string>();\n'],
+    ['global counter write', "  EXTRA_COUNTER++;\n", '\nlet EXTRA_COUNTER = 0;\n'],
+    ['ambient method alias', "  const remote = globalThis as any; remote.get('never-called');\n", ''],
+    ['getter returns I/O', "  const remote = { get get() { return globalThis.fetch; } }; remote.get('https://example.invalid/never-called');\n", ''],
+  ];
+  for (const [name, prefix, suffix] of cases) await t.test(name, async () => {
+    const changed = base.replace(anchor, prefix + anchor) + suffix;
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner),
+      roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    let error;
+    try { components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); }
+    catch (caught) { error = caught; }
+    assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+    assert.equal(error.separationSite, 'new-validation-effects');
+    assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)),
+      'the effect refusal must bind the exact mutated SourceFile');
+  });
+});
+
+test('Chinese reader effect root and callee parameter execution cannot skip real writes', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', scene = 'packages/domain/src/assets/scene-image.ts';
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const original = await videoIngressProgram(new Map(), options);
+  const oldAsset = original.program.getSourceFile(resolve(original.projectRoot, asset)).text;
+  const oldScene = original.program.getSourceFile(resolve(original.projectRoot, scene)).text;
+  const cut = "if (reply.kind !== 'proposal') return undefined;";
+  const oldCut = "if (reply.kind !== 'proposal' || !selectedImageProductionIntent(payload.goal)) return undefined;";
+  const write = "await tx.agentTask.updateMany({ where: { id: task.id }, data: { error: 'reader-probe' } });";
+  const sceneSignature = 'userId: string; researchObjectId: string; versionId: string; assetId: string;\n}) {';
+  assert.equal(oldScene.split(sceneSignature).length, 2);
+  const sceneWithDefault = oldScene.replace(sceneSignature,
+    "userId: string; researchObjectId: string; versionId: string; assetId: string;\n}, unused = globalThis.fetch('https://example.invalid/never-called')) {");
+  const cases = [
+    { name: 'direct post-cut database write', file: asset,
+      current: current.replace(cut, `${cut}\n  ${write}`), old: oldAsset.replace(oldCut, `${oldCut}\n  ${write}`), term: write.slice('await '.length, -1) },
+    { name: 'omitted callee default performs I/O', file: scene,
+      current: sceneWithDefault, old: sceneWithDefault, term: "globalThis.fetch('https://example.invalid/never-called')" },
+    { name: 'post-cut ambient accessor cannot borrow plain data', file: asset,
+      current: current.replace(cut, `${cut}\n  const ambient = globalThis as any; const unknownValue = ambient.value;`),
+      old: oldAsset.replace(oldCut, `${oldCut}\n  const ambient = globalThis as any; const unknownValue = ambient.value;`), term: 'ambient.value' },
+  ];
+  const contextFor = owner => ({ ...selectedGuideSourceContext(owner),
+    roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+  for (const value of cases) await t.test(value.name, async () => {
+    const previous = await videoIngressProgram(new Map([[value.file, value.old]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [value.file, value.current]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, value.file)).text, value.current);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, value.file)).text, value.old);
+    let error;
+    try { components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); }
+    catch (caught) { error = caught; }
+    assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+    assert.equal(error.separationSite, 'new-validation-effects');
+    assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, value.file)), 'the actual offending source must bind');
+    assert.equal(error.node.getText(), value.term);
+  });
+});
+
+test('Chinese reader receiver origins survive owned return and supplied argument wrapping', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const anchor = '  const version = await requirePresentationWriteScope(tx, input);';
+  assert.equal(base.split(anchor).length, 2);
+  const cases = [
+    ['owned return keeps ambient origin', "  const borrowed = () => globalThis as any; const remote = borrowed(); remote.get('never-called');\n", "remote.get('never-called')"],
+    ['supplied parameter keeps ambient origin', "  const borrowed = (remote: any) => remote.get('never-called'); borrowed(globalThis);\n", "remote.get('never-called')"],
+    ['Array.from retains ambient elements', "  Array.from([globalThis], remote => remote.get('never-called'));\n", "remote.get('never-called')"],
+    ['Array.from preserves finite plain elements', "  const rendered = Array.from(['ink'], text => text.trim());\n", null],
+    ['supplied unknown does not select omitted default', "  const borrowed = (remote: any = 'ink') => remote.trim(); borrowed(globalThis);\n", 'remote.trim()'],
+    ['omission and guarded unknown keep primitive origin', "  const borrowed = (text = 'ink') => text.trim(); borrowed(); const length = (value: unknown) => typeof value === 'string' && value.length > 0; length(globalThis);\n", null],
+  ];
+  for (const [name, prefix, offending] of cases) await t.test(name, async () => {
+    const changed = base.replace(anchor, prefix + anchor);
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner),
+      roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    let error, model;
+    try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); }
+    catch (caught) { error = caught; }
+    if (offending === null) {
+      if (error) assert.fail(JSON.stringify({ reason: error.reason, site: error.separationSite,
+        path: error.node?.getSourceFile().fileName, term: error.node?.getText().slice(0, 120) }));
+      assert.equal(model.status, 'conditional');
+      assert.equal(model.projected.size, 1);
+      assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+      return;
+    }
+    assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+    assert.equal(error.separationSite, 'new-validation-effects');
+    assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)), 'origin refusal must bind actual mutation');
+    assert.equal(error.node.getText(), offending);
+  });
+});
+
+test('Chinese reader mutable allocations and implicit coercion retain actual effects', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const anchor = '  const version = await requirePresentationWriteScope(tx, input);';
+  assert.equal(base.split(anchor).length, 2);
+  const cases = [
+    ['alias field mutation', "const holder: any = { value: new Map() }; const alias = holder; alias.value = globalThis; holder.value.get('never-called');", 'alias.value = globalThis'],
+    ['supplied writer mutation', "const holder: any = { value: new Map() }; const write = (supplied: any) => { supplied.value = globalThis; }; write(holder); holder.value.get('never-called');", 'supplied.value = globalThis'],
+    ['join implicit coercion', "const rendered = [{ toString: () => { (globalThis as any).readerProbe = 1; return 'ink'; } }]; rendered.join('');", "rendered.join('')"],
+    ['default sort implicit coercion', "const rendered = [{ toString: () => { (globalThis as any).readerProbe = 1; return 'ink'; } }]; rendered.sort();", 'rendered.sort()'],
+    ['separate harmless allocation and plain join', "const original = { value: new Map() }; const independent = { value: new Map() }; independent.value = new Map(); original.value.get('ink'); const rendered = ['ink', 'paper']; rendered.sort(); rendered.join(' ');", null],
+  ];
+  for (const [name, prefix, offending] of cases) await t.test(name, async () => {
+    const changed = base.replace(anchor, `  ${prefix}\n${anchor}`);
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner),
+      roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    let error, model;
+    try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+    if (offending === null) {
+      if (error) assert.fail(JSON.stringify({ reason: error.reason, site: error.separationSite,
+        path: error.node?.getSourceFile().fileName, term: error.node?.getText().slice(0, 140) }));
+      assert.equal(model.status, 'conditional');
+      assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+    } else {
+      assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+      assert.equal(error.separationSite, 'new-validation-effects');
+      assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)), 'refusal binds actual mutated source');
+      assert.equal(error.node.getText(), offending);
+    }
+  });
+});
+
+test('Chinese reader guarded task specialization retains actual object authority', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/video.ts';
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const kind = "task.kind !== 'presentation.generate'";
+  const call = 'await requireNativeIllustrationTerminalSource(prisma as Prisma.TransactionClient, task, async';
+  assert.equal(base.split(kind).length, 2); assert.equal(base.split(call).length, 2);
+  const cases = [
+    ['missing kind guard', base.replace(` || ${kind}`, '')],
+    ['inverted kind guard', base.replace(kind, "task.kind === 'presentation.generate'")],
+    ['nonterminal kind guard', base.replace("throw new PresentationAssetError('VALIDATION_ERROR', 'Native video storyboard owner is not completed');", "new PresentationAssetError('VALIDATION_ERROR', 'Native video storyboard owner is not completed');")],
+    ['wrong task argument', base.replace(call, 'await requireNativeIllustrationTerminalSource(prisma as Prisma.TransactionClient, { ...task, kind: undefined }, async')],
+    ['aliased computed kind mutation', base.replace(call, "const escapedTask = task; escapedTask['kind'] = 'workspace.guide';\n    " + call)],
+    ['opaque task escape', base.replace(call, '(globalThis as any).inspectTask(task);\n    ' + call)],
+  ];
+  for (const [name, changed] of cases) await t.test(name, async () => {
+    assert.notEqual(changed, base);
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner),
+      roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    let error;
+    try { components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+    assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+    assert.equal(error.separationSite, 'new-validation-effects');
+    const errorSource = error.node.getSourceFile();
+    const inVideo = errorSource === actual.program.getSourceFile(resolve(actual.projectRoot, file));
+    const atUnprovedSource = errorSource === actual.program.getSourceFile(resolve(actual.projectRoot, 'packages/domain/src/agent/native-agent-execution.ts'))
+      && error.node.getText().startsWith('requireSelectedImageSource(tx,');
+    assert.ok(inVideo || atUnprovedSource, 'refusal must bind the actual changed guard/effect or its exact unproved recursive consumer');
+  });
+});
+
+test('Chinese reader captured writes and genuine guide stay source bound', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', scene = 'packages/domain/src/assets/scene-image.ts', video = 'packages/domain/src/assets/video.ts';
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, scene)).text;
+  const oldVideo = original.program.getSourceFile(resolve(original.projectRoot, video)).text;
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const anchor = '  const version = await requirePresentationWriteScope(tx, input);';
+  const call = 'await requireNativeIllustrationTerminalSource(prisma as Prisma.TransactionClient, task, async';
+  assert.equal(base.split(anchor).length, 2); assert.equal(oldVideo.split(call).length, 2);
+  const cases = [
+    ['captured container writer', scene, base.replace(anchor, "  const holder: any = [new Map(), new Map()]; holder.sort(() => { holder[0] = globalThis; return 0; }); holder[0].get('never-called');\n" + anchor), 'holder[0] = globalThis'],
+    ['module intrinsic allocation is shared', scene, base.replace(anchor, '  EXTRA_MAPPED.sort();\n' + anchor) + "\nconst EXTRA_MAPPED = ['ink'].map(value => value);\n", 'EXTRA_MAPPED.sort()'],
+    ['actual workspace guide retains selected source', video, oldVideo.replace(call, "await requireNativeIllustrationTerminalSource(prisma as Prisma.TransactionClient, { ...task, kind: 'workspace.guide' }, async"), null],
+  ];
+  for (const [name, file, changed, offending] of cases) await t.test(name, async () => {
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner), roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    let error, model;
+    try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+    console.log(JSON.stringify({ control: name, sourceRelation: model?.status, reason: error?.reason,
+      site: error?.separationSite, term: error?.node?.getText().slice(0, 150) }));
+    assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+    assert.equal(error.separationSite, 'new-validation-effects');
+    if (offending) {
+      assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)));
+      assert.equal(error.node.getText(), offending);
+    } else {
+      assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, 'packages/domain/src/agent/native-agent-execution.ts')));
+      assert.ok(error.node.getText().startsWith('requireSelectedImageSource(tx,'));
+    }
+  });
+});
+
+test('Chinese reader permutations preserve nested ownership and post-read origins', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const anchor = '  const version = await requirePresentationWriteScope(tx, input);';
+  assert.equal(base.split(anchor).length, 2);
+  const cases = [
+    ['module nested permutation', 'SHARED[0].reverse();', "\nconst SHARED = ['ink'].map(() => [2, 1]);\n", 'SHARED[0].reverse()'],
+    ['capability permutation', "const holder: any = [new Map(), globalThis]; holder.reverse(); holder[0].get('never-called');", '', 'holder.reverse()'],
+    ['intrinsic method replacement', "const holder: any = ['ink']; holder.reverse = () => { (globalThis as any).probe = 1; return holder; }; holder.reverse();", '', 'holder.reverse = () => { (globalThis as any).probe = 1; return holder; }'],
+    ['plain local permutation post-read', "const holder = [2, 1]; holder.reverse(); holder[0].toString(); const independent = [3, 4]; independent.sort(); holder.pop(); holder[0]?.toString();", '', null],
+  ];
+  for (const [name, prefix, suffix, offending] of cases) await t.test(name, async () => {
+    const changed = base.replace(anchor, `  ${prefix}\n${anchor}`) + suffix;
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner), roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    let error, model;
+    try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+    console.log(JSON.stringify({ permutation: name, relation: model?.status, reason: error?.reason, site: error?.separationSite, term: error?.node?.getText().slice(0, 130) }));
+    if (offending) {
+      assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+      assert.equal(error.separationSite, 'new-validation-effects');
+      assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)));
+      assert.equal(error.node.getText(), offending);
+    } else {
+      if (error) assert.fail(JSON.stringify({ reason: error.reason, site: error.separationSite, term: error.node?.getText().slice(0, 130) }));
+      assert.equal(model.status, 'conditional');
+      assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+    }
+  });
+});
+
+test('Chinese reader module closure cannot retain unproved mutable lifetime', async () => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const factory = '(() => { const held: number[][] = []; const read = () => held[0].reverse(); held.push([2, 1]); return read; })()';
+  const changed = base.replace('  const version = await requirePresentationWriteScope(tx, input);',
+    '  SHARED_FN();\n  const version = await requirePresentationWriteScope(tx, input);') + `\nconst SHARED_FN = ${factory};\n`;
+  const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+  const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+  assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+  assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+  const contextFor = owner => ({ ...selectedGuideSourceContext(owner), roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+  let error, model;
+  try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+  console.log(JSON.stringify({ closure: 'late captured child allocation', relation: model?.status, reason: error?.reason, site: error?.separationSite, term: error?.node?.getText().slice(0, 220) }));
+  assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+  assert.equal(error.separationSite, 'new-validation-effects');
+  assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)));
+  assert.equal(error.node.getText(), factory);
+});
+
+test('Chinese reader captured data escape retains actual mutation lifetime', async t => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const anchor = '  const version = await requirePresentationWriteScope(tx, input);';
+  assert.equal(base.split(anchor).length, 2);
+  const factory = '(() => { const held: number[][] = []; const insert = () => { held.push([2, 1]); }; insert(); return held; })()';
+  const cases = [
+    ['captured child insertion', 'SHARED_DATA[0].reverse();', factory, factory],
+    ['plain read-only data factory', 'SHARED_DATA[0].toString();', '(() => { const held = [2, 1]; return held; })()', null],
+  ];
+  for (const [name, prefix, initializer, offending] of cases) await t.test(name, async () => {
+    const changed = base.replace(anchor, `  ${prefix}\n${anchor}`) + `\nconst SHARED_DATA = ${initializer};\n`;
+    const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+    const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+    assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+    assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+    const contextFor = owner => ({ ...selectedGuideSourceContext(owner), roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+    let error, model;
+    try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+    console.log(JSON.stringify({ capturedData: name, relation: model?.status, reason: error?.reason,
+      site: error?.separationSite, term: error?.node?.getText().slice(0, 220) }));
+    if (offending) {
+      assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+      assert.equal(error.separationSite, 'new-validation-effects');
+      assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)));
+      assert.equal(error.node.getText(), offending);
+    } else {
+      if (error) assert.fail(JSON.stringify({ reason: error.reason, site: error.separationSite, term: error.node?.getText().slice(0, 130) }));
+      assert.equal(model.status, 'conditional');
+      assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, previous.projectRoot, []), false);
+    }
+  });
+});
+
+test('Chinese reader derived captured data cannot erase unresolved lifetime', async () => {
+  const components = selectedGuideSourceComponents();
+  const options = { sourceRef: '291d934f1d58f8ee2309ee7b4e5dcfd3b0d2c063', trackedSourceOnly: true };
+  const asset = 'packages/domain/src/assets/presentation-asset.ts', file = 'packages/domain/src/assets/scene-image.ts';
+  const original = await videoIngressProgram(new Map(), options);
+  const base = original.program.getSourceFile(resolve(original.projectRoot, file)).text;
+  const current = readFileSync(new URL(`../../${asset}`, import.meta.url), 'utf8');
+  const factory = '(() => { const held: number[][] = []; const insert = () => { held.push([2, 1]); }; insert(); return held[0]; })()';
+  const changed = base.replace('  const version = await requirePresentationWriteScope(tx, input);',
+    '  SHARED_CHILD.reverse();\n  const version = await requirePresentationWriteScope(tx, input);') + `\nconst SHARED_CHILD = ${factory};\n`;
+  const previous = await videoIngressProgram(new Map([[file, changed]]), options);
+  const actual = await videoIngressProgram(new Map([[asset, current], [file, changed]]), options);
+  assert.equal(actual.program.getSourceFile(resolve(actual.projectRoot, file)).text, changed);
+  assert.equal(previous.program.getSourceFile(resolve(previous.projectRoot, file)).text, changed);
+  const contextFor = owner => ({ ...selectedGuideSourceContext(owner), roots: [['apps/agent-worker/src/index.ts'], ['packages/domain/src/agent/first-image-continuation.ts']] });
+  let error, model;
+  try { model = components.sourceModel(actual.ts, contextFor(actual), contextFor(previous)); } catch (caught) { error = caught; }
+  console.log(JSON.stringify({ capturedData: 'derived child escape', relation: model?.status, reason: error?.reason,
+    site: error?.separationSite, term: error?.node?.getText().slice(0, 220) }));
+  assert.equal(error?.reason, 'SELECTED_GUIDE_SAVED_READER_UNKNOWN');
+  assert.equal(error.separationSite, 'new-validation-effects');
+  assert.ok(error.node.getSourceFile() === actual.program.getSourceFile(resolve(actual.projectRoot, file)));
+  assert.equal(error.node.getText(), factory);
+});
 
 test('selected guide supplementary writer input retains captured nodes and actual API and Drawer sources', async () => {
   const components = selectedGuideSourceComponents(), actual = await retainedSelectedGuideProgram();
@@ -2585,9 +3092,15 @@ test('selected guide initialization consumes original collected module equality 
   videoTimeoutObservation('67-parent-begin');
   try {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
-  const ts = createRequire(import.meta.url)('typescript');
+  const fixtureClientRequire = createRequire(import.meta.url), ts = fixtureClientRequire('typescript');
   videoTimeoutObservation('67-data-begin');
-  const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
+  const localClient = join(projectRoot, 'packages/search/generated/client/index.js');
+  // A source-only worktree may use the already installed workspace dependency
+  // as fixture DATA. CI prefers its own generated file. No client is installed
+  // or substituted in either original collector's release-root input.
+  const client = existsSync(localClient) ? localClient
+    : join(dirname(fixtureClientRequire.resolve('@openscience/search/package.json')), 'generated/client/index.js');
+  const genuine = readFileSync(client, 'utf8');
   const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
   const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
     ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
@@ -2600,9 +3113,12 @@ test('selected guide initialization consumes original collected module equality 
   const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
     deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
   assert.ok(collector && metadata && consumer && initialization);
+  const writerRemainder = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideWriterRemainderTerms('),
+    deployLockSource.indexOf('\nfunction finiteSelectedGuideSavedReaderSeparation('));
+  assert.ok(writerRemainder.startsWith('function finiteSelectedGuideWriterRemainderTerms('));
   const contexts = new WeakMap(), defaultRoots = [], vendorCalls = [];
-  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 29), runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization};
-    ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms })`, {
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 29), runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization}; ${writerRemainder};
+    ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms, remainder: finiteSelectedGuideWriterRemainderTerms })`, {
     resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
     rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: defaultRoots,
     // This custom-root component fixture isolates the existing vendor boundary;
@@ -2620,7 +3136,7 @@ test('selected guide initialization consumes original collected module equality 
     }, error => { videoTimeoutObservation('67-cleanup-throw'); throw error; });
   });
   const candidate = join(fixture, 'candidate'), previous = join(fixture, 'previous');
-  const modulePath = 'packages/search/generated/client/index.js', roots = [[modulePath]];
+  const modulePath = 'packages/search/generated/client/index.js', ordinaryPath = 'apps/ordinary.ts', roots = [[modulePath], [ordinaryPath]];
   const input = directory => {
     const config = structuredClone(original);
     config.generator.output.value = join(directory, 'packages/search/generated/client');
@@ -2632,6 +3148,8 @@ test('selected guide initialization consumes original collected module equality 
     await writeFile(join(directory, 'tsconfig.json'), '{}');
     await writeFile(join(directory, modulePath), input(directory));
     await writeFile(join(directory, 'packages/search/generated/client/runtime/library.js'), 'module.exports = {};');
+    await mkdir(join(directory, 'apps'), { recursive: true });
+    await writeFile(join(directory, ordinaryPath), 'export function readOrdinary() { return { value: 1 }; }');
   }
   videoTimeoutObservation('67-fixture-written');
   const collect = directory => {
@@ -2647,26 +3165,59 @@ test('selected guide initialization consumes original collected module equality 
   videoTimeoutObservation('67-initialize-begin');
   assert.equal(functions.initialize(ts, left, right, { current, previous: old }).status, 'conditional');
   videoTimeoutObservation('67-initialize-end');
+  assert.equal(functions.remainder(ts, left, right, new Set(), { current, previous: old }).status, 'conditional',
+    'the actual W remainder must retain the original two-location equality');
+  const pair = deployLockSource.match(/function finiteSelectedGuidePairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
+  assert.ok(pair);
+  const remaining = pair.slice(pair.indexOf('    for (const key of new Set'), pair.indexOf('    // Existing production callers'));
+  assert.ok(remaining.startsWith('    for (const key of new Set'));
+  const strictRemaining = runInNewContext(`(current, previous) => {
+    const a = new Map(current), b = new Map(previous), affected = new Set(), runtime = new Map();
+    const model = { projected: new Map() }, reject = () => false; let site, moduleKey;
+    ${remaining}
+    return true;
+  }`, { ts, builtinModules });
+  assert.equal(strictRemaining(current, old), true, 'original remaining-entry equality accepts lawful relocation');
   const refuses = action => { videoTimeoutObservation('67-refusal-begin');
     assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
     videoTimeoutObservation('67-refusal-end'); };
+  const refusesRemainder = (a = left, b = right, collected) => assert.throws(
+    () => functions.remainder(ts, a, b, new Set(), collected),
+    error => ['SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN'].includes(error.reason));
+  refusesRemainder(); // No collected arrays means no captured-equality premise.
+  refusesRemainder({ ...left, modules: new Map(left.modules) }, right);
   refuses(() => functions.initialize(ts, left, right)); // Source-only equality cannot mint the captured proof.
-  for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }])
+  for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }]) {
     refuses(() => functions.initialize(ts, left, right, collected));
+    refusesRemainder(left, right, collected);
+  }
   refuses(() => functions.initialize(ts, { ...left }, right, { current, previous: old }));
+  refusesRemainder({ ...left }, right, { current, previous: old });
   const capturedPath = resolve(candidate, modulePath), capturedSource = left.modules.get(capturedPath);
   left.modules.set(capturedPath, ts.createSourceFile(capturedPath, capturedSource.text, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS));
   refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  refusesRemainder(left, right, { current, previous: old });
   left.modules.set(capturedPath, capturedSource);
   const position = current.findIndex(([name]) => name === key), [missing] = current.splice(position, 1);
   refuses(() => functions.initialize(ts, left, right, { current, previous: old }));
+  refusesRemainder(left, right, { current, previous: old });
   current.splice(position, 0, missing);
+  left.modules.delete(capturedPath);
+  refusesRemainder(left, right, { current, previous: old });
+  left.modules.set(capturedPath, capturedSource);
+  await writeFile(join(candidate, ordinaryPath), 'export function readOrdinary() { return { value: 2 }; }');
+  const ordinaryChange = collect(candidate);
+  assert.equal(functions.remainder(ts, contexts.get(ordinaryChange), right, new Set(), { current: ordinaryChange, previous: old }).status, 'conditional');
+  assert.equal(strictRemaining(ordinaryChange, old), false, 'deferred captured runtime change is still refused by the ORIGINAL remaining loop');
+  await writeFile(join(candidate, ordinaryPath), 'export function readOrdinary() { return { value: 1 }; }');
   const changedRuntime = input(candidate).replace(JSON.stringify(original.inlineSchemaHash), JSON.stringify(`${original.inlineSchemaHash}-changed`));
   assert.notEqual(changedRuntime, input(candidate));
   await writeFile(join(candidate, modulePath), changedRuntime);
   const changed = collect(candidate);
   assert.notEqual(JSON.stringify(new Map(changed).get(key)), JSON.stringify(new Map(old).get(key)));
+  assert.equal(strictRemaining(changed, old), false, 'nonlocation generated metadata must remain unequal');
   refuses(() => functions.initialize(ts, contexts.get(changed), right, { current: changed, previous: old }));
+  refusesRemainder(contexts.get(changed), right, { current: changed, previous: old });
   for (const bad of [input(candidate).replace(JSON.stringify(join(candidate, 'infra/search/schema.prisma')), JSON.stringify(join(candidate, 'wrong/schema.prisma'))),
     `${input(candidate)}\nexports.configObserver = config;`]) {
     await writeFile(join(candidate, modulePath), bad);
