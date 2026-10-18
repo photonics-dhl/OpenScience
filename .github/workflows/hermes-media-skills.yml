@@ -695,7 +695,470 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # Original source fixtures run without cross-parent proof/cache transport.
+  release-tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      PLAYWRIGHT_WEB_MODE: production
+      API_ORIGIN: http://127.0.0.1:3101
+      ENABLE_VISUAL_HARNESS: '1'
+      PRISMA_CLI_BINARY_TARGETS: debian-openssl-3.0.x,linux-musl
+      TOOLING_GROUP: ${{ matrix.group }}
+      ROLLBACK_REF: ${{ inputs.rollback_ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: npx pnpm@9.15.0 install --frozen-lockfile
+      - run: npx pnpm@9.15.0 --filter @openscience/database generate
+      - run: npx pnpm@9.15.0 --filter @openscience/search generate
+      - run: npx pnpm@9.15.0 --filter "@openscience/agent-worker^..." build
+      - name: Verify generated Prisma clients include the required musl engines
+        run: |
+          core_prisma_root="$(node -e "const path = require('node:path'); const root = path.dirname(require.resolve('@prisma/client/package.json')); process.stdout.write(path.join(root, '..', '..', '.prisma', 'client'))")"
+          test -f "$core_prisma_root/libquery_engine-linux-musl.so.node"
+          test -f packages/search/generated/client/libquery_engine-linux-musl.so.node
+      - name: Retain exact original historical source fixtures
+        run: |
+          for fixture_ref in ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d 4cc78008f86da811aeb695b5d3639a5b52891d57 ba276d8edccf163a8fb4e5a44655dd8ccf718eff 764020c76b25af571e8b88e80338406d70bdb37a 2ad0aa1b103797dd9f86a005ff3c33050b33ff54 852c6eaef9df6acbded36ff8194ff4e8392e65ea 5979840b31d6aa02e5350b0e63c8c2c8b049b133 676650c78313ac8cfe39eaf029a6eeebe71824de a9ff2332ff1b8646467edfa09628f625d6c27a1c; do
+            if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$fixture_ref"
+            fi
+            test "$(git rev-parse "$fixture_ref^{commit}")" = "$fixture_ref"
+          done
+      - name: Run complete source tooling in fresh original test processes
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/release-tooling "tmp/release-tooling-${TOOLING_GROUP}"
+          cat > tmp/release-tooling/runner.mjs <<'XGS_TOOLING_RUNNER_MJS'
+          import assert from 'node:assert/strict';
+          import { createReadStream, createWriteStream } from 'node:fs';
+          import { mkdir, readFile, writeFile } from 'node:fs/promises';
+          import { createInterface } from 'node:readline';
+          import { createRequire } from 'node:module';
+          import { spawn } from 'node:child_process';
+          import { finished } from 'node:stream/promises';
+          import { fileURLToPath, pathToFileURL } from 'node:url';
+          import { resolve, join } from 'node:path';
+          import { getHeapStatistics } from 'node:v8';
+
+          export function registrations(ts, text) {
+            const source = ts.createSourceFile('deploy.test.mjs', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+            assert.equal(source.parseDiagnostics.length, 0, 'registration syntax');
+            const imports = source.statements.filter(s => ts.isImportDeclaration(s) && s.moduleSpecifier.text === 'node:test');
+            assert.equal(imports.length, 1); assert.equal(imports[0].importClause?.name?.text, 'test');
+            assert.equal(imports[0].importClause.namedBindings, undefined, 'original default test binding only');
+            // Keep acquisition of registrars closed, not merely their original spelling.
+            // Additional loaders/escapes refuse; ordinary literal helper imports remain.
+            const unknown = () => { throw Error('REGISTRATION_ACQUISITION_UNKNOWN'); };
+            const factories = new Map(), factoryCalls = new Set(), loaderDeclarations = new Set(), loaders = new Set();
+            const propertyName = n => (ts.isPropertyAccessExpression(n.parent) && n.parent.name === n)
+              || ((ts.isMethodDeclaration(n.parent) || ts.isPropertyAssignment(n.parent)) && n.parent.name === n);
+            const literalMember = n => ts.isPropertyAccessExpression(n) ? n.name.text
+              : ts.isElementAccessExpression(n) && n.argumentExpression
+                && (ts.isStringLiteral(n.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(n.argumentExpression))
+                  ? n.argumentExpression.text : undefined;
+            const hostNamespace = n => ts.isIdentifier(n) && ['globalThis', 'global'].includes(n.text);
+            const processSource = n => ts.isIdentifier(n) && n.text === 'process'
+              || ((ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n))
+                && hostNamespace(n.expression) && literalMember(n) === 'process');
+            function moduleArgument(call) {
+              const arg = call.arguments[0];
+              if (call.arguments.length !== 1 || !arg || !(ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg))
+                || ['node:test', 'node:module', 'module', 'node:process', 'process'].includes(arg.text)) unknown();
+            }
+            const walk = (node, visit) => { visit(node); ts.forEachChild(node, n => walk(n, visit)); };
+            for (const statement of source.statements) {
+              if (ts.isImportDeclaration(statement) && ['node:process', 'process'].includes(statement.moduleSpecifier.text)) unknown();
+              if (ts.isImportDeclaration(statement) && ['node:module', 'module'].includes(statement.moduleSpecifier.text)) {
+                const clause = statement.importClause;
+                if (!clause || clause.name || !clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) unknown();
+                for (const item of clause.namedBindings.elements) {
+                  const imported = (item.propertyName ?? item.name).text;
+                  if (imported === 'createRequire') {
+                    if (factories.has(item.name.text)) unknown(); factories.set(item.name.text, item);
+                  } else if (imported !== 'builtinModules') unknown();
+                }
+              }
+            }
+            walk(source, n => {
+              // Validate an identified source's whole member/escape domain BEFORE looking
+              // for a particular loader name. Do not interpret computed key expressions.
+              if ((processSource(n) || hostNamespace(n)) && !propertyName(n)) {
+                const member = n.parent;
+                if (!(ts.isPropertyAccessExpression(member) || ts.isElementAccessExpression(member))
+                  || member.expression !== n || literalMember(member) === undefined) unknown();
+                if (hostNamespace(n) && ['global', 'globalThis'].includes(literalMember(member))) unknown();
+              }
+              if (literalMember(n) === 'getBuiltinModule') {
+                if (!ts.isCallExpression(n.parent) || n.parent.expression !== n) unknown();
+                moduleArgument(n.parent);
+              }
+              if (ts.isBindingElement(n) && n.propertyName && n.propertyName.text === 'getBuiltinModule') unknown();
+              if ((ts.isImportDeclaration(n) || ts.isExportDeclaration(n)) && n !== imports[0]
+                && n.moduleSpecifier && ['node:test', 'node:module', 'module', 'node:process', 'process'].includes(n.moduleSpecifier.text)
+                && !ts.isImportDeclaration(n)) unknown();
+              if (ts.isCallExpression(n)) {
+                if (n.expression.kind === ts.SyntaxKind.ImportKeyword) moduleArgument(n);
+                if (ts.isIdentifier(n.expression) && factories.has(n.expression.text)) {
+                  factoryCalls.add(n);
+                  if (ts.isVariableDeclaration(n.parent) && n.parent.initializer === n && ts.isIdentifier(n.parent.name)) {
+                    if (!(n.parent.parent.flags & ts.NodeFlags.Const)) unknown();
+                    loaderDeclarations.add(n.parent); loaders.add(n.parent.name.text);
+                  } else if (ts.isCallExpression(n.parent) && n.parent.expression === n) moduleArgument(n.parent);
+                  else unknown();
+                }
+                const callee = n.expression;
+                if ((ts.isIdentifier(callee) && callee.text === 'require')
+                  || ['require', 'getBuiltinModule'].includes(literalMember(callee))) moduleArgument(n);
+              }
+            });
+            walk(source, n => {
+              if (!ts.isIdentifier(n) || propertyName(n)) return;
+              if (factories.has(n.text)) {
+                const declaration = factories.get(n.text);
+                if (n.parent === declaration || (ts.isCallExpression(n.parent) && n.parent.expression === n && factoryCalls.has(n.parent))) return;
+                unknown(); // Factory alias/shadow/argument/return/property escape.
+              }
+              if (loaders.has(n.text)) {
+                const parent = n.parent;
+                if (ts.isVariableDeclaration(parent) && parent.name === n && loaderDeclarations.has(parent)) return;
+                if (ts.isCallExpression(parent) && parent.expression === n) { moduleArgument(parent); return; }
+                if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent))
+                  && parent.expression === n && literalMember(parent) === 'resolve'
+                  && ts.isCallExpression(parent.parent) && parent.parent.expression === parent) { moduleArgument(parent.parent); return; }
+                unknown(); // Ambiguous shadow or unsupported acquired-loader escape.
+              }
+            });
+            const arrays = new Map(), calls = new Set(), names = [];
+            for (const s of source.statements) if (ts.isVariableStatement(s)) for (const d of s.declarationList.declarations) {
+              if (ts.isIdentifier(d.name) && d.initializer && ts.isArrayLiteralExpression(d.initializer)) {
+                assert.ok(s.declarationList.flags & ts.NodeFlags.Const); assert.ok(!arrays.has(d.name.text));
+                arrays.set(d.name.text, d.initializer);
+              }
+            }
+            function value(n, env) {
+              if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
+              if (n.kind === ts.SyntaxKind.TrueKeyword) return true;
+              if (n.kind === ts.SyntaxKind.FalseKeyword) return false;
+              if (ts.isIdentifier(n) && env.has(n.text)) return value(env.get(n.text), new Map());
+              if (ts.isTemplateExpression(n)) return n.head.text + n.templateSpans.map(s => String(value(s.expression, env)) + s.literal.text).join('');
+              if (ts.isConditionalExpression(n)) {
+                const condition = value(n.condition, env); assert.equal(typeof condition, 'boolean');
+                return value(condition ? n.whenTrue : n.whenFalse, env);
+              }
+              throw Error('UNRESOLVED_REGISTRATION_NAME');
+            }
+            function register(n, env) {
+              assert.ok(ts.isExpressionStatement(n) && ts.isCallExpression(n.expression), 'unsupported registration statement');
+              const call = n.expression;
+              assert.ok(ts.isIdentifier(call.expression) && call.expression.text === 'test', 'original test import required');
+              assert.equal(call.arguments.length, 2, 'no altered test options');
+              assert.ok(ts.isArrowFunction(call.arguments[1]) || ts.isFunctionExpression(call.arguments[1]));
+              const name = value(call.arguments[0], env); assert.equal(typeof name, 'string'); assert.ok(name.length);
+              calls.add(call); names.push(name);
+            }
+            for (const s of source.statements) {
+              if (ts.isExpressionStatement(s) && ts.isCallExpression(s.expression) && ts.isIdentifier(s.expression.expression)
+                  && s.expression.expression.text === 'test') register(s, new Map());
+              else if (ts.isForOfStatement(s)) {
+                assert.ok(ts.isVariableDeclarationList(s.initializer) && (s.initializer.flags & ts.NodeFlags.Const));
+                assert.equal(s.initializer.declarations.length, 1);
+                let array = s.expression;
+                if (ts.isIdentifier(array)) array = arrays.get(array.text);
+                assert.ok(array && ts.isArrayLiteralExpression(array), 'finite literal registration array');
+                for (const element of array.elements) {
+                  const binding = s.initializer.declarations[0].name, env = new Map();
+                  if (ts.isIdentifier(binding)) { assert.notEqual(binding.text, 'test'); env.set(binding.text, element); }
+                  else {
+                    assert.ok(ts.isArrayBindingPattern(binding) && ts.isArrayLiteralExpression(element));
+                    binding.elements.forEach((b, i) => {
+                      assert.ok(ts.isBindingElement(b) && ts.isIdentifier(b.name) && !b.initializer && !b.dotDotDotToken);
+                      assert.notEqual(b.name.text, 'test'); assert.ok(element.elements[i]); env.set(b.name.text, element.elements[i]);
+                    });
+                  }
+                  register(s.statement, env);
+                }
+              }
+            }
+            // Resolve only the actual import's supported top-level calls; aliases, conditional
+            // registration and new test.only/skip forms cannot silently disappear from groups.
+            function inspect(n) {
+              if (ts.isIdentifier(n) && n.text === 'test') {
+                const parent = n.parent;
+                assert.ok((ts.isPropertyAccessExpression(parent) && parent.name === n)
+                  || parent === imports[0].importClause || (ts.isCallExpression(parent)
+                  && parent.expression === n && calls.has(parent)), 'UNACCOUNTED_TEST_BINDING');
+              }
+              ts.forEachChild(n, inspect);
+            }
+            inspect(source);
+            assert.ok(names.length); assert.equal(new Set(names).size, names.length, 'DUPLICATE_ROOT');
+            return names;
+          }
+
+          export function schedule(names, count = 8) {
+            assert.ok(names.length && names.every(n => typeof n === 'string' && n.length));
+            assert.equal(new Set(names).size, names.length, 'DUPLICATE_ROOT');
+            const units = names.map(name => [name]);
+            for (let i = 0; i < units.length; i++) for (let j = i + 1; j < units.length;) {
+              if (units[i].some(a => units[j].some(b => a.startsWith(b + ' ') || b.startsWith(a + ' ')))) {
+                units[i].push(...units.splice(j, 1)[0]); j = i + 1;
+              } else j++;
+            }
+            const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const groups = Array.from({ length: count }, () => []);
+            units.forEach((roots, index) => {
+              const pattern = `^(?:${roots.map(escape).join('|')})(?:$| )`, regex = new RegExp(pattern);
+              assert.deepEqual(names.filter(n => regex.test(n)).sort(), [...roots].sort(), 'OVERLAPPING_ROOT_FILTER');
+              groups[index % count].push({ index, roots, pattern });
+            });
+            const all = groups.flat().flatMap(u => u.roots);
+            assert.equal(all.length, names.length); assert.equal(new Set(all).size, names.length);
+            return groups;
+          }
+
+          export async function verdict(file, expected) {
+            const roots = new Set(expected ?? []), seenRoots = new Set(), active = new Set(), path = [];
+            const descendants = [], summaries = []; let currentRoot, terminals = 0;
+            for await (const line of createInterface({ input: createReadStream(file), crlfDelay: Infinity })) {
+              const e = JSON.parse(line), d = e.data;
+              if (e.type === 'test:summary') { summaries.push(d); continue; }
+              if (!['test:start', 'test:pass', 'test:fail'].includes(e.type)) continue;
+              assert.ok(Number.isInteger(d.nesting) && d.nesting >= 0 && typeof d.name === 'string');
+              if (d.nesting === 0) currentRoot = d.name;
+              const selected = expected === undefined || roots.has(currentRoot);
+              if (!selected) {
+                if (e.type !== 'test:start') assert.ok(d.skip, 'unexpected non-skipped root/descendant');
+                continue;
+              }
+              path.length = d.nesting; path[d.nesting] = d.name;
+              const key = JSON.stringify([path, d.file, d.line, d.column]);
+              if (e.type === 'test:start') { assert.ok(!active.has(key)); active.add(key); continue; }
+              assert.equal(e.type, 'test:pass', 'runner failure'); assert.ok(!d.skip && !d.todo, 'selected test skipped/todo');
+              assert.ok(active.delete(key), 'verdict without start'); terminals++;
+              if (d.nesting === 0) { assert.ok(!seenRoots.has(d.name)); seenRoots.add(d.name); }
+              descendants.push({ path: [...path], testNumber: d.testNumber });
+            }
+            assert.equal(active.size, 0, 'unfinished selected tests');
+            if (expected !== undefined) assert.deepEqual([...seenRoots].sort(), [...roots].sort(), 'ZERO_OR_MISSING_ROOT');
+            else assert.ok(seenRoots.size, 'ZERO_ROOT');
+            const final = summaries.filter(s => s.file === undefined).at(-1);
+            assert.ok(final?.success === true && final.counts, 'MISSING_SUCCESSFUL_SUMMARY');
+            for (const s of summaries) {
+              assert.equal(s.success, true); for (const k of ['failed', 'cancelled', 'todo']) assert.equal(s.counts[k], 0);
+            }
+            assert.ok(final.counts.passed >= seenRoots.size && terminals >= seenRoots.size);
+            return { roots: [...seenRoots], descendants, summaries };
+          }
+
+          export async function runChild({ executable = process.execPath, file, expected, pattern, directory, reporter, cwd = process.cwd(), signal }) {
+            await mkdir(directory, { recursive: true });
+            const events = join(directory, 'events.ndjson');
+            const args = ['--test', ...(pattern ? [`--test-name-pattern=${pattern}`] : []),
+              `--test-reporter=${pathToFileURL(reporter).href}`, `--test-reporter-destination=${events}`,
+              '--test-reporter=tap', '--test-reporter-destination=stdout', file];
+            const out = createWriteStream(join(directory, 'stdout.log')), err = createWriteStream(join(directory, 'stderr.log'));
+            let child, failure, interrupted, timer;
+            const startedAt = new Date().toISOString(), began = performance.now();
+            const stop = reason => {
+              failure ??= reason instanceof Error ? reason : Error(String(reason));
+              if (child?.pid && child.exitCode === null && child.signalCode === null) {
+                // The CLI and its own test worker share a detached Linux process group.
+                if (process.platform !== 'win32') { try { process.kill(-child.pid, 'SIGTERM'); } catch {} }
+                else child.kill('SIGTERM');
+                timer ??= setTimeout(() => {
+                  if (process.platform !== 'win32') { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }
+                  else child.kill('SIGKILL');
+                }, 5000);
+              }
+            };
+            const onSignal = name => { interrupted = name; stop(name); };
+            const handlers = new Map(['SIGINT', 'SIGTERM'].map(name => [name, () => onSignal(name)]));
+            for (const [name, handler] of handlers) process.on(name, handler);
+            const onAbort = () => onSignal('ABORT'); signal?.addEventListener('abort', onAbort, { once: true });
+            out.on('error', stop); err.on('error', stop);
+            let result;
+            try {
+              if (signal?.aborted) throw Error('ABORT');
+              child = spawn(executable, args, { cwd, env: { ...process.env, XGS_VIDEO_TIMEOUT_TRACE: join(directory, 'phase.ndjson') },
+                stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+              child.stdout.pipe(out); child.stderr.pipe(err);
+              child.stdout.pipe(process.stdout, { end: false }); child.stderr.pipe(process.stderr, { end: false });
+              result = await new Promise(resolveResult => {
+                child.once('error', error => { failure ??= error; });
+                child.once('close', (code, childSignal) => resolveResult({ code, signal: childSignal }));
+              });
+              await Promise.all([finished(out), finished(err)]);
+              await writeFile(join(directory, 'exit.json'), JSON.stringify({ executable, args, pid: child.pid,
+                startedAt, elapsedMs: performance.now() - began, ...result, interrupted, failure: failure?.message }) + '\n');
+              if (failure) throw failure;
+              assert.equal(result.code, 0, 'nonzero child'); assert.equal(result.signal, null, 'signalled child');
+              const receipt = await verdict(events, expected);
+              await writeFile(join(directory, 'verdict.json'), JSON.stringify(receipt) + '\n');
+              return receipt;
+            } finally {
+              if ((failure || interrupted || result?.signal || result?.code !== 0) && child?.pid && process.platform !== 'win32') {
+                try { process.kill(-child.pid, 'SIGKILL'); } catch {}
+              }
+              if (timer) clearTimeout(timer);
+              signal?.removeEventListener('abort', onAbort);
+              for (const [name, handler] of handlers) process.removeListener(name, handler);
+              if (!result) { out.end(); err.end(); await Promise.allSettled([finished(out), finished(err)]); }
+            }
+          }
+
+          export async function main() {
+            assert.equal(process.versions.node.split('.')[0], '22', 'official Node22 runner required');
+            const group = Number(process.env.TOOLING_GROUP); assert.ok(Number.isInteger(group) && group >= 0 && group < 8);
+            const ts = createRequire(import.meta.url)('typescript');
+            const names = registrations(ts, await readFile('infra/scripts/deploy.test.mjs', 'utf8')), groups = schedule(names);
+            const base = resolve(`tmp/release-tooling-${group}`), reporter = fileURLToPath(new URL('./reporter.cjs', import.meta.url));
+            await mkdir(base, { recursive: true });
+            await writeFile(join(base, 'schedule.json'), JSON.stringify({ node: process.version, typescript: ts.version,
+              platform: process.platform, heapLimit: getHeapStatistics().heap_size_limit, candidate: process.env.GITHUB_SHA,
+              rollback: process.env.ROLLBACK_REF, roots: names, groups }) + '\n');
+            if (group === 0) for (const file of ['scripts/release-input-manifest.test.mjs', 'infra/scripts/production-release-retention.test.mjs']) {
+              await runChild({ file, directory: join(base, file.replaceAll('/', '_')), reporter });
+            }
+            const completed = [];
+            for (const unit of groups[group]) {
+              const result = await runChild({ file: 'infra/scripts/deploy.test.mjs', expected: unit.roots, pattern: unit.pattern,
+                directory: join(base, `unit-${unit.index}`), reporter });
+              completed.push(...result.roots);
+            }
+            assert.deepEqual(completed.sort(), groups[group].flatMap(u => u.roots).sort());
+            await writeFile(join(base, 'complete.json'), JSON.stringify({ group, roots: completed, success: true }) + '\n');
+          }
+          if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+          XGS_TOOLING_RUNNER_MJS
+          cat > tmp/release-tooling/reporter.cjs <<'XGS_TOOLING_REPORTER_CJS'
+          module.exports = async function* (source) {
+            for await (const event of source) {
+              const d = event.data ?? {}, data = {};
+              for (const key of ['name', 'nesting', 'testNumber', 'file', 'line', 'column', 'skip', 'todo', 'message', 'success']) {
+                if (['string', 'number', 'boolean'].includes(typeof d[key])) data[key] = d[key];
+              }
+              if (event.type === 'test:summary') data.counts = d.counts;
+              yield JSON.stringify({ type: event.type, data }) + '\n';
+            }
+          };
+          XGS_TOOLING_REPORTER_CJS
+          cat > tmp/release-tooling/controls.mjs <<'XGS_TOOLING_CONTROLS_MJS'
+          import assert from 'node:assert/strict';
+          import { mkdir, mkdtemp, writeFile, readFile } from 'node:fs/promises';
+          import { createRequire } from 'node:module';
+          import { resolve, join } from 'node:path';
+          import { fileURLToPath } from 'node:url';
+          import { registrations, schedule, runChild, verdict } from './runner.mjs';
+
+          const ts = process.env.TOOLING_CONTROL_TS ? createRequire(import.meta.url)(process.env.TOOLING_CONTROL_TS)
+            : createRequire(import.meta.url)('typescript');
+          const base = await mkdtemp(resolve(process.env.TOOLING_CONTROL_DIRECTORY ?? 'tmp/tooling-control-'));
+          const reporter = fileURLToPath(new URL('./reporter.cjs', import.meta.url));
+          const prefix = "import test from 'node:test';\n";
+          const fixture = prefix + "test('a.+', async t=>{ await t.test('child', async t=>{await t.test('leaf',()=>{});}); t.after(()=>{}); });\n"
+            + "test('a.+ variant',()=>{}); test('other',()=>{});";
+          const names = registrations(ts, fixture), groups = schedule(names);
+          assert.deepEqual(names, ['a.+', 'a.+ variant', 'other']);
+          assert.deepEqual(groups[0][0].roots, names.slice(0, 2)); assert.equal(groups.flat().length, 2);
+          assert.ok(!new RegExp(groups[0][0].pattern).test('arbitrary'));
+          const loop = prefix + "const pairs=[['x',()=>{}],['y',()=>{}]]; for(const [name,mutate] of pairs) test(`negative ${name}`,()=>{});"
+            + "for(const alias of [false,true]) test(`positive${alias?' alias':''}`,()=>{});";
+          assert.deepEqual(registrations(ts, loop), ['negative x', 'negative y', 'positive', 'positive alias']);
+          const acquired=["const extra=(await import('node:test')).default;", "const extra=require('node:test');",
+            "const extra=process[`getBuiltinModule`]('node:test').test;",
+            "const load=process[`getBuiltinModule`];const extra=load('node:test').test;",
+            "const extra=process['get'+'BuiltinModule']('node:test').test;",
+            "const load=process['get'+'BuiltinModule'];const extra=load('node:test').test;",
+            "const p=process;const extra=p.getBuiltinModule('node:test').test;",
+            "import p from 'node:process';const extra=p['get'+'BuiltinModule']('node:test').test;",
+            "import {getBuiltinModule as load} from 'process';const extra=load('node:test').test;",
+            "const p=await import('node:process');const extra=p['get'+'BuiltinModule']('node:test').test;",
+            "import {createRequire as make} from 'node:module';const load=make(import.meta.url);const extra=load('node:test')['test'];",
+            "const specifier='node:test';const extra=(await import(specifier)).test;",
+            "import {createRequire as make} from 'node:module';const alias=make;const extra=alias(import.meta.url)('node:test');"];
+          for(const code of acquired)assert.throws(()=>registrations(ts,prefix+code+"test('covered',()=>{});"), /REGISTRATION_ACQUISITION_UNKNOWN/);
+          assert.deepEqual(registrations(ts,prefix+"test('helper',async()=>{await import('./production-deploy-lock.mjs');});"),['helper']);
+          assert.deepEqual(registrations(ts,prefix+"test('literal helper',async()=>{process[`env`];await import(`./production-deploy-lock.mjs`);});"),['literal helper']);
+          for (const text of [prefix+"test('same',()=>{});test('same',()=>{});", prefix+"test(dynamic,()=>{});",
+            prefix+"if(true)test('hidden',()=>{});", prefix+"test.skip('skip',()=>{});", prefix+"const alias=test;alias('hidden',()=>{});"]) {
+            assert.throws(()=>registrations(ts,text));
+          }
+          const childFile = join(base, 'nested.test.mjs'); await writeFile(childFile, fixture);
+          const nested = await runChild({ file: childFile, pattern: groups[0][0].pattern, expected: names.slice(0, 2), reporter, directory: join(base,'nested') });
+          assert.equal(nested.roots.length, 2); assert.equal(nested.descendants.length, 4);
+          await assert.rejects(runChild({ file: childFile, pattern:'^no-match$', expected:['no-match'], reporter, directory:join(base,'zero') }), /ZERO_OR_MISSING_ROOT|unexpected non-skipped root/);
+          const skipped=join(base,'skipped.test.mjs');
+          await writeFile(skipped,prefix+"test('selected',async t=>{await t.test('skipped descendant',{skip:true},()=>{});});");
+          await assert.rejects(runChild({file:skipped,expected:['selected'],pattern:'^selected(?:$| )',reporter,directory:join(base,'skipped')}), /selected test skipped/);
+          const failing = join(base,'fail.test.mjs'), marker=join(base,'cleanup.txt');
+          await writeFile(failing, prefix+"import {writeFileSync} from 'node:fs'; test('fail',t=>{t.after(()=>writeFileSync("
+            +JSON.stringify(marker)+",'done'));throw Error('controlled failure');});");
+          await assert.rejects(runChild({file:failing,expected:['fail'],pattern:'^fail(?:$| )',reporter,directory:join(base,'failure')}), /nonzero child/);
+          assert.equal(await readFile(marker,'utf8'),'done');
+          assert.match(await readFile(join(base,'failure/stdout.log'),'utf8'), /controlled failure/);
+          const cleanupFail=join(base,'cleanup-fail.test.mjs');
+          await writeFile(cleanupFail,prefix+"test('cleanup fail',t=>{t.after(()=>{throw Error('controlled cleanup failure')});});");
+          await assert.rejects(runChild({file:cleanupFail,reporter,directory:join(base,'cleanup-failure')}), /nonzero child/);
+          assert.match(await readFile(join(base,'cleanup-failure/stdout.log'),'utf8'), /controlled cleanup failure/);
+          await assert.rejects(runChild({executable:join(base,'missing-node'),file:childFile,expected:names,reporter,directory:join(base,'spawn')}), e=>e.code==='ENOENT');
+          const badReporter=join(base,'bad-reporter.cjs');await writeFile(badReporter,"module.exports=async function*(){throw Error('controlled reporter failure')};");
+          await assert.rejects(runChild({file:childFile,reporter:badReporter,directory:join(base,'reporter-failure')}), /nonzero child/);
+          assert.match(await readFile(join(base,'reporter-failure/stderr.log'),'utf8'), /controlled reporter failure/);
+          const badOutput=join(base,'bad-output');await mkdir(join(badOutput,'stdout.log'),{recursive:true});
+          await assert.rejects(runChild({file:childFile,reporter,directory:badOutput}), e=>['EISDIR','EPERM'].includes(e.code));
+          await writeFile(join(base,'incomplete.ndjson'),JSON.stringify({type:'test:start',data:{name:'unfinished',nesting:0,testNumber:1}})+'\n');
+          await assert.rejects(verdict(join(base,'incomplete.ndjson'),['unfinished']), /unfinished selected tests/);
+          const held=join(base,'held.test.mjs'), worker=join(base,'worker.pid');
+          await writeFile(held,prefix+"import {writeFileSync} from 'node:fs';test('held',async()=>{writeFileSync("
+            +JSON.stringify(worker)+",String(process.pid));await new Promise(r=>setTimeout(r,3000));});");
+          const controller=new AbortController();
+          const cancellation=runChild({file:held,expected:['held'],reporter,directory:join(base,'signal'),signal:controller.signal});
+          // Wait for this owned test worker's actual entry before signalling its CLI group.
+          let pid;for(let i=0;i<100;i++){try{pid=Number(await readFile(worker,'utf8'));break;}catch{await new Promise(r=>setTimeout(r,25));}}
+          assert.ok(pid);controller.abort();await assert.rejects(cancellation, /ABORT/);
+          assert.equal(JSON.parse(await readFile(join(base,'signal/exit.json'),'utf8')).interrupted,'ABORT');
+          if(process.platform!=='win32'){
+            let alive=true;for(let i=0;i<100;i++){try{
+              process.kill(pid,0);const stat=await readFile(`/proc/${pid}/stat`,'utf8');
+              if(stat.slice(stat.lastIndexOf(')')+2).startsWith('Z')){alive=false;break;}
+              await new Promise(r=>setTimeout(r,25));
+            }catch{alive=false;break;}}
+            assert.equal(alive,false,'owned analyzer must not outlive cancelled CLI');
+          }
+          await writeFile(join(base,'receipt.json'),JSON.stringify({node:process.version,typescript:ts.version,platform:process.platform,
+            finiteNames:true,unknownDuplicateAliasRefused:true,prefixNestedRoots:2,descendants:4,zeroMatchRefused:true,selectedSkipRefused:true,
+            failCleanup:true,cleanupFailure:true,spawnError:true,reporterError:true,outputFailure:true,missingVerdict:true,abortRefused:true,
+            linuxProcessGroupVerified:process.platform!=='win32',productionTestsExecuted:0})+'\n');
+          console.log('TOOLING_CONTROLS_PASS '+base);
+          XGS_TOOLING_CONTROLS_MJS
+          export TOOLING_CONTROL_DIRECTORY="tmp/release-tooling-${TOOLING_GROUP}/control-"
+          node tmp/release-tooling/controls.mjs
+          node tmp/release-tooling/runner.mjs
+      - name: Preserve complete tooling verdicts and original child output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tooling-${{ matrix.group }}
+          path: |
+            tmp/release-tooling-${{ matrix.group }}/
+            tmp/release-tooling/
+          if-no-files-found: error
+          retention-days: 7
+
   skill-path:
+    needs: release-tooling
     runs-on: ubuntu-latest
     timeout-minutes: 70
     services:
@@ -796,15 +1259,6 @@ jobs:
             --output "$GITHUB_WORKSPACE/tmp/native-restore-source-identity/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --node "$(command -v node)"
       - run: node --check infra/hermes-agent/offline_host.cjs
-      - name: Test release tooling with the retained video source fixtures
-        run: |
-          for fixture_ref in ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6 36e8ce5228bc8d3109de171cc86f17eab3fe7f64 e75f2764ded1074f4d307d34dca833517f0d3696 3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5 70e81398903db9cfd6f46cbab51db18ba5f7cb05 1c88ff813db128fd1933096a2f102c1c1c667b25 39fcaa4b957dc5a672ae7c485b6310e3f1e6aa0d 4cc78008f86da811aeb695b5d3639a5b52891d57 ba276d8edccf163a8fb4e5a44655dd8ccf718eff 764020c76b25af571e8b88e80338406d70bdb37a 2ad0aa1b103797dd9f86a005ff3c33050b33ff54 852c6eaef9df6acbded36ff8194ff4e8392e65ea 5979840b31d6aa02e5350b0e63c8c2c8b049b133 676650c78313ac8cfe39eaf029a6eeebe71824de a9ff2332ff1b8646467edfa09628f625d6c27a1c; do
-            if ! git cat-file -e "${fixture_ref}^{commit}" 2>/dev/null; then
-              git fetch --no-tags --depth=1 origin "$fixture_ref"
-            fi
-            test "$(git rev-parse "$fixture_ref^{commit}")" = "$fixture_ref"
-          done
-          node --test infra/scripts/deploy.test.mjs scripts/release-input-manifest.test.mjs infra/scripts/production-release-retention.test.mjs
       - name: Lint first-image continuation sources and tests
         run: npx pnpm@9.15.0 exec eslint apps/agent-worker/src/presentation/handler.ts apps/agent-worker/src/scientific-writing-source.ts apps/agent-worker/src/workspace-guide.ts apps/agent-worker/test/workspace-guide.test.ts apps/api/src/routes/agent.ts apps/api/src/routes/research-runs.ts apps/api/test/agent-payload.test.ts apps/api/test/first-image-continuation.test.ts apps/web/components/hermes/HermesAssistantDrawer.tsx apps/web/components/hermes/HermesFirstImageResult.tsx apps/web/lib/api.ts apps/web/lib/hermes/presentation-intent.ts apps/web/test/e2e/hermes-first-image.spec.ts apps/web/test/hermes-guide-recovery.test.ts apps/web/test/hermes-presentation-intent.test.ts packages/domain/src/agent/first-image-continuation.ts packages/domain/src/agent/native-agent-execution.ts packages/domain/src/agent/workspace-guide-contract.ts packages/domain/src/assets/illustration-source.ts packages/domain/src/assets/presentation-asset.ts packages/domain/test/agent/first-image-continuation-fixture.ts packages/domain/test/agent/first-image-continuation.test.ts packages/domain/test/workspace-guide-contract.test.ts
       - name: Check completed paid image recovery and changed sources
@@ -925,6 +1379,7 @@ jobs:
             apps/web/test/visual/out/**/*.json
             tmp/hermes-guide-browser/**/*.png
             tmp/native-restore-source-identity/ci-*/
+            tmp/release-tooling-telemetry/
           if-no-files-found: ignore
           retention-days: 7
 

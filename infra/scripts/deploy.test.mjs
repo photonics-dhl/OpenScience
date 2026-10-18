@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { getHeapStatistics } from 'node:v8';
 import {
   chmod, copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile,
 } from 'node:fs/promises';
@@ -14,6 +15,26 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { runInNewContext, Script } from 'node:vm';
 import * as deployLock from './production-deploy-lock.mjs';
+
+let videoTimeoutObservationDisabled = false;
+const videoTimeoutCounts = { programRequested: 0, programReturned: 0, vmCreated: 0, cacheEntries: 0, cacheCharacters: 0 };
+function videoTimeoutCount(name, amount = 1) {
+  try { videoTimeoutCounts[name] += amount; return videoTimeoutCounts[name]; } catch { return 0; }
+}
+function videoTimeoutObservation(phase, ordinal = 0, metrics = {}) {
+  try {
+    if (videoTimeoutObservationDisabled) return;
+    const target = process.env.XGS_VIDEO_TIMEOUT_TRACE;
+    if (!target) return;
+    const memory = process.memoryUsage(), cpu = process.cpuUsage();
+    appendFileSync(target, JSON.stringify({ phase, ordinal, pid: process.pid, elapsedMs: performance.now(),
+      cpuUserUs: cpu.user, cpuSystemUs: cpu.system, rss: memory.rss, heapUsed: memory.heapUsed,
+      external: memory.external, heapLimit: getHeapStatistics().heap_size_limit, ...videoTimeoutCounts, ...metrics }) + '\n');
+  } catch {
+    videoTimeoutObservationDisabled = true;
+  }
+}
+
 
 const launcherSource = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const transactionSource = readFileSync(new URL('./production-deploy-transaction.sh', import.meta.url), 'utf8');
@@ -39,10 +60,10 @@ test('private rollback rejection diagnostics preserve refusal and opt in only fo
   const video = deployLockSource.match(/function finiteVideoPairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
   const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0] ?? '';
   const events = [], roots = [];
-  const functions = runInNewContext(`${helper}; ${video}; finiteVideoPairCompatibility`, {
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 1), runInNewContext(`${helper}; ${video}; finiteVideoPairCompatibility`, {
     rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: roots,
     console: { error: value => events.push(value) }, nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
-  });
+  }));
   for (const value of [undefined, false, 'true', 1, true]) {
     events.length = 0;
     assert.equal(functions({}, [], [], '/candidate', '/previous', roots, value), false);
@@ -52,13 +73,88 @@ test('private rollback rejection diagnostics preserve refusal and opt in only fo
   }
   const selected = deployLockSource.match(/function finiteSelectedGuidePairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   if (selected) {
-    const invoke = runInNewContext(`${helper}; ${selected}; finiteSelectedGuidePairCompatibility`, {
+    const invoke = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 2), runInNewContext(`${helper}; ${selected}; finiteSelectedGuidePairCompatibility`, {
       rollbackProofContexts:new WeakMap(), APPLICATION_ROLLBACK_READERS:roots,
       console:{error:value=>events.push(value)}, nodeUtilTypes:createRequire(import.meta.url)('node:util').types,
-    });
+    }));
     events.length=0; assert.equal(invoke({},[],[],'/candidate','/previous',roots,true),false);
     assert.equal(events.length,1); assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ')+1)).stage,'selected-guide');
   }
+});
+
+test('private video ingress diagnostics identify the original side and first failed obligation without exposing returned data', async t => {
+  const ts = createRequire(import.meta.url)('typescript'), contexts = new WeakMap(), events = [];
+  const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)[0];
+  const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const video = deployLockSource.match(/function finiteVideoPairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
+  const directory = await mkdtemp(join(fileURLToPath(new URL('../../tmp/', import.meta.url)), 'video-ingress-diagnostic-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const candidate = join(directory, 'candidate'), previous = join(directory, 'previous'), roots = [['apps/reader.ts']];
+  for (const root of [candidate, previous]) {
+    await mkdir(join(root, 'apps'), { recursive: true }); await writeFile(join(root, 'tsconfig.json'), '{}');
+    await writeFile(join(root, 'apps/reader.ts'), 'export function read() { return 1; }');
+  }
+  let sinkFailure = false, proofs, calls;
+  const environment = { resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
+    rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [],
+    nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
+    console: { error(value) { if (sinkFailure) throw Error('SECRET-sink'); events.push(value); } },
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
+    proveNativeVideoReceiptIngress(_ts, program, root) {
+      const index = root === candidate ? 0 : 1; calls.push(index);
+      assert.equal(program, contexts.get(index === 0 ? current : old).program);
+      if (proofs[index] instanceof Error) throw proofs[index];
+      return proofs[index];
+    } };
+  const collect = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 3), runInNewContext(`${collector}; rollbackReaderClosure`, environment));
+  const current = collect(ts, candidate, roots), old = collect(ts, previous, roots);
+  // Real original collector contexts, but only the actual ingress wrapper is
+  // exercised here: this is no DEFAULT or finite source-model acceptance proof.
+  const head = video.slice(0, video.indexOf('  try {'));
+  const body = video.slice(video.indexOf("    site = 'ingress'"), video.indexOf("    site = 'family'"));
+  const invoke = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 4), runInNewContext(`${helper}; ${head} try {
+    const left = rollbackProofContexts.get(current), right = rollbackProofContexts.get(previous);
+    ${body} return true;
+  } catch (error) { return reject(error); } }; finiteVideoPairCompatibility`, environment));
+  const edges = ['materializer-host', 'host-slot-result', 'host-before-session', 'session-prefix',
+    'session-checkpoint-prefix', 'verified-base', 'store-capability-use', 'generic-private-store-chain'];
+  const healthy = () => ({ reason: 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', storeGraph: { status: 'conditional' },
+    privateStoreChain: { status: 'conditional' }, proven: [...edges] });
+  const run = (result, side = 0, diagnostics = true, entries = current) => {
+    proofs = [healthy(), healthy()]; proofs[side] = result; calls = []; events.length = 0;
+    const accepted = invoke(ts, entries, old, candidate, previous, roots, diagnostics);
+    return { accepted, lines: events.map(value => JSON.parse(value.slice(value.indexOf(' ') + 1))) };
+  };
+  const cases = [
+    ['reason', () => ({ reason: 'PROGRAM_SYNTAX_UNKNOWN' })],
+    ['store-graph', () => ({ reason: healthy().reason, storeGraph: { status: 'unproven' } })],
+    ['private-store-chain', () => ({ reason: healthy().reason, storeGraph: { status: 'conditional' },
+      privateStoreChain: { status: 'unproven' } })],
+    ...edges.map(edge => [edge, () => ({ ...healthy(), proven: edges.filter(value => value !== edge) })]),
+  ];
+  for (const side of [0, 1]) for (const [site, make] of cases) {
+    const result = run(make(), side);
+    assert.equal(result.accepted, false);
+    assert.deepEqual(calls, side === 0 ? [0] : [0, 1], 'original proof evaluation stops at the first refusal');
+    assert.deepEqual(result.lines, [{ stage: 'video', code: site === 'reason' ? 'PROGRAM_SYNTAX_UNKNOWN' : 'COMPATIBILITY_UNKNOWN',
+      site: `ingress-${site}`, side: side === 0 ? 'candidate' : 'rollback' }]);
+  }
+  let reads = 0;
+  const secret = { reason: 'SECRET', get at() { reads++; throw Error('SECRET'); }, toJSON() { reads++; throw Error('SECRET'); } };
+  assert.equal(run(secret).lines[0].code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(reads, 0);
+  assert.doesNotMatch(events.join(''), /SECRET/u);
+  const proxyReason = new Proxy({}, { get() { reads++; throw Error('SECRET'); },
+    getOwnPropertyDescriptor() { reads++; throw Error('SECRET'); } });
+  assert.equal(run({ reason: proxyReason }).lines[0].code, 'COMPATIBILITY_UNKNOWN'); assert.equal(reads, 0);
+  for (const side of [0, 1]) assert.deepEqual(run(Error('SECRET'), side).lines,
+    [{ stage: 'video', code: 'COMPATIBILITY_UNKNOWN', site: 'ingress', side: side === 0 ? 'candidate' : 'rollback' }]);
+  for (const value of [false, 'true', 1]) assert.equal(run(secret, 0, value).lines.length, 0);
+  const unbound = run(secret, 0, true, [...current]);
+  assert.equal(unbound.accepted, false); assert.equal(unbound.lines[0].code, 'COMPATIBILITY_UNKNOWN');
+  assert.equal(unbound.lines[0].side, undefined);
+  sinkFailure = true; assert.equal(run(secret).accepted, false); assert.equal(events.length, 0); sinkFailure = false;
+  assert.equal(run(healthy()).accepted, true); assert.deepEqual(calls, [0, 1]); assert.equal(events.length, 0);
 });
 
 test('private rollback diagnostic privacy uses only natural captured AST identity and fixed refusal sites', async t => {
@@ -71,7 +167,7 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
     nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
     console: { error(value) { if (sinkFailure) throw Error('SECRET-sink'); events.push(value); } },
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } };
-  const functions = runInNewContext(`${collector}; ${helper}; ({collect:rollbackReaderClosure, emit:emitPrivateRollbackDiagnostic})`, environment);
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 5), runInNewContext(`${collector}; ${helper}; ({collect:rollbackReaderClosure, emit:emitPrivateRollbackDiagnostic})`, environment));
   const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(join(parent, 'diagnostic-context-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -119,28 +215,28 @@ test('private rollback diagnostic privacy uses only natural captured AST identit
     assert.equal(result.code,'COMPATIBILITY_UNKNOWN'); assert.equal(result.module,undefined);
   } finally { left.checker=originalChecker; }
   sinkFailure = true; assert.doesNotThrow(() => run({reason:known,node:source})); sinkFailure = false;
-  const descriptorFailure = runInNewContext(`${helper}; (error=>{emitPrivateRollbackDiagnostic(ts,current,old,candidate,previous,roots,'selected-guide','model',error);return false;})`, {
+  const descriptorFailure = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 6), runInNewContext(`${helper}; (error=>{emitPrivateRollbackDiagnostic(ts,current,old,candidate,previous,roots,'selected-guide','model',error);return false;})`, {
     ...environment, ts,current,old,candidate,previous,roots,
     Object:{getOwnPropertyDescriptor(){throw Error('SECRET-descriptor');}},
-  });
+  }));
   events.length=0; assert.equal(descriptorFailure({reason:known,node:source}),false); assert.equal(events.length,0);
   const video = deployLockSource.match(/function finiteVideoPairCompatibility\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
   const segments = [
     [video.slice(video.indexOf('    for (const key of new Set'), video.indexOf('    for (const key of projectedKeys)')), 'remaining-entry'],
     [video.match(/      site = 'projected-equality';\r?\n      if [^\n]+/u)[0], 'projected-equality'],
-    [video.slice(video.indexOf("      if (ingress.reason"), video.indexOf("    site = 'family'")), 'ingress'],
+    [video.slice(video.indexOf("      let ingressReason;"), video.indexOf("    site = 'family'")), 'ingress-reason'],
     [video.slice(video.indexOf("    site = 'family'"), video.indexOf('  } catch')), 'family'],
   ];
   for (let [body, expected] of segments) {
     // The ingress snippet includes its original enclosing loop's closing brace.
-    if (expected === 'ingress') body = body.slice(0, body.lastIndexOf('    }'));
+    if (expected === 'ingress-reason') body = body.slice(0, body.lastIndexOf('    }'));
     events.length = 0;
     const reject = (error, reason) => { functions.emit(ts,current,old,candidate,previous,roots,'video',expected,error,key,reason); return false; };
     const family = deployLockSource.match(/function finiteVideoFamilyClosure\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
-    const execute = runInNewContext(`${family}; (()=>{let site,moduleKey; ${body}; return true;})`, {
+    const execute = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 7), runInNewContext(`${family}; (()=>{let site,moduleKey; ${body}; return true;})`, {
       a:new Map(current), b:new Map(old), affected:new Set(), projected:[new Map(current).get(key),new Map(old).get(key)],
       ingress:{reason:'unproven'}, candidate:{constructors:{terms:{legacy:1}}}, rollback:{constructors:{terms:{legacy:2}}}, reject,
-    });
+    }));
     assert.equal(execute(), false); assert.equal(events.length,1);
     assert.equal(JSON.parse(events[0].slice(events[0].indexOf(' ')+1)).site,expected);
   }
@@ -156,14 +252,14 @@ test('private eager diagnostics identify the original initialization phase and s
   const helper = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
   const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
     deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
-  const functions = runInNewContext(`${collector}; ${helper}; ${initialization};
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 8), runInNewContext(`${collector}; ${helper}; ${initialization};
     ({collect:rollbackReaderClosure, initialize:finiteSelectedGuideInitializationTerms, emit:emitPrivateRollbackDiagnostic})`, {
     resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
     rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [],
     nodeUtilTypes: createRequire(import.meta.url)('node:util').types,
     console: { error: value => events.push(value) },
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(join(parent, 'eager-diagnostic-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -254,13 +350,13 @@ test('selected entry may reach an old captured pure module without borrowing an 
   const diagnostic = deployLockSource.match(/function emitPrivateRollbackDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)[0];
   const initialization = deployLockSource.slice(deployLockSource.indexOf('function finiteSelectedGuideInitializationTerms('),
     deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
-  const functions = runInNewContext(`${collector}; ${initialization}; ${diagnostic};
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 9), runInNewContext(`${collector}; ${initialization}; ${diagnostic};
     ({collect:rollbackReaderClosure, initialize:finiteSelectedGuideInitializationTerms, emit:emitPrivateRollbackDiagnostic})`, {
     resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
     rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: [], Script,
     nodeUtilTypes: createRequire(import.meta.url)('node:util').types, console: { error: value => events.push(value) },
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const parent = fileURLToPath(new URL('../../tmp/first-image/', import.meta.url)); await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(join(parent, 'entry-reachability-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -382,13 +478,13 @@ test('rollback verifier diagnostics are opt-in, bounded and preserve rejection',
   let rejectDiagnosticOutput = false;
   failure.code = 'MODULE_NOT_FOUND';
   failure.stack = `Error: ${failure.message}\n    at unrelated (/private-user/secret-path:900:2)`;
-  const verify = runInNewContext(`${verifierSource.replace('export ', '')}; verifyApplicationRollbackReaders`, {
+  const verify = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 10), runInNewContext(`${verifierSource.replace('export ', '')}; verifyApplicationRollbackReaders`, {
     APPLICATION_ROLLBACK_READERS: [], APPLICATION_ROLLBACK_ROOTS: {}, resolve, join,
     VERIFIER_SOURCE_URL: new URL('./production-deploy-lock.mjs', import.meta.url).href,
     createRequire() { throw failure; },
     console: { error(value) { if (rejectDiagnosticOutput) throw Error('private-log-sink-failure'); events.push(value); } },
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   for (const diagnostics of [undefined, false, 'true']) {
     await assert.rejects(verify({ candidateRoot: '/candidate', rollbackRoot: '/rollback', diagnostics }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
     assert.equal(events.length, 0);
@@ -424,7 +520,7 @@ test('rollback verifier dispatches guarded finite proofs only after original def
   assert.ok(verifierSource);
   const roots=[],events=[],current=[['module:one','new']],previous=[['module:one','old']];
   let accept='',equal=false;
-  const verify=runInNewContext(`${verifierSource.replace('export ','')}; verifyApplicationRollbackReaders`,{
+  const verify=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 11), runInNewContext(`${verifierSource.replace('export ','')}; verifyApplicationRollbackReaders`,{
     APPLICATION_ROLLBACK_READERS:roots,APPLICATION_ROLLBACK_ROOTS:{},resolve,join,dirname,
     createRequire(){return ()=>({});},
     rollbackReaderClosure(_ts,root,selected){events.push(['collect',root,selected]);return root===resolve('/candidate')?current:equal?current:previous;},
@@ -435,7 +531,7 @@ test('rollback verifier dispatches guarded finite proofs only after original def
     finiteSdfReadablePairCompatibility(...args){events.push(['sdf',...args]);return accept==='sdf';},
     finiteSelectedGuidePairCompatibility(...args){events.push(['selected',...args]);return accept==='selected';},
     rollbackCompatibilityUnknown(){throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN');},
-  });
+  }));
   for(const allowed of ['video','capable','first','voice','sdf','selected']){
     accept=allowed;events.length=0;
     await verify({candidateRoot:'/candidate',rollbackRoot:'/previous',roots});
@@ -491,7 +587,7 @@ test('comparison diagnostics locate real two-root differences without printing v
 test('comparison diagnostics bound missing keys and multiple differences without exposing arbitrary keys or values', async () => {
   const helperSource = deployLockSource.match(/function rollbackComparisonDiagnostic\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(helperSource);
-  const describe = runInNewContext(`${helperSource}; rollbackComparisonDiagnostic`, { resolve });
+  const describe = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 12), runInNewContext(`${helperSource}; rollbackComparisonDiagnostic`, { resolve }));
   const current = [['PRIVATE_KEY', 'PRIVATE_VALUE'], ...Array.from({ length: 16 }, (_, i) => [`module:packages/domain/src/reader${i}.ts`, 'PRIVATE_VALUE'])];
   const report = describe(current, [], '/candidate', '/rollback');
   assert.equal(report.differences, 17);
@@ -637,11 +733,11 @@ test('Prisma location mapping keeps the original 22 metadata and unrelated-sourc
   assert.ok(helper && canonical);
   // Exercise the actual helper and closure canonicalizer without substituting
   // this AST unit control for complete vendor/default-root pair acceptance.
-  const normalize = runInNewContext(`${helper}; const locationLiterals = new Map(); ${canonical}
+  const normalize = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 13), runInNewContext(`${helper}; const locationLiterals = new Map(); ${canonical}
     (file, root) => { locationLiterals.clear(); for (const [node, identity] of prismaSearchLocationLiterals(ts, file, root))
       locationLiterals.set(node, identity); return JSON.stringify(canonical(file)); }`, {
     ts, join, resolve, rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const candidate = join(projectRoot, 'tmp/prisma-candidate'), previous = join(projectRoot, 'tmp/prisma-previous');
   const fixture = (directory, change = () => {}) => {
     const config = structuredClone(original);
@@ -701,9 +797,9 @@ test('Prisma location allowance proves the actual generated config consumer and 
   const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
   const proofSource = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(proofSource);
-  const prove = runInNewContext(`${proofSource}; provePrismaSearchConsumer`, {
+  const prove = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 14), runInNewContext(`${proofSource}; provePrismaSearchConsumer`, {
     rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const check = code => {
     const filename = join(projectRoot, 'tmp/prisma-consumer-memory.js').replaceAll('\\', '/');
     const options = { allowJs: true, noLib: true, noEmit: true };
@@ -789,7 +885,7 @@ test('Prisma observer refusal occurs at consumer proof in the exported verifier,
     const source = `const config=${JSON.stringify(config)}; exports.readPersisted=()=>config.generator.output.value===${JSON.stringify(join(candidate, 'packages/search/generated/client'))};`;
     await writeFile(file, source);
     const context = { exports: {} };
-    runInNewContext(source, context);
+    (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 15), runInNewContext(source, context));
     observed.push(context.exports.readPersisted());
   }
   assert.deepEqual(observed, [true, false]);
@@ -816,12 +912,12 @@ test('Prisma initial config rejects the identical prototype/this observer before
   const metadataSource = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   const canonicalSource = deployLockSource.match(/  const canonical = node => \{[\s\S]*?\n  \};/u)?.[0];
   assert.ok(proofSource && metadataSource && canonicalSource);
-  const functions = runInNewContext(`${proofSource}; ${metadataSource}; const locationLiterals = new Map(); ${canonicalSource};
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 16), runInNewContext(`${proofSource}; ${metadataSource}; const locationLiterals = new Map(); ${canonicalSource};
     ({ prove: provePrismaSearchConsumer, metadata: prismaSearchLocationLiterals,
       normalized(file, literals) { locationLiterals.clear(); for (const [node, identity] of literals) locationLiterals.set(node, identity);
         return JSON.stringify(canonical(file)); } })`, {
     ts, join, resolve, rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const candidate = join(projectRoot, 'tmp/ui-r04-prisma-location/prototype-candidate');
   const previous = join(projectRoot, 'tmp/ui-r04-prisma-location/prototype-previous');
   const fixed = JSON.stringify(join(candidate, 'packages/search/generated/client'));
@@ -848,7 +944,7 @@ test('Prisma initial config rejects the identical prototype/this observer before
     ts.createSourceFile('index.js', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS), directory);
   assert.equal(metadataOnly(fixture(candidate, '"nested": { "text": "__proto__", "constructor": { "prototype": 3 }, "values": [1, -2, 0, 1.5, true, false, null] }'), candidate).size, 2);
   const pair = [fixture(candidate, extra), fixture(previous, extra)];
-  const observed = pair.map(({ initializer }) => runInNewContext(`(${initializer}).isBundled`));
+  const observed = pair.map(({ initializer }) => (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 17), runInNewContext(`(${initializer}).isBundled`)));
   assert.deepEqual(observed, [true, false]);
   const accepted = pair.map((value, index) => { try { return check(value, [candidate, previous][index]); } catch { return null; } });
   console.log(JSON.stringify({ prototypeRegression: true, helperAccepted: accepted.map(Boolean), mappedLiteralCounts: accepted.map(value => value?.mapped ?? 0),
@@ -899,12 +995,12 @@ test('Prisma consumer rejects alias-based ambient prototype observers and unknow
   const metadataSource = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   const canonicalSource = deployLockSource.match(/  const canonical = node => \{[\s\S]*?\n  \};/u)?.[0];
   assert.ok(proofSource && metadataSource && canonicalSource);
-  const functions = runInNewContext(`${proofSource}; ${metadataSource}; const locationLiterals = new Map(); ${canonicalSource};
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 18), runInNewContext(`${proofSource}; ${metadataSource}; const locationLiterals = new Map(); ${canonicalSource};
     ({ prove: provePrismaSearchConsumer, metadata: prismaSearchLocationLiterals,
       normalized(file, literals) { locationLiterals.clear(); for (const [node, identity] of literals) locationLiterals.set(node, identity);
         return JSON.stringify(canonical(file)); } })`, {
     ts, join, resolve, rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const candidate = join(projectRoot, 'tmp/ui-r04-prisma-location/ambient-candidate');
   const previous = join(projectRoot, 'tmp/ui-r04-prisma-location/ambient-previous');
   const fixed = JSON.stringify(join(candidate, 'packages/search/generated/client'));
@@ -927,7 +1023,7 @@ test('Prisma consumer rejects alias-based ambient prototype observers and unknow
     functions.prove(ts, file, program.getTypeChecker());
     return file;
   };
-  const observed = pair.map(({ initializer }) => runInNewContext(`const config=${initializer}; ${extra} config.isBundled;`));
+  const observed = pair.map(({ initializer }) => (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 19), runInNewContext(`const config=${initializer}; ${extra} config.isBundled;`)));
   assert.deepEqual(observed, [true, false]);
   const accepted = pair.map(({ source, directory }) => {
     try { const file = check(source), literals = functions.metadata(ts, file, directory);
@@ -966,9 +1062,9 @@ test('Prisma consumer requires plain runtime destructuring, not a rest object or
   const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
   const proofSource = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(proofSource);
-  const prove = runInNewContext(`${proofSource}; provePrismaSearchConsumer`, {
+  const prove = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 20), runInNewContext(`${proofSource}; provePrismaSearchConsumer`, {
     rollbackCompatibilityUnknown() { throw new Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const check = code => {
     const filename = join(projectRoot, 'tmp/prisma-binding-memory.js').replaceAll('\\', '/');
     const options = { allowJs: true, noLib: true, noEmit: true };
@@ -1035,6 +1131,8 @@ test('ordinary rollback compares persisted readers and their runtime helpers wit
 // They do not replace genuine successful collectors or installed-root checks.
 const historicalVideoSources = new Map();
 function historicalVideoSource(projectRoot, sourceRef) {
+  videoTimeoutObservation('history-request', 0);
+  if (historicalVideoSources.has(sourceRef)) { videoTimeoutObservation('history-hit', 0); } else { videoTimeoutObservation('history-load-begin', 0); }
   if (historicalVideoSources.has(sourceRef)) return historicalVideoSources.get(sourceRef);
   const files = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', sourceRef, '--', 'apps', 'packages'],
     { cwd: projectRoot, encoding: 'utf8' }).split('\0').filter(file =>
@@ -1056,10 +1154,17 @@ function historicalVideoSource(projectRoot, sourceRef) {
   assert.equal(offset, blobs.length);
   const result = { files, sources };
   historicalVideoSources.set(sourceRef, result);
+  videoTimeoutCount('cacheEntries');
+  videoTimeoutCount('cacheCharacters', [...sources.values()].reduce((sum, text) => sum + text.length, 0));
+  videoTimeoutObservation('history-load-end', 0, { inventoryCount: files.length, sourceCount: sources.size });
   return result;
 }
 
 async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSourceOnly = false, ambientSources = new Map() } = {}) {
+  const observedRequest = videoTimeoutCount('programRequested');
+  videoTimeoutObservation('program-request', observedRequest, { mutationCount: changes.size, historicalInput: sourceRef ? 1 : 0 });
+  try {
+
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const ts = createRequire(import.meta.url)('typescript');
   // Retained fixtures are source-only historical oracles, never installed roots.
@@ -1128,7 +1233,12 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
       extension: filename.endsWith('.mjs') ? ts.Extension.Mjs : filename.endsWith('.js') ? ts.Extension.Js
         : filename.endsWith('.tsx') ? ts.Extension.Tsx : ts.Extension.Ts } : undefined;
   });
+  videoTimeoutObservation('host-ready', observedRequest, { rootCount: tracked.length, mutationCount: changedFiles.length });
+  videoTimeoutObservation('createProgram-begin', observedRequest);
   const program = ts.createProgram([...new Set([...tracked, ...changedFiles.map(item => item.filename)])], options, host);
+  videoTimeoutObservation('createProgram-end', observedRequest, { sourceCount: program.getSourceFiles().length });
+  videoTimeoutObservation('validation-begin', observedRequest);
+
   assert.equal(program.getSyntacticDiagnostics().length, 0, 'actual Program must parse before a source-proof result');
   if (historical) for (const file of program.getSourceFiles().filter(file => ownsSource(file.fileName)))
     assert.equal(file.text, overlays.get(key(file.fileName)) ?? historical.sources.get(key(file.fileName))
@@ -1136,8 +1246,13 @@ async function videoIngressProgram(changes = new Map(), { sourceRef, trackedSour
       'historical Program must contain only selected baseline bytes plus exact mutations or declared ambient inputs');
   for (const item of changedFiles) assert.equal(program.getSourceFiles().find(file => key(file.fileName) === key(item.filename))?.text,
     item.updated, 'the real Program must contain the exact mutation before testing its rejection');
+  videoTimeoutObservation('validation-end', observedRequest);
+  videoTimeoutCount('programReturned');
+  videoTimeoutObservation('program-return', observedRequest);
   return { ts, program, projectRoot, sourceHost: host,
     resolveSource: (specifier, containingFile) => host.resolveModuleNames([specifier], containingFile)[0] };
+
+  } catch (error) { videoTimeoutObservation('program-throw', observedRequest); throw error; }
 }
 
 // Legacy video controls opt into the released V1 oracle. The two historical
@@ -1151,11 +1266,11 @@ function videoPairSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   assert.ok(component.startsWith('function finiteVideoConstructorTerms('));
-  return runInNewContext(`${component}; ({ constructors: finiteVideoConstructorTerms, model: finiteVideoSourceModel, closure: finiteVideoFamilyClosure,
-    pair: finiteVideoPairCompatibility, roots: APPLICATION_ROLLBACK_READERS })`, { relative, resolve, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+  return (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 21), runInNewContext(`${component}; ({ constructors: finiteVideoConstructorTerms, model: finiteVideoSourceModel, closure: finiteVideoFamilyClosure,
+    pair: finiteVideoPairCompatibility, roots: APPLICATION_ROLLBACK_READERS })`, { relative, resolve, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] }));
 }
 
-function videoPairContext({ ts, program, projectRoot }) { return { ts, program, checker: program.getTypeChecker(), root: projectRoot }; }
+function videoPairContext({ ts, program, projectRoot }) { videoTimeoutObservation('checker-begin', 0);  const observedContext = { ts, program, checker: (videoTimeoutObservation('checker-call-begin'), program.getTypeChecker()), root: projectRoot }; videoTimeoutObservation('checker-end', 0); return observedContext;  }
 
 function videoPairRuntime(ts, text) {
   // Extract the one actual collector canonical, including its reviewed unary
@@ -1163,7 +1278,7 @@ function videoPairRuntime(ts, text) {
   // production collector or a complete installed root.
   const canonicalText = deployLockSource.slice(deployLockSource.indexOf('  const canonical = node => {'),
     deployLockSource.indexOf('\n  const addConfiguration =', deployLockSource.indexOf('  const canonical = node => {')));
-  const canonical = runInNewContext(`${canonicalText}; canonical`, { ts, locationLiterals: new Map() });
+  const canonical = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 22), runInNewContext(`${canonicalText}; canonical`, { ts, locationLiterals: new Map() }));
   const compiled = ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
   return JSON.parse(JSON.stringify(canonical(ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS))));
 }
@@ -1171,9 +1286,9 @@ function videoPairRuntime(ts, text) {
 function sdfReadableSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  return runInNewContext(`${component}; ({ model: typeof finiteSdfReadableSourceModel === 'function' ? finiteSdfReadableSourceModel : undefined,
+  return (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 23), runInNewContext(`${component}; ({ model: typeof finiteSdfReadableSourceModel === 'function' ? finiteSdfReadableSourceModel : undefined,
     pair: typeof finiteSdfReadablePairCompatibility === 'function' ? finiteSdfReadablePairCompatibility : undefined, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
-    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] }));
 }
 
 test('SDF readable R source proof preserves the actual 764 runtime and old opaque domain', async () => {
@@ -1238,8 +1353,8 @@ function voicePairSourceComponents() {
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVoiceSourceModel('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   assert.ok(component.startsWith('function finiteVoiceSourceModel('), 'finite voice proof must exist inside the original verifier');
-  return runInNewContext(`${component}; ({ model: finiteVoiceSourceModel, writer: finiteVoiceWriterSourceModel, formatReader: typeof finiteVoiceFormatReaderSourceModel === 'function' ? finiteVoiceFormatReaderSourceModel : undefined, formatWriter: typeof finiteVoiceFormatWriterSourceModel === 'function' ? finiteVoiceFormatWriterSourceModel : undefined, pair: finiteVoicePairCompatibility, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
-    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] });
+  return (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 24), runInNewContext(`${component}; ({ model: finiteVoiceSourceModel, writer: finiteVoiceWriterSourceModel, formatReader: typeof finiteVoiceFormatReaderSourceModel === 'function' ? finiteVoiceFormatReaderSourceModel : undefined, formatWriter: typeof finiteVoiceFormatWriterSourceModel === 'function' ? finiteVoiceFormatWriterSourceModel : undefined, pair: finiteVoicePairCompatibility, defaultRoots: APPLICATION_ROLLBACK_READERS })`,
+    { resolve, relative, builtinModules, rollbackProofContexts: new WeakMap(), APPLICATION_ROLLBACK_READERS: [] }));
 }
 
 // Preserve the actually released reader and all its mutations independently of
@@ -1686,10 +1801,11 @@ function selectedGuideSourceComponents() {
   const start = deployLockSource.indexOf('function finiteSelectedGuideSupplementaryTerms(');
   assert.ok(start !== -1, 'the selected decoder proof must be implemented');
   const component = deployLockSource.slice(start, deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic(', start));
-  return runInNewContext(`${component}; ({ supplemental: finiteSelectedGuideSupplementaryTerms, decoder: finiteSelectedGuideDecoderTerms, fresh: finiteSelectedGuideFreshTerms,
+  return (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 25), runInNewContext(`${component}; ({ supplemental: finiteSelectedGuideSupplementaryTerms, decoder: finiteSelectedGuideDecoderTerms, fresh: finiteSelectedGuideFreshTerms,
     relocation: finiteSelectedGuideRelocationTerms, relocationResidual: finiteSelectedGuideRelocationResidualTerms,
     workspace: finiteSelectedGuideWorkspaceTerms, native: finiteSelectedGuideNativeTerms, handlers: finiteSelectedGuideHandlerTerms,
     illustration: finiteSelectedGuideIllustrationTerms, illustrationResidual: finiteSelectedGuideIllustrationResidualTerms,
+    illustrationWitness: finiteSelectedGuideIllustrationWitness,
     dormant: finiteSelectedGuideDormantModuleTerms, ingestion: finiteSelectedGuideIngestionReaderTerms, publicReader: finiteSelectedGuidePublicReaderTerms,
     agent: finiteSelectedGuideAgentResidualTerms,
     maintenanceWorker: finiteSelectedGuideMaintenanceWorkerTerms,
@@ -1703,13 +1819,13 @@ function selectedGuideSourceComponents() {
     pair: finiteSelectedGuidePairCompatibility,
     httpLibrary: finiteSelectedGuideApiLibraryTerms,
     initialization: finiteSelectedGuideInitializationTerms })`, { relative, resolve, isAbsolute, builtinModules,
-      APPLICATION_ROLLBACK_READERS: [], rollbackProofContexts: new WeakMap(), Script });
+      APPLICATION_ROLLBACK_READERS: [], rollbackProofContexts: new WeakMap(), Script }));
 }
 
 function selectedGuideSourceContext(actual) {
   const canonicalText = deployLockSource.slice(deployLockSource.indexOf('  const canonical = node => {'),
     deployLockSource.indexOf('\n  const addConfiguration =', deployLockSource.indexOf('  const canonical = node => {')));
-  const canonical = runInNewContext(`${canonicalText}; canonical`, { ts: actual.ts, locationLiterals: new Map() });
+  const canonical = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 26), runInNewContext(`${canonicalText}; canonical`, { ts: actual.ts, locationLiterals: new Map() }));
   return { ...videoPairContext(actual), canonical, sourceHost: actual.sourceHost, resolveSource: actual.resolveSource };
 }
 
@@ -2362,16 +2478,16 @@ test('selected guide High ordinary constructor witness has equal old and current
     const source = input.program.getSourceFile(resolve(input.projectRoot, 'packages/domain/src/agent/agent.ts'));
     const text = names.map(name => source.statements.find(node => node.name?.text === name).getText()).join('\n');
     const exports = {};
-    runInNewContext(input.ts.transpileModule(text, { compilerOptions: { target: input.ts.ScriptTarget.ES2022, module: input.ts.ModuleKind.CommonJS } }).outputText,
-      { exports, ...globals });
+    (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 27), runInNewContext(input.ts.transpileModule(text, { compilerOptions: { target: input.ts.ScriptTarget.ES2022, module: input.ts.ModuleKind.CommonJS } }).outputText,
+      { exports, ...globals }));
     return exports;
   };
   const nativeSource = actual.program.getSourceFile(resolve(actual.projectRoot, 'packages/domain/src/agent/native-agent-execution.ts'));
   const nativeText = ['record', 'readNativeAgentExecution'].map(name => nativeSource.statements.find(node => node.name?.text === name
     || actual.ts.isVariableStatement(node) && node.declarationList.declarations.some(value => value.name.text === name)).getText()).join('\n');
   const native = {};
-  runInNewContext(actual.ts.transpileModule(nativeText, { compilerOptions: { target: actual.ts.ScriptTarget.ES2022, module: actual.ts.ModuleKind.CommonJS } }).outputText,
-    { exports: native });
+  (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 28), runInNewContext(actual.ts.transpileModule(nativeText, { compilerOptions: { target: actual.ts.ScriptTarget.ES2022, module: actual.ts.ModuleKind.CommonJS } }).outputText,
+    { exports: native }));
   const oldReader = load(previous, ['isJsonRecord', 'projectAgentTaskResult']);
   const currentReader = load(actual, ['isJsonRecord', 'projectAgentTaskResult'], native);
   const raw = { echoed: true, selectedImageReference: { note: 'ordinary legacy opaque field' } };
@@ -2449,6 +2565,8 @@ test('selected guide legacy retry cannot execute an added effect before its abse
 });
 
 test('selected guide current combination closes the whole source over the exact voice reader', async () => {
+  videoTimeoutObservation('66-parent-begin');
+  try {
   const components = selectedGuideSourceComponents(), actual = await retainedSelectedVoiceProgram();
   const previous = await historicalVideoIngressProgram(new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
   const model = components.sourceModel(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous));
@@ -2460,17 +2578,22 @@ test('selected guide current combination closes the whole source over the exact 
   assert.equal(relative(actual.projectRoot, model.handlers.voicePredecessor.factory.getSourceFile().fileName).replaceAll('\\', '/'), 'apps/agent-worker/src/voice.ts');
   for (const [key, value] of model.projected)
     assert.deepEqual(videoPairRuntime(actual.ts, value.text), videoPairRuntime(previous.ts, value.previous.text), key);
+  } finally { videoTimeoutObservation('66-parent-exit'); }
 });
 
 test('selected guide initialization consumes original collected module equality without reclassifying root metadata', async t => {
+  videoTimeoutObservation('67-parent-begin');
+  try {
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   const ts = createRequire(import.meta.url)('typescript');
+  videoTimeoutObservation('67-data-begin');
   const genuine = readFileSync(join(projectRoot, 'packages/search/generated/client/index.js'), 'utf8');
   const parsed = ts.createSourceFile('index.js', genuine, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
   const declaration = parsed.statements.flatMap(statement => ts.isVariableStatement(statement)
     ? [...statement.declarationList.declarations] : []).find(node => node.name?.text === 'config');
   assert.ok(declaration && ts.isObjectLiteralExpression(declaration.initializer));
   const original = JSON.parse(declaration.initializer.getText(parsed));
+  videoTimeoutObservation('67-data-parsed');
   const collector = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
   const metadata = deployLockSource.match(/function prismaSearchLocationLiterals\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
   const consumer = deployLockSource.match(/function provePrismaSearchConsumer\([^\n]+\) \{[\s\S]*?\n\}/u)?.[0];
@@ -2478,7 +2601,7 @@ test('selected guide initialization consumes original collected module equality 
     deployLockSource.indexOf('\nfunction finiteSelectedGuideDeclarationTerms('));
   assert.ok(collector && metadata && consumer && initialization);
   const contexts = new WeakMap(), defaultRoots = [], vendorCalls = [];
-  const functions = runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization};
+  const functions = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 29), runInNewContext(`${metadata}; ${consumer}; ${collector}; ${initialization};
     ({ collect: rollbackReaderClosure, initialize: finiteSelectedGuideInitializationTerms })`, {
     resolve, relative, dirname, join, existsSync, readFileSync, builtinModules,
     rollbackProofContexts: contexts, APPLICATION_ROLLBACK_READERS: defaultRoots,
@@ -2487,10 +2610,15 @@ test('selected guide initialization consumes original collected module equality 
     // unmodified original collector writes its private contexts below.
     verifyPrismaVendorRuntime(args) { vendorCalls.push(args.runtimeFile); return { controlledVendorFixture: true }; },
     rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
-  });
+  }));
   const parent = join(projectRoot, 'tmp/first-image'); await mkdir(parent, { recursive: true });
   const fixture = await mkdtemp(join(parent, 'selected-collected-runtime-'));
-  t.after(() => rm(fixture, { recursive: true, force: true }));
+  t.after(() => {
+    videoTimeoutObservation('67-cleanup-begin');
+    return rm(fixture, { recursive: true, force: true }).then(value => {
+      videoTimeoutObservation('67-cleanup-end'); return value;
+    }, error => { videoTimeoutObservation('67-cleanup-throw'); throw error; });
+  });
   const candidate = join(fixture, 'candidate'), previous = join(fixture, 'previous');
   const modulePath = 'packages/search/generated/client/index.js', roots = [[modulePath]];
   const input = directory => {
@@ -2505,14 +2633,23 @@ test('selected guide initialization consumes original collected module equality 
     await writeFile(join(directory, modulePath), input(directory));
     await writeFile(join(directory, 'packages/search/generated/client/runtime/library.js'), 'module.exports = {};');
   }
-  const collect = directory => functions.collect(ts, directory, roots, {});
+  videoTimeoutObservation('67-fixture-written');
+  const collect = directory => {
+    videoTimeoutObservation('67-collect-begin');
+    try { const value = functions.collect(ts, directory, roots, {}); videoTimeoutObservation('67-collect-end'); return value; }
+    catch (error) { videoTimeoutObservation('67-collect-throw'); throw error; }
+  };
   const current = collect(candidate), old = collect(previous);
   const left = contexts.get(current), right = contexts.get(old), key = `module:${modulePath}`;
   assert.notEqual(roots, defaultRoots);
   assert.equal(JSON.stringify(new Map(current).get(key)), JSON.stringify(new Map(old).get(key)));
   assert.notEqual(left.modules.get(resolve(candidate, modulePath)).text, right.modules.get(resolve(previous, modulePath)).text);
+  videoTimeoutObservation('67-initialize-begin');
   assert.equal(functions.initialize(ts, left, right, { current, previous: old }).status, 'conditional');
-  const refuses = action => assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+  videoTimeoutObservation('67-initialize-end');
+  const refuses = action => { videoTimeoutObservation('67-refusal-begin');
+    assert.throws(action, error => error.reason === 'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN');
+    videoTimeoutObservation('67-refusal-end'); };
   refuses(() => functions.initialize(ts, left, right)); // Source-only equality cannot mint the captured proof.
   for (const collected of [{ current: [...current], previous: old }, { current, previous: [...old] }, { current, previous: current }])
     refuses(() => functions.initialize(ts, left, right, collected));
@@ -2536,16 +2673,23 @@ test('selected guide initialization consumes original collected module equality 
     assert.throws(() => collect(candidate), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   }
   assert.ok(vendorCalls.length >= 2);
+  } finally { videoTimeoutObservation('67-parent-exit'); }
 });
 
 test('selected guide current voice predecessor refuses eager effects keys and non-data suppliers at their actual nodes', async t => {
+  videoTimeoutObservation('68-parent-begin');
+  try {
   const components = selectedGuideSourceComponents(), voice = 'apps/agent-worker/src/voice.ts', worker = 'apps/agent-worker/src/index.ts';
+  let observedMutant = 0;
   const check = async (changes, both, evidence) => {
+    const ordinal = ++observedMutant; videoTimeoutObservation('68-mutant-begin', ordinal);
+    try {
     const actual = await retainedSelectedVoiceProgram(changes);
     const previous = await historicalVideoIngressProgram(both ? changes : new Map(), 'ba276d8edccf163a8fb4e5a44655dd8ccf718eff');
     assert.throws(() => components.handlers(actual.ts, selectedGuideSourceContext(actual), selectedGuideSourceContext(previous)),
       error => error.reason === 'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED' && evidence(error.node, actual),
       'The named boundary must refuse at its supplying node, not an unrelated earlier frontier');
+    } finally { videoTimeoutObservation('68-mutant-exit', ordinal); }
   };
   await t.test('same factory eager effect on both source sides', () => check(new Map([[voice,
     text => text.replace('  const wait = options.wait ??', '  globalThis.eagerVoiceFactory();\n  const wait = options.wait ??')]]), true,
@@ -2572,9 +2716,13 @@ test('selected guide current voice predecessor refuses eager effects keys and no
   await t.test('actual factory shorthand escape', () => check(new Map([[worker,
     text => text + '\nconst leakedVoiceFactory = { createHermesVoiceHandlers };\n']]), false,
   (node, input) => input.ts.isShorthandPropertyAssignment(node.parent)));
+  } finally { videoTimeoutObservation('68-parent-exit'); }
 });
 
 test('selected guide supplemental HTTP library identity requires the actual locked importer and same installed package', () => {
+  videoTimeoutObservation('p69-begin', 0);
+  try {
+
   const components = selectedGuideSourceComponents();
   const importer = readFileSync(new URL('../../apps/api/package.json', import.meta.url), 'utf8');
   const lock = readFileSync(new URL('../../pnpm-lock.yaml', import.meta.url), 'utf8');
@@ -2590,42 +2738,59 @@ test('selected guide supplemental HTTP library identity requires the actual lock
   // These controlled filesystem records test the boundary, never provide a
   // successful DEFAULT collection, execute Zod, or mint deployment authority.
   const actual = make('/candidate'), previous = make('/previous');
-  assert.equal(components.httpLibrary(actual, previous).status, 'conditional');
+  assert.equal((videoTimeoutObservation('p69-proof-begin', 1), components.httpLibrary(actual, previous)).status, 'conditional');
+  videoTimeoutObservation('p69-proof-statement-end', 1);
   for (const bad of [{ packageVersion: '0.0.0' }, { missing: true }, { lockText: `${lock}\nchanged` }, { dependency: `^${pinned}` },
     { nearVersion: '0.0.0' }, { cachePath: '/unrelated-donor/zod/package.json' }])
-    assert.throws(() => components.httpLibrary(actual, make('/previous', bad)),
+    assert.throws(() => (videoTimeoutObservation('p69-proof-begin', 2), components.httpLibrary(actual, make('/previous', bad))),
       error => error.reason === 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN');
+
+  } catch (error) { videoTimeoutObservation('p69-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p69-exit', 0); }
 });
 
 test('image producer partition uses the real initializer and preserves all consumer runtime', async () => {
+  videoTimeoutObservation('p70-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   assert.ok(component.startsWith('function finiteImageProducerTerms('));
-  const terms = runInNewContext(`${component}; finiteImageProducerTerms`, { resolve, relative });
+  const terms = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 30), runInNewContext(`${component}; finiteImageProducerTerms`, { resolve, relative }));
   const actual = await videoIngressProgram();
-  const original = terms(actual.ts, videoPairContext(actual));
+  const original = (videoTimeoutObservation('p70-proof-begin', 1), terms(actual.ts, videoPairContext(actual)));
+  videoTimeoutObservation('p70-proof-statement-end', 1);
   assert.equal(original.kind, 'absent');
   const path = 'packages/domain/src/agent/agent.ts';
   const writer = await videoIngressProgram(new Map([[path, text => text.replace(
     "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review')",
     "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', 'image-review-tool-final-v1')")]]));
-  const tagged = terms(writer.ts, videoPairContext(writer));
+  const tagged = (videoTimeoutObservation('p70-proof-begin', 2), terms(writer.ts, videoPairContext(writer)));
+  videoTimeoutObservation('p70-proof-statement-end', 2);
   assert.equal(tagged.kind, 'tagged');
   assert.deepEqual(videoPairRuntime(actual.ts, original.text), videoPairRuntime(writer.ts, tagged.text));
   for (const argument of ['undefined', 'input.payload.policy']) {
     const unknown = await videoIngressProgram(new Map([[path, text => text.replace(
       "nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review')",
       `nativeReviewResult ? initialNativeAgentExecution(deps.nativeAgentRuntime, 'image-review', ${argument})`)]]));
-    assert.throws(() => terms(unknown.ts, videoPairContext(unknown)), error => error.reason === 'IMAGE_PRODUCER_BINDING_UNKNOWN');
+    assert.throws(() => (videoTimeoutObservation('p70-proof-begin', 3), terms(unknown.ts, videoPairContext(unknown))), error => error.reason === 'IMAGE_PRODUCER_BINDING_UNKNOWN');
+  videoTimeoutObservation('p70-proof-statement-end', 3);
   }
+
+  } catch (error) { videoTimeoutObservation('p70-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p70-exit', 0); }
 });
 
 test('image constructor partition refuses untagged raw-turn emission at the actual Session writer', async () => {
+  videoTimeoutObservation('p71-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const partition = runInNewContext(`${component}; finiteImageProtocolPartition`, { resolve, relative });
+  const partition = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 31), runInNewContext(`${component}; finiteImageProtocolPartition`, { resolve, relative }));
   const actual = await videoIngressProgram();
-  const model = partition(actual.ts, videoPairContext(actual));
+  const model = (videoTimeoutObservation('p71-proof-begin', 1), partition(actual.ts, videoPairContext(actual)));
+  videoTimeoutObservation('p71-proof-statement-end', 1);
   assert.equal(model.status, 'conditional');
   assert.equal(model.producer.kind, 'absent');
   assert.equal(model.writers.length, 5);
@@ -2637,16 +2802,24 @@ test('image constructor partition refuses untagged raw-turn emission at the actu
       "{ state: 'started', target, request: { messages, options }, effectiveOptions: boundedOptions, imageResultPolicy: 'image-review-tool-final-v1' }"),
   ]) {
     const unsafe = await videoIngressProgram(new Map([[path,change]]));
-    assert.throws(() => partition(unsafe.ts, videoPairContext(unsafe)), error => error.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN');
+    assert.throws(() => (videoTimeoutObservation('p71-proof-begin', 2), partition(unsafe.ts, videoPairContext(unsafe))), error => error.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN');
+  videoTimeoutObservation('p71-proof-statement-end', 2);
   }
+
+  } catch (error) { videoTimeoutObservation('p71-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p71-exit', 0); }
 });
 
 test('image cyclic imports inspect the actual owned freezer and eager initializer effects', async () => {
+  videoTimeoutObservation('p72-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const initialization = runInNewContext(`${component}; finiteImageInitializationTerms`, { resolve, relative });
+  const initialization = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 32), runInNewContext(`${component}; finiteImageInitializationTerms`, { resolve, relative }));
   const actual = await videoIngressProgram();
-  const model = initialization(actual.ts, videoPairContext(actual));
+  const model = (videoTimeoutObservation('p72-proof-begin', 1), initialization(actual.ts, videoPairContext(actual)));
+  videoTimeoutObservation('p72-proof-statement-end', 1);
   assert.equal(model.status, 'conditional');
   assert.equal(model.sources.length, 3);
   assert.ok(model.freezer);
@@ -2655,7 +2828,8 @@ test('image cyclic imports inspect the actual owned freezer and eager initialize
     text => text.replace("const resultTool: ChatToolDefinition = freeze({", "const resultTool: ChatToolDefinition = (globalThis.imageProtocolChanged = true, freeze)({"),
   ]) {
     const unsafe = await videoIngressProgram(new Map([['packages/ai-gateway/src/native-image-review.ts',change]]));
-    assert.throws(() => initialization(unsafe.ts, videoPairContext(unsafe)), error => error.reason === 'IMAGE_INITIALIZATION_UNKNOWN');
+    assert.throws(() => (videoTimeoutObservation('p72-proof-begin', 2), initialization(unsafe.ts, videoPairContext(unsafe))), error => error.reason === 'IMAGE_INITIALIZATION_UNKNOWN');
+  videoTimeoutObservation('p72-proof-statement-end', 2);
   }
   // Pure operands alone do not make arithmetic nonthrowing. These are actual
   // eager initializer nodes in the SCC, including the independently observed
@@ -2667,19 +2841,27 @@ test('image cyclic imports inspect the actual owned freezer and eager initialize
     const mutated=`${original}\nconst imageInitializationCrash = ${expression};\n`;
     const unsafe=await videoIngressProgram(new Map([[path,mutated]]));
     assert.equal(unsafe.program.getSourceFile(resolve(unsafe.projectRoot,path)).text,mutated);
-    assert.throws(()=>initialization(unsafe.ts,videoPairContext(unsafe)),
+    assert.throws(()=>(videoTimeoutObservation('p72-proof-begin', 3), initialization(unsafe.ts,videoPairContext(unsafe))),
       error=>error.reason==='IMAGE_INITIALIZATION_UNKNOWN',`must not erase potentially throwing initializer ${expression}`);
+  videoTimeoutObservation('p72-proof-statement-end', 3);
   }
   const numeric=await videoIngressProgram(new Map([['packages/ai-gateway/src/native-image-review.ts',text=>
     `${text}\nconst imageInitializationNumeric = -(2 * 1024) + 4 / 0 + 2 ** 3;\n`]]));
-  assert.equal(initialization(numeric.ts,videoPairContext(numeric)).status,'conditional',
+  assert.equal((videoTimeoutObservation('p72-proof-begin', 4), initialization(numeric.ts,videoPairContext(numeric))).status,'conditional',
     'number-literal arithmetic remains nonthrowing even when its result is nonfinite');
+  videoTimeoutObservation('p72-proof-statement-end', 4);
+
+  } catch (error) { videoTimeoutObservation('p72-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p72-exit', 0); }
 });
 
 test('image store binds its three modes to the original captured image attempt', async () => {
+  videoTimeoutObservation('p73-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const analyze = runInNewContext(`${component}; finiteImageStoreFlowTerms`,{ resolve,relative });
+  const analyze = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 33), runInNewContext(`${component}; finiteImageStoreFlowTerms`,{ resolve,relative }));
   const actual = await videoIngressProgram(), model = analyze(actual.ts,videoPairContext(actual));
   assert.equal(model.status,'conditional');
   assert.deepEqual(Array.from(model.modes,([name,value]) => [name,value.mode]),[
@@ -2694,12 +2876,18 @@ test('image store binds its three modes to the original captured image attempt',
     const unsafe = await videoIngressProgram(new Map([[file,change]]));
     assert.throws(() => analyze(unsafe.ts,videoPairContext(unsafe)),error => error.reason === 'IMAGE_STORE_FLOW_UNKNOWN');
   }
+
+  } catch (error) { videoTimeoutObservation('p73-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p73-exit', 0); }
 });
 
 test('image initializer projection preserves the retained real legacy function on every supported caller', async () => {
+  videoTimeoutObservation('p74-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project = runInNewContext(`${component}; finiteImageInitializerProjection`,{ resolve,relative });
+  const project = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 34), runInNewContext(`${component}; finiteImageInitializerProjection`,{ resolve,relative }));
   const path = 'packages/domain/src/agent/native-agent-execution.ts';
   // This unchanged file is already in the workflow's retained source fixture;
   // the accepting deployment pair still uses its actual installed rollback.
@@ -2708,24 +2896,36 @@ test('image initializer projection preserves the retained real legacy function o
   const model = project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
   assert.equal(model.status,'conditional');
   assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,model.rollback.getText()));
+
+  } catch (error) { videoTimeoutObservation('p74-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p74-exit', 0); }
 });
 
 test('image Session projection retains the complete original untagged runtime and read order', async () => {
+  videoTimeoutObservation('p75-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project = runInNewContext(`${component}; finiteImageSessionProjection`,{ resolve,relative });
+  const project = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 35), runInNewContext(`${component}; finiteImageSessionProjection`,{ resolve,relative }));
   const path = 'apps/agent-worker/src/native-agent/session.ts';
   const text = execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{ encoding:'utf8' });
   const actual = await videoIngressProgram(), legacy = await videoIngressProgram(new Map([[path,text]]));
   const model = project(actual.ts,videoPairContext(actual),videoPairContext(legacy));
   assert.equal(model.status,'conditional');
   assert.deepEqual(videoPairRuntime(actual.ts,model.text),videoPairRuntime(legacy.ts,text));
+
+  } catch (error) { videoTimeoutObservation('p75-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p75-exit', 0); }
 });
 
 test('image decoder projection preserves the actual old private checkpoint decoder', async () => {
+  videoTimeoutObservation('p76-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project = runInNewContext(`${component}; finiteImageDecoderProjection`,{ resolve,relative });
+  const project = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 36), runInNewContext(`${component}; finiteImageDecoderProjection`,{ resolve,relative }));
   const path = 'packages/domain/src/assets/native-image-review.ts';
   const text = execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{ encoding:'utf8' });
   const actual = await videoIngressProgram(), legacy = await videoIngressProgram(new Map([[path,text]]));
@@ -2747,12 +2947,18 @@ test('image decoder projection preserves the actual old private checkpoint decod
       assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
     },'a changed decoder/predicate or an unsafe pre-record read must not erase into the original runtime');
   }
+
+  } catch (error) { videoTimeoutObservation('p76-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p76-exit', 0); }
 });
 
 test('image store projection retains actual private bytes, known references and paid/live CAS', async () => {
+  videoTimeoutObservation('p77-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageStoreProjection`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 37), runInNewContext(`${component}; finiteImageStoreProjection`,{resolve,relative}));
   const path='apps/agent-worker/src/native-agent/task-store.ts';
   const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
   const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
@@ -2773,12 +2979,18 @@ test('image store projection retains actual private bytes, known references and 
       assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
     },'changed old/new reference, full execution fence, bytes or CAS count must not project to the retained store');
   }
+
+  } catch (error) { videoTimeoutObservation('p77-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p77-exit', 0); }
 });
 
 test('image Domain projection preserves the entire original execution and compare-and-set module', async () => {
+  videoTimeoutObservation('p78-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageExecutionProjection`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 38), runInNewContext(`${component}; finiteImageExecutionProjection`,{resolve,relative}));
   const path='packages/domain/src/agent/native-agent-execution.ts';
   const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
   const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
@@ -2799,12 +3011,18 @@ test('image Domain projection preserves the entire original execution and compar
       assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
     },'original attempt, fetched-result equality and exactly-one CAS must remain in the actual Domain function');
   }
+
+  } catch (error) { videoTimeoutObservation('p78-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p78-exit', 0); }
 });
 
 test('image illustration projection preserves the original complete image-role entry', async () => {
+  videoTimeoutObservation('p79-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageIllustrationProjection`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 39), runInNewContext(`${component}; finiteImageIllustrationProjection`,{resolve,relative}));
   const path='apps/agent-worker/src/native-agent/illustration-task.ts';
   const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
   const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
@@ -2828,12 +3046,18 @@ test('image illustration projection preserves the original complete image-role e
       assert.deepEqual(videoPairRuntime(unsafe.ts,entry(unsafe.ts,projected.text)),videoPairRuntime(legacy.ts,entry(legacy.ts,text)));
     },'common source authority and whole exact current envelope must remain before every new branch');
   }
+
+  } catch (error) { videoTimeoutObservation('p79-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p79-exit', 0); }
 });
 
 test('image Host projection keeps the original SDK response and finish guards', async () => {
+  videoTimeoutObservation('p80-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageHostProjection`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 40), runInNewContext(`${component}; finiteImageHostProjection`,{resolve,relative}));
   const path='apps/agent-worker/src/native-agent/host-task.ts';
   const text=execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'});
   const actual=await videoIngressProgram(),legacy=await videoIngressProgram(new Map([[path,text]]));
@@ -2851,12 +3075,18 @@ test('image Host projection keeps the original SDK response and finish guards', 
       assert.deepEqual(videoPairRuntime(unsafe.ts,projected.text),videoPairRuntime(legacy.ts,text));
     },'Host final equality and plain owned message shape cannot be waived');
   }
+
+  } catch (error) { videoTimeoutObservation('p80-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p80-exit', 0); }
 });
 
 test('image SDK option domain follows actual request and all Session binding constructors', async () => {
+  videoTimeoutObservation('p81-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const analyze=runInNewContext(`${component}; finiteImageSdkOptionTerms`,{resolve,relative});
+  const analyze=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 41), runInNewContext(`${component}; finiteImageSdkOptionTerms`,{resolve,relative}));
   const actual=await videoIngressProgram(),model=analyze(actual.ts,videoPairContext(actual));
   assert.equal(model.status,'conditional');assert.ok(model.sites.length>0);
   assert.deepEqual([...model.assignments].sort(),['maxTokens','temperature','topP']);
@@ -2870,12 +3100,18 @@ test('image SDK option domain follows actual request and all Session binding con
     const unsafe=await videoIngressProgram(new Map([[path,change]]));
     assert.throws(()=>analyze(unsafe.ts,videoPairContext(unsafe)),error=>error.reason==='IMAGE_SDK_OPTION_DOMAIN_UNKNOWN');
   }
+
+  } catch (error) { videoTimeoutObservation('p81-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p81-exit', 0); }
 });
 
 test('image recovery projection retains both original task and run recovery modules', async () => {
+  videoTimeoutObservation('p82-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageRecoveryProjections`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 42), runInNewContext(`${component}; finiteImageRecoveryProjections`,{resolve,relative}));
   const files=['packages/domain/src/agent/agent.ts','packages/domain/src/agent/research-run.ts'];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
   // This historical image component proof is not current whole-candidate compatibility.
@@ -2895,12 +3131,18 @@ test('image recovery projection retains both original task and run recovery modu
       for(const [key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
     },'new pre-refusal effects or expanded old retry authority cannot be erased');
   }
+
+  } catch (error) { videoTimeoutObservation('p82-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p82-exit', 0); }
 });
 
 test('image allowed-tool domain derives all fresh names and explicit saved-name recurrences', async () => {
+  videoTimeoutObservation('p83-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const analyze=runInNewContext(`${component}; finiteImageAllowedToolTerms`,{resolve,relative});
+  const analyze=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 43), runInNewContext(`${component}; finiteImageAllowedToolTerms`,{resolve,relative}));
   const actual=await videoIngressProgram(),model=analyze(actual.ts,videoPairContext(actual));
   assert.equal(model.status,'conditional');assert.equal(model.results.length,model.options.sites.length);
   assert.ok(model.history.length>0);
@@ -2911,12 +3153,18 @@ test('image allowed-tool domain derives all fresh names and explicit saved-name 
   const mutated=await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/paper-task.ts',value=>value.replace(
     "tool.function.name.startsWith('paper_')).map(tool => {","tool.function.name.startsWith('paper_')).map(tool => { tool.function.name = 'image_review_result';")]]));
   assert.throws(()=>analyze(mutated.ts,videoPairContext(mutated)),error=>error.reason==='IMAGE_ALLOWED_TOOL_DOMAIN_UNKNOWN');
+
+  } catch (error) { videoTimeoutObservation('p83-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p83-exit', 0); }
 });
 
 test('image transport projection retains the original native and provider request methods', async () => {
+  videoTimeoutObservation('p84-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageTransportProjections`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 44), runInNewContext(`${component}; finiteImageTransportProjections`,{resolve,relative}));
   const files=['packages/ai-gateway/src/gateway.ts','packages/ai-gateway/src/provider.ts'];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
   const actual=await videoIngressProgram(),legacy=await videoIngressProgram(originals);
@@ -2941,12 +3189,18 @@ test('image transport projection retains the original native and provider reques
     assert.throws(()=>project(observed.ts,videoPairContext(observed),videoPairContext(legacy)),
       error=>error.reason==='IMAGE_TRANSPORT_RESIDUAL_UNKNOWN','method arity or escaped function identity cannot be specialized away');
   }
+
+  } catch (error) { videoTimeoutObservation('p84-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p84-exit', 0); }
 });
 
 test('image consumer projection retains original decision parsing and journal turn checks', async () => {
+  videoTimeoutObservation('p85-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageConsumerProjections`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 45), runInNewContext(`${component}; finiteImageConsumerProjections`,{resolve,relative}));
   const files=['apps/agent-worker/src/presentation/generated-image-review.ts','apps/agent-worker/src/native-agent/journal-task-store.ts'];
   const originals=new Map(files.map(path=>[path,execFileSync('git',['show',`ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6:${path}`],{encoding:'utf8'})]));
   const sourceRef='3a93eb49137a67b2c12ef0ca89d7327c68c8e1b5';
@@ -2963,12 +3217,18 @@ test('image consumer projection retains original decision parsing and journal tu
       for(const[key,value]of projected.projected)assert.deepEqual(videoPairRuntime(unsafe.ts,value.text),videoPairRuntime(legacy.ts,originals.get(key)),key);
     },'legacy JSON validation and paid/live journal completion checks must be retained');
   }
+
+  } catch (error) { videoTimeoutObservation('p85-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p85-exit', 0); }
 });
 
 test('image legacy source model composes historical projections and refuses current voice and live prepared-method escapes', async () => {
+  videoTimeoutObservation('p86-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const project=runInNewContext(`${component}; finiteImageLegacySourceModel`,{resolve,relative});
+  const project=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 46), runInNewContext(`${component}; finiteImageLegacySourceModel`,{resolve,relative}));
   const files=[
     'apps/agent-worker/src/native-agent/session.ts','apps/agent-worker/src/native-agent/task-store.ts',
     'apps/agent-worker/src/native-agent/host-task.ts','apps/agent-worker/src/native-agent/illustration-task.ts',
@@ -3018,14 +3278,20 @@ test('image legacy source model composes historical projections and refuses curr
   const unsafe=await videoIngressProgram(new Map([['packages/ai-gateway/src/gateway.ts',value=>value.replace(
     '    messages = snapshotChatMessages(messages);','    void this.prepareNativeImageReviewTurn; messages = snapshotChatMessages(messages);')]]),{sourceRef});
   assert.throws(()=>project(unsafe.ts,videoPairContext(unsafe),videoPairContext(legacy)),error=>error.reason==='IMAGE_DECLARATION_CONTEXT_UNKNOWN');
+
+  } catch (error) { videoTimeoutObservation('p86-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p86-exit', 0); }
 });
 
 test('image capable source pair retains raw/final readers despite an absent fresh producer', async () => {
+  videoTimeoutObservation('p87-begin', 0);
+  try {
+
   const component=deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   const roots=[],weak=new WeakMap();
-  const methods=runInNewContext(`${component}; ({model:finiteImageCapableSourceModel,capable:finiteImageCapablePairCompatibility,first:finiteImageFirstPairCompatibility})`,
-    {resolve,relative,rollbackProofContexts:weak,APPLICATION_ROLLBACK_READERS:roots,builtinModules});
+  const methods=(videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 47), runInNewContext(`${component}; ({model:finiteImageCapableSourceModel,capable:finiteImageCapablePairCompatibility,first:finiteImageFirstPairCompatibility})`,
+    {resolve,relative,rollbackProofContexts:weak,APPLICATION_ROLLBACK_READERS:roots,builtinModules}));
   const file='packages/domain/src/agent/agent.ts',decoder='packages/domain/src/assets/native-image-review.ts';
   const current=await videoIngressProgram();
   const writer=await videoIngressProgram(new Map([[file,value=>value.replace(
@@ -3048,35 +3314,830 @@ test('image capable source pair retains raw/final readers despite an absent fres
   }
   for(const proof of[methods.capable,methods.first])for(const arrays of[[left,right],[structuredClone(left),structuredClone(right)]])
     assert.equal(proof(writer.ts,...arrays,writer.projectRoot,current.projectRoot,roots),false,'source-only/copied arrays have no successful collector provenance');
+
+  } catch (error) { videoTimeoutObservation('p87-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p87-exit', 0); }
 });
 
-test('current candidate source keeps the legacy video helper conservative', async () => {
-  const { ts, program, projectRoot } = await videoIngressProgram();
-  const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
-  assert.equal(host.text, readFileSync(host.fileName, 'utf8'));
-  const illustration=program.getSourceFile(resolve(projectRoot,'apps/agent-worker/src/native-agent/illustration-task.ts'));
-  const factory=illustration.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='createNativeIllustrationMaterializer');
-  assert.ok(factory);
-  const checker=program.getTypeChecker(), target=checker.getSymbolAtLocation(factory.name), callers=[];
-  const visit=node=>{
-    if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&checker.getSymbolAtLocation(node.expression)===target){
-      let owner=node.parent;while(owner&&!(ts.isFunctionLike(owner)&&owner.body))owner=owner.parent;
-      callers.push(owner);
+test('actual current host message alias preserves the video history-before-session boundary', async () => {
+  videoTimeoutObservation('p88-begin', 0);
+  try {
+
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const { ts, program, projectRoot } = await videoIngressProgram(new Map(), { sourceRef });
+    const host = program.getSourceFiles().find(file => file.fileName.replaceAll('\\', '/').endsWith('/native-agent/host-task.ts'));
+    assert.equal(host.text, execFileSync('git', ['show', `${sourceRef}:apps/agent-worker/src/native-agent/host-task.ts`],
+      { cwd: projectRoot, encoding: 'utf8' }));
+    const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
+    assert.equal(result.status, 'unknown');
+    assert.ok(result.proven.includes('host-before-session'), `${sourceRef}: ${result.reason}`);
+    assert.equal(result.releaseCompatible, false);
+  }
+
+  } catch (error) { videoTimeoutObservation('p88-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p88-exit', 0); }
+});
+
+test('actual current video session preserves decoded history and checkpoints across disjoint image branches', async t => {
+  videoTimeoutObservation('p89-begin', 0);
+  try {
+
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, boundary: 'source-only', reason: result.reason, proven: result.proven,
+      storeGraph: result.storeGraph.status, privateStoreChain: result.privateStoreChain.status }));
+    assert.ok(result.proven.includes('session-prefix'), result.reason);
+    assert.ok(result.proven.includes('session-checkpoint-prefix'), result.reason);
+    assert.equal(result.releaseCompatible, false);
+  }
+
+  } catch (error) { videoTimeoutObservation('p89-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p89-exit', 0); }
+});
+
+test('current video Session clone rejects opaque mutations and unproved containing copies before history proof', async t => {
+  videoTimeoutObservation('p90-begin', 0);
+  try {
+
+  const policy = "{ sourceKind: 'illustration-image', imageReview: { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' } }";
+  const cases = [
+    ['exact-High-Object-assign', `Object.assign(binding, ${policy});`],
+    ['computed-direct-clone-write', "binding['sourceKind'] = 'illustration-image'; binding['imageReview'] = { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' };"],
+    ['opaque-containing-copy', `const opaque = value => Object.assign(value.holder, ${policy}); opaque({ holder: binding });`],
+    ['checkpoint-binding-mutation', `Object.assign(started.binding, ${policy});`, 'if (!retry) await input.store.compareAndSet(state, started);'],
+    ['checkpoint-containing-copy', `const opaque = value => Object.assign(value.checkpoint.binding, ${policy}); opaque({ checkpoint: started });`,
+      'if (!retry) await input.store.compareAndSet(state, started);'],
+    ['retry-binding-mutation', `if (retry) Object.assign(retry.started.binding, ${policy});`, 'const started: NativeAgentSessionState = retry?.started ??'],
+    ['rejection-containing-copy', `const opaque = value => Object.assign(value.started.binding, ${policy}); if (attempt.rejection) opaque(attempt.rejection);`,
+      'attempt.rejection = { started, error };', true],
+  ];
+  for (const [name, inserted, point, append] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p90-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/session.ts', value => {
+      const before = point ?? 'const binding = structuredClone(input.binding);';
+      assert.equal(value.split(before).length, 2);
+      return value.replace(before, !point || append ? before + '\n  ' + inserted : inserted + '\n  ' + before);
+    }]]),
+    { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), result.reason);
+    assert.ok(!result.proven.includes('session-prefix'), `${name}: ${result.reason}`);
+    assert.ok(!result.proven.includes('session-checkpoint-prefix'), `${name}: ${result.reason}`);
+
+  } catch (error) { videoTimeoutObservation('p90-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p90-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p90-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p90-exit', 0); }
+});
+
+test('current video Session snapshot input refuses mutations before the intrinsic clone', async t => {
+  videoTimeoutObservation('p91-begin', 0);
+  try {
+
+  const policy = "{ sourceKind: 'illustration-image', imageReview: { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' } }";
+  for (const [name, receiver] of [['original-input', 'input.binding'], ['implicit-argument-input', 'arguments[0].binding']]) await t.test(name, async () => {
+  videoTimeoutObservation('p91-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/session.ts', value =>
+      value.replace('const binding = structuredClone(input.binding);', `Object.assign(${receiver}, ${policy});\n  const binding = structuredClone(input.binding);`)]]),
+    { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), result.reason);
+    assert.ok(!result.proven.includes('session-prefix'), `${name}: ${result.reason}`);
+
+  } catch (error) { videoTimeoutObservation('p91-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p91-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p91-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p91-exit', 0); }
+});
+
+test('current video Session clone refuses replacement of a checkpoint store consumer before history proof', async () => {
+  videoTimeoutObservation('p92-begin', 0);
+  try {
+
+  const input = await videoIngressProgram(new Map([['apps/agent-worker/src/native-agent/session.ts', value =>
+    value.replace('const binding = structuredClone(input.binding);', "const binding = structuredClone(input.binding);\n  input.store.compareAndSet = async (_state, checkpoint) => { Object.assign(checkpoint.binding, { sourceKind: 'illustration-image', imageReview: { ['imageResult' + 'Policy']: 'image-review-tool-final-v1' } }); };")]]),
+  { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+  const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+  assert.ok(result.proven.includes('host-before-session'), result.reason);
+  assert.ok(!result.proven.includes('session-prefix'), result.reason);
+
+  } catch (error) { videoTimeoutObservation('p92-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p92-exit', 0); }
+});
+
+test('current video session rejects unproven profile guards and changed decoder submission suppliers', async t => {
+  videoTimeoutObservation('p93-begin', 0);
+  try {
+
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts', session = 'apps/agent-worker/src/native-agent/session.ts';
+  const binding = 'const binding = { taskId: input.task.id, artifactId:';
+  const sessionCall = 'const session = createNativeAgentSession({ gateway: input.gateway, binding, store, authorize });';
+  const terminal = "if (binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1') {";
+  const rawPrefix = "if (binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'\n        && messages.some";
+  const last = (value, before, after) => {
+    const index = value.lastIndexOf(before); assert.ok(index >= 0);
+    return value.slice(0, index) + after + value.slice(index + before.length);
+  };
+  const cases = [
+    ['direct-image-kind', illustration, value => value.replace(binding, "const binding = { sourceKind: 'illustration-image', taskId: input.task.id, artifactId:")],
+    ['computed-kind', illustration, value => value.replace(binding, "const binding = { ['source' + 'Kind']: 'illustration-image', taskId: input.task.id, artifactId:")],
+    ['literal-kind-spread', illustration, value => value.replace(binding, "const binding = { ...{ sourceKind: 'illustration-image' }, taskId: input.task.id, artifactId:")],
+    ['conditional-kind-spread', illustration, value => value.replace(binding, "const binding = { ...(nativeVideo ? { sourceKind: 'illustration-image' } : {}), taskId: input.task.id, artifactId:")],
+    ['opaque-binding-spread', illustration, value => value.replace(binding, 'const binding = { ...input.opaqueBinding, taskId: input.task.id, artifactId:')],
+    ['mutable-binding', illustration, value => value.replace(binding, 'let binding = { taskId: input.task.id, artifactId:')],
+    ['mutated-kind', illustration, value => value.replace(sessionCall, "binding['sourceKind'] = 'illustration-image';\n  " + sessionCall)],
+    ['escaped-binding', illustration, value => value.replace(sessionCall, "Object.assign(binding, { sourceKind: 'illustration-image' });\n  " + sessionCall)],
+    ['binding-alias', illustration, value => value.replace(sessionCall, 'const escapedBinding = binding;\n  ' + sessionCall)],
+    ['unawaited-entry-authorization', session, value => value.replace('async function completeOnce(raw: unknown) {\n      await authorize();',
+      'async function completeOnce(raw: unknown) {\n      authorize();')],
+    ['unknown-entry-effect', session, value => value.replace('async function completeOnce(raw: unknown) {\n      await authorize();',
+      'async function completeOnce(raw: unknown) {\n      await authorize(); opaque();')],
+    ['terminal-profile-guard', session, value => value.replace(terminal, terminal.replace("'illustration-image'", "'paper'"))],
+    ['terminal-effect-before-guard', session, value => value.replace(terminal, terminal.replace('if (', 'if (opaque() && '))],
+    ['raw-effect-before-guard', session, value => value.replace(rawPrefix, rawPrefix.replace('if (', 'if (opaque() && '))],
+    ['wrong-parser', session, value => value.replace('nativeAgentSdkRequest(raw, binding.model)', 'otherSdkRequest(raw, binding.model)')],
+    ['wrong-raw-request', session, value => value.replace('nativeAgentSdkRequest(raw, binding.model)', 'nativeAgentSdkRequest({}, binding.model)')],
+    ['wrong-decoder-model', session, value => value.replace('nativeAgentSdkRequest(raw, binding.model)', 'nativeAgentSdkRequest(raw, input.otherModel)')],
+    ['state-before-decoder', session, value => value.replace('const { messages, options } = nativeAgentSdkRequest(raw, binding.model);\n      let state = await read();',
+      'let state = await read();\n      const { messages, options } = nativeAgentSdkRequest(raw, binding.model);')],
+    ['wrong-state-supplier', session, value => value.replace('let state = await read();', 'let state = await input.store.read();')],
+    ['different-common-history', session, value => value.replace('checkHistory(messages, state);', 'checkHistory([], state);')],
+    ['unawaited-text-submit-authorization', session, value => last(value,
+      'await authorize(); state = await read(); checkHistory(messages, state);', 'authorize(); state = await read(); checkHistory(messages, state);')],
+    ['different-text-submit-history', session, value => last(value, 'checkHistory(messages, state);', 'checkHistory([], state);')],
+    ['different-text-submit-read', session, value => last(value, 'state = await read(); checkHistory(messages, state);',
+      'state = await otherRead(); checkHistory(messages, state);')],
+    ['different-text-supplier', session, value => value.replace('input.gateway.nativeAgentComplete(messages, boundedOptions,',
+      'input.gateway.otherComplete(messages, boundedOptions,')],
+    ['different-text-request', session, value => value.replace('input.gateway.nativeAgentComplete(messages, boundedOptions,',
+      'input.gateway.nativeAgentComplete([], boundedOptions,')],
+    ['unbound-text-submit-callback', session, value => last(value, 'submitProvider: async (target, submit) =>', 'unusedProvider: async (target, submit) =>')],
+    ['different-retry-checkpoint', session, value => value.replace('retry?.started ??', 'state ??'), 'session-checkpoint-prefix'],
+  ];
+  for (const [name, file, change, cutoff = 'session-prefix'] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p93-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[file, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), `${name} must reach this actual Session boundary: ${result.reason}`);
+    assert.ok(!result.proven.includes(cutoff), `${name}: ${result.reason}`);
+    assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p93-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p93-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p93-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p93-exit', 0); }
+});
+
+test('actual image Host attempt is bound to its guarded fresh task snapshot', async t => {
+  videoTimeoutObservation('p94-begin', 0);
+  try {
+
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, boundary: 'source-only', reason: result.reason, proven: result.proven, at: result.at }));
+    assert.ok(result.storeGraph.hosts.some(host => host.at.file.endsWith('/native-agent/illustration-task.ts') && host.at.line === 141), result.reason);
+    assert.equal(result.releaseCompatible, false);
+  }
+
+  } catch (error) { videoTimeoutObservation('p94-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p94-exit', 0); }
+});
+
+test('actual image finalizer consumers preserve the bounded store and completed state', async t => {
+  videoTimeoutObservation('p95-begin', 0);
+  try {
+
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, reason: result.reason, at: result.at, proven: result.proven }));
+    assert.equal(result.storeGraph.finalizations?.length, 2, result.reason);
+    assert.ok(result.storeGraph.finalizations.some(row => row.file.endsWith('/native-agent/illustration-task.ts') && row.line === 126));
+    assert.ok(result.storeGraph.finalizations.some(row => row.file.endsWith('/native-agent/session.ts') && row.line === 215));
+    assert.ok(result.proven.includes('session-checkpoint-prefix'), result.reason);
+    assert.equal(result.privateStoreChain.status, 'conditional', 'the joined serializer retains the private-chain obligations');
+    assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', 'report the original remaining origins after the joined store proof');
+    assert.ok(result.proven.includes('store-capability-use'));
+    assert.equal(result.releaseCompatible, false);
+  }
+
+  } catch (error) { videoTimeoutObservation('p95-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p95-exit', 0); }
+});
+
+test('actual image checkpoint normalization keeps captured attempt and raw receipt identity', async t => {
+  videoTimeoutObservation('p96-begin', 0);
+  try {
+
+  for (const sourceRef of ['ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e', '764020c76b25af571e8b88e80338406d70bdb37a']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    t.diagnostic(JSON.stringify({ sourceRef, reason: result.reason, at: result.at, proven: result.proven }));
+    assert.equal(result.storeGraph.finalizations?.length, 2, result.reason);
+    assert.ok(result.privateStoreChain.normalization, result.reason);
+    assert.equal(result.privateStoreChain.normalization.reference.file, 'apps/agent-worker/src/native-agent/task-store.ts');
+    assert.ok(result.proven.includes('session-checkpoint-prefix'), result.reason);
+    assert.equal(result.privateStoreChain.status, 'conditional');
+    assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN');
+    assert.ok(result.proven.includes('generic-private-store-chain'));
+    assert.equal(result.releaseCompatible, false);
+  }
+
+  } catch (error) { videoTimeoutObservation('p96-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p96-exit', 0); }
+});
+
+test('image checkpoint normalization rejects lost source policy and private reference order', async t => {
+  videoTimeoutObservation('p97-begin', 0);
+  try {
+
+  const store = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const replace = (from, to) => value => { assert.ok(value.includes(from), from); return value.replace(from, to); };
+  const persist = change => value => {
+    const a = value.indexOf('  async function persist('), b = value.indexOf('  async function update(', a);
+    assert.ok(a >= 0 && b > a); const before = value.slice(a, b), after = change(before); assert.notEqual(after, before);
+    return value.slice(0, a) + after + value.slice(b);
+  };
+  const serializer = ['PRIVATE_SERIALIZER_ORIGIN_UNKNOWN'];
+  const cases = [
+    ['swapped-source-attempt-arms', replace("binding.sourceKind === 'illustration-image' ? binding.imageReview.executionAttempt : input.executionAttempt",
+      "binding.sourceKind === 'illustration-image' ? input.executionAttempt : binding.imageReview.executionAttempt"), ['STORE_HOST_IDENTITY_UNKNOWN']],
+    ['wrong-image-attempt-receiver', replace("binding.sourceKind === 'illustration-image' ? binding.imageReview.executionAttempt : input.executionAttempt",
+      "binding.sourceKind === 'illustration-image' ? input.taskId : input.executionAttempt"), ['STORE_HOST_IDENTITY_UNKNOWN']],
+    ['wrong-raw-only-supplier', replace("const rawOnly = turn.state === 'received';", "const rawOnly = turn.state === 'started';"), serializer],
+    ['wrong-raw-reference-state', replace("state: rawOnly ? 'completed' : turn.state", "state: rawOnly ? 'received' : turn.state"), serializer],
+    ['missing-persist-policy', replace('imageResultPolicy: binding.imageReview.imageResultPolicy,', 'imageResultPolicy: undefined,'), ['IMAGE_PROTOCOL_PARTITION_UNKNOWN']],
+    ['raw-marked-decoded', replace("received: rawOnly ? 'raw-only' as const : 'decoded' as const", "received: rawOnly ? 'decoded' as const : 'decoded' as const"), serializer],
+    ['missing-read-policy', replace('|| cp.imageResultPolicy !== input.execution.imageResultPolicy', '|| false'), serializer],
+    ['missing-response-absence', replace("Object.hasOwn(turn, 'response')", 'false'), serializer],
+    ['wrong-received-policy', replace('turn.received.policy !== cp.imageResultPolicy', 'turn.received.policy !== binding.model'), serializer],
+    ['wrong-image-source-identity', persist(replace('sourceEvidenceIdentity: binding.imageReview.sourceEvidenceIdentity', 'sourceEvidenceIdentity: binding.imageReview.parentIdentity')), serializer],
+    ['wrong-inverse-source-identity', replace('isDeepStrictEqual(cp.imageIdentity,', 'isDeepStrictEqual(cp.unprovedIdentity,'), serializer],
+    ['ordinary-source-contamination', replace(': { artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash }',
+      ": { artifactId: binding.artifactId, documentSha256: binding.documentSha256, sourceMapHash: binding.sourceMapHash, received: 'decoded' }"), serializer],
+    ['wrong-serialized-bytes', persist(replace('Buffer.from(JSON.stringify(state))', 'Buffer.from(JSON.stringify({}))')), serializer],
+    ['wrong-serialized-hash', persist(replace('const hash = sha(bytes);', "const hash = sha(Buffer.from('wrong'));")), serializer],
+    ['late-source-override', replace('...source, executionAttempt:', "...source, serializedSha256: 'wrong', executionAttempt:"), serializer],
+    ['wrong-private-cas-expected', replace('expected: old,', 'expected: input.execution.checkpoint,'), ['PRIVATE_CAS_REFERENCE_UNKNOWN']],
+    ['premature-known-registration', value => {
+      assert.ok(value.includes('    known.set(next.serializedSha256, next);'));
+      return value.replace('    known.set(next.serializedSha256, next);', '')
+        .replace('const prepared = await persist(state); next = prepared.reference;',
+          'const prepared = await persist(state); next = prepared.reference; known.set(next.serializedSha256, next);');
+    }, ['PRIVATE_KNOWN_REGISTRATION_ORDER_UNKNOWN']],
+  ];
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const flow = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 48), runInNewContext(`${component}; finiteImageStoreFlowTerms`, { resolve, relative }));
+  for (const [name, change, reasons] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p97-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[store, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown', name);
+    assert.ok(reasons.includes(result.reason), `${name}: ${result.reason}`);
+    assert.equal(result.proven.includes('generic-private-store-chain'), false, 'changed metadata/order cannot be hidden by the later remaining origins');
+    if (result.reason === 'STORE_HOST_IDENTITY_UNKNOWN') {
+      assert.equal(result.at.file, 'apps/agent-worker/src/native-agent/illustration-task.ts'); assert.equal(result.at.line, 141);
+      assert.throws(() => flow(input.ts, videoPairContext(input)), error => error.reason === 'IMAGE_STORE_FLOW_UNKNOWN');
     }
-    ts.forEachChild(node,visit);
-  };visit(illustration);
-  assert.deepEqual(callers.map(node=>node?.name?.text).sort(),['replayNativeVideoPlan','runNativeIllustrationTaskCore']);
-  assert.ok(!callers.some(node=>node.name?.text==='runNativeIllustrationTask'),
-    'the actual materializer is in the new core, outside the old helper live/replay ownership premise');
-  const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
-  assert.equal(result.status, 'unknown');
-  assert.equal(result.reason, 'EXTRA_MATERIALIZER_CALLER');
-  assert.ok(!result.proven.includes('materializer-host'));
-  assert.ok(!result.proven.includes('host-before-session'));
-  assert.equal(result.releaseCompatible, false);
+    if (result.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN') {
+      assert.equal(result.proven.includes('session-prefix'), false, 'the original protocol partition refuses before either consumer proof');
+      assert.equal(result.privateStoreChain.normalization, undefined);
+      assert.throws(() => flow(input.ts, videoPairContext(input)), error => error.reason === 'IMAGE_PROTOCOL_PARTITION_UNKNOWN');
+    }
+    assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p97-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p97-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p97-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p97-exit', 0); }
+});
+
+test('image finalizer rejects changed validation state consumers and final-mode suppliers', async t => {
+  videoTimeoutObservation('p98-begin', 0);
+  try {
+
+  const session = 'apps/agent-worker/src/native-agent/session.ts', route = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const store = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const finalizer = change => value => {
+    const start = value.indexOf('export async function finalizeNativeImageReviewState('), end = value.indexOf('/** Owns SDK', start);
+    assert.ok(start >= 0 && end > start); const before = value.slice(start, end), after = change(before); assert.notEqual(after, before);
+    return value.slice(0, start) + after + value.slice(end);
+  };
+  const replace = (from, to) => value => { assert.ok(from instanceof RegExp ? from.test(value) : value.includes(from), String(from)); return value.replace(from, to); };
+  const finalReason = ['STORE_FINALIZER_CONSUMER_UNKNOWN'];
+  const modeReason = ['IMAGE_STORE_FLOW_UNKNOWN', 'STORE_UPDATE_SUPPLIER_UNKNOWN', 'STORE_RETURN_UNKNOWN', 'STORE_HOST_IDENTITY_UNKNOWN'];
+  const component = deployLockSource.slice(deployLockSource.indexOf('function finiteImageProducerTerms('),
+    deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
+  const flow = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 49), runInNewContext(`${component}; finiteImageStoreFlowTerms`, { resolve, relative }));
+  const cases = [
+    ['late-validator', session, finalizer(replace(/const final = nativeImageReviewFinal\(state\);\r?\n  if \(state.validatedFinal\) return state;/u,
+      'if (state.validatedFinal) return state;\n  const final = nativeImageReviewFinal(state);')), finalReason],
+    ['removed-validator', session, finalizer(replace('nativeImageReviewFinal(state)', 'state.validatedFinal')), finalReason],
+    ['awaited-validator', session, finalizer(replace('nativeImageReviewFinal(state)', 'await nativeImageReviewFinal(state)')), finalReason],
+    ['final-declaration-effect', session, finalizer(replace('const final = nativeImageReviewFinal(state);',
+      'const final = nativeImageReviewFinal(state), leaked = opaque(state);')), finalReason],
+    ['next-declaration-effect', session, finalizer(replace('const next = { ...state, validatedFinal: final };',
+      'const next = { ...state, validatedFinal: final }, leaked = opaque(state);')), finalReason],
+    ['rest-state-receiver', session, finalizer(replace('state: NativeAgentSessionState)', '...state: any)')), finalReason, true],
+    ['rest-final-wrapper-receiver', store, replace("finalize: (previous, state) => update(previous, state, 'final')",
+      "finalize: (previous, ...state) => update(previous, state, 'final')"), finalReason, true],
+    ['wrong-validator-symbol', session, finalizer(replace('nativeImageReviewFinal(state)', 'deriveNativeImageReviewFinal(state)')), finalReason],
+    ['already-final-bypass', session, finalizer(replace('if (state.validatedFinal) return state;', 'if (state.validatedFinal) return { ...state };')), finalReason],
+    ['missing-finalize-guard', session, finalizer(replace("if (!store.finalize) blocked('pure image finalization is unavailable');", '')), finalReason],
+    ['unawaited-finalize', session, finalizer(replace('await store.finalize(state, next)', 'store.finalize(state, next)')), finalReason],
+    ['different-finalize-receiver', session, finalizer(replace('await store.finalize(state, next)', 'await opaque.finalize(state, next)')), finalReason],
+    ['swapped-state', session, finalizer(replace('store.finalize(state, next)', 'store.finalize(next, state)')), finalReason],
+    ['wrong-next', session, finalizer(replace('store.finalize(state, next)', 'store.finalize(state, state)')), finalReason],
+    ['next-turn-override', session, finalizer(replace('{ ...state, validatedFinal: final }', '{ ...state, validatedFinal: final, turns: [] }')), finalReason],
+    ['next-binding-override', session, finalizer(replace('{ ...state, validatedFinal: final }', '{ ...state, validatedFinal: final, binding: opaque }')), finalReason],
+    ['wrong-return-value', session, finalizer(replace('return next;', 'return state;')), finalReason],
+    ['async-rejection', session, replace('function blocked(reason: string): never', 'async function blocked(reason: string): Promise<never>'), finalReason],
+    ['state-escape', session, finalizer(replace('const final = nativeImageReviewFinal(state);', 'opaque(state); const final = nativeImageReviewFinal(state);')), finalReason],
+    ['whole-store-escape', session, finalizer(replace('const final = nativeImageReviewFinal(state);', 'opaque(store); const final = nativeImageReviewFinal(state);')), finalReason],
+    ['route-state-mutation', route, replace('const prior = saved?.turns.at(-1);', 'opaque(saved); const prior = saved?.turns.at(-1);'), finalReason],
+    ['route-wrong-state', route, replace('finalizeNativeImageReviewState(store, saved)', 'finalizeNativeImageReviewState(store, structuredClone(saved))'), finalReason],
+    ['route-wrong-store', route, replace('finalizeNativeImageReviewState(store, saved)', 'finalizeNativeImageReviewState({ ...store }, saved)'), finalReason],
+    ['additional-helper-caller', route, value => value + '\nexport async function unprovedFinal(store: any,state: any) { return await finalizeNativeImageReviewState(store,state); }\n', finalReason],
+    ['helper-alias', route, replace('const saved = await store.read();', 'const saved = await store.read(); const hiddenFinalizer = finalizeNativeImageReviewState;'), ['FACTORY_ALIAS_OR_ESCAPE_UNKNOWN']],
+    ['received-state-mutation', session, replace('if (!receivedState) blocked', 'opaque(receivedState); if (!receivedState) blocked'), finalReason],
+    ['received-state-alias', session, replace('if (!receivedState) blocked', 'const leaked = receivedState; if (!receivedState) blocked'), finalReason],
+    ['received-wrong-completion', session, replace('await input.store.complete(started, receivedState);', 'await input.store.complete(started, started);'), finalReason],
+    ['raw-wrong-cas-previous', session, replace('await input.store.compareAndSet(state, started);', 'await input.store.compareAndSet(null, started);'), finalReason],
+    ['raw-store-escape', session, replace('if (!receivedState) blocked', 'opaque(input.store); if (!receivedState) blocked'), finalReason],
+    ['raw-store-replacement', session, replace('if (!receivedState) blocked', 'input.store.complete = opaque; if (!receivedState) blocked'), finalReason],
+    ['raw-reflection', session, replace('if (!receivedState) blocked', 'eval("receivedState.binding = opaque"); if (!receivedState) blocked'), finalReason],
+    ['unproved-live-consumer', session, replace('let retry: { started:', 'opaque(input.store); let retry: { started:'), ['SESSION_REQUEST_NOT_DECODED']],
+    ['changed-profile-partition', session, replace(/if \(binding.sourceKind === 'illustration-image' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'\r?\n        && messages.some/u, "if (binding.sourceKind === 'paper' && binding.imageReview.imageResultPolicy === 'image-review-tool-final-v1'\n        && messages.some"), ['IMAGE_PROTOCOL_PARTITION_UNKNOWN']],
+    ['extra-factory-method', store, replace('compareAndSet: (previous, state)', 'opaqueWriter() {}, compareAndSet: (previous, state)'), modeReason],
+    ['duplicate-factory-member', store, replace('compareAndSet: (previous, state)', 'read: () => null, compareAndSet: (previous, state)'), modeReason],
+    ['computed-factory-member', store, replace('compareAndSet: (previous, state)', "['compareAndSet']: (previous, state)"), modeReason],
+    ['getter-factory-member', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "get finalize() { return (previous, state) => update(previous, state, 'final'); }"), modeReason],
+    ['wrong-final-wrapper', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "finalize: (previous, state) => opaque(previous, state, 'final')"), modeReason],
+    ['swapped-wrapper-state', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "finalize: (previous, state) => update(state, previous, 'final')"), modeReason],
+    ['paid-substitutes-final', store, replace("finalize: (previous, state) => update(previous, state, 'final')", "finalize: (previous, state) => update(previous, state, 'paid')"), modeReason],
+    ['start-substitutes-paid', store, replace("complete: (previous, state) => update(previous, state, 'paid')", "complete: (previous, state) => update(previous, state, 'start')"), modeReason],
+    ['missing-final-cas-flag', store, replace('validatedFinalization: true', 'validatedFinalization: false'), modeReason],
+    ['paid-final-cas-flag', store, replace("...(mode === 'final' ? { validatedFinalization: true }", "...(mode === 'paid' ? { validatedFinalization: true }"), modeReason],
+    ['missing-final-authority-guard', store, replace('previous.validatedFinal || !input.authorizeFinal', 'previous.validatedFinal || false'), modeReason],
+    ['missing-final-authorization', store, replace('await input.authorizeFinal!(tx)', 'await input.authorize(tx)'), modeReason],
+    ['wrong-final-authority-supplier', route, replace('authorizeFinal: tx => authorize(tx)', 'authorizeFinal: tx => authorize(tx, true)'), modeReason],
+  ];
+  for (const [name, file, change, reasons, noFinalizations] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p98-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[file, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown', name);
+    assert.ok(reasons.includes(result.reason), `${name}: ${result.reason}`);
+    if (noFinalizations) assert.equal(result.storeGraph.finalizations, undefined, 'unsupported receiver semantics cannot prove either finalizer call');
+    if (result.reason === 'STORE_HOST_IDENTITY_UNKNOWN') {
+      assert.equal(result.at.file, route); assert.equal(result.at.line, 141);
+      assert.throws(() => flow(input.ts, videoPairContext(input)), error => error.reason === 'IMAGE_STORE_FLOW_UNKNOWN',
+        'the earlier Host refusal must be caused by this original mode supplier, not another guard');
+    }
+    assert.equal(result.releaseCompatible, false, name);
+    assert.notEqual(result.reason, 'PRIVATE_SERIALIZER_ORIGIN_UNKNOWN', 'the honest next refusal must not conceal this changed obligation');
+
+  } catch (error) { videoTimeoutObservation('p98-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p98-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p98-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p98-exit', 0); }
+});
+
+test('image Host guarded attempt rejects unproved dominance snapshots and changed consumers', async t => {
+  videoTimeoutObservation('p99-begin', 0);
+  try {
+
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts', session = 'apps/agent-worker/src/native-agent/session.ts';
+  const editRoute = change => value => {
+    const start = value.indexOf('export async function runNativeImageReviewTask('), end = value.indexOf('\nfunction stopped(', start);
+    assert.ok(start >= 0 && end > start);
+    const before = value.slice(start, end), after = change(before); assert.notEqual(after, before);
+    return value.slice(0, start) + after + value.slice(end);
+  };
+  const editGuard = change => editRoute(value => {
+    const start = value.indexOf('  if (!input.gateway || !input.inboxRoot || !input.runtime');
+    const end = value.indexOf('stopped();', start) + 'stopped();'.length;
+    assert.ok(start >= 0 && end > start);
+    return value.slice(0, start) + change(value.slice(start, end)) + value.slice(end);
+  });
+  const afterRead = text => editRoute(value => value.replace('const saved = await store.read();', 'const saved = await store.read();\n  ' + text));
+  const afterGuard = text => editGuard(value => value + '\n  ' + text);
+  const cases = [
+    ['missing-guard', illustration, editGuard(value => value.replace(' || input.task.executionAttempt !== envelope.executionAttempt', ''))],
+    ['inverted-guard', illustration, editGuard(value => value.replace('input.task.executionAttempt !== envelope.executionAttempt', 'input.task.executionAttempt === envelope.executionAttempt'))],
+    ['nonterminal-stop', illustration, value => value.replace('function stopped(): never { throw', 'function stopped(): never { return; throw')],
+    ['async-stop', illustration, value => value.replace('function stopped(): never', 'async function stopped(): never')],
+    ['swallowed-stop', illustration, editGuard(value => 'try { ' + value + ' } catch {}')],
+    ['wrong-task-guard', illustration, editGuard(value => value.replace('input.task.executionAttempt', 'input.otherTask.executionAttempt'))],
+    ['wrong-envelope-field', illustration, editGuard(value => value.replace('!== envelope.executionAttempt', '!== envelope.requestId'))],
+    ['nested-guard', illustration, editGuard(value => 'if (input.gateway) { ' + value + ' }')],
+    ['capture-before-guard-mutation', illustration, afterRead('input.task.executionAttempt += 1; envelope.executionAttempt = input.task.executionAttempt;')],
+    ['after-guard-mutation', illustration, afterGuard('envelope.executionAttempt += 1;')],
+    ['task-alias', illustration, afterRead('const escaped = input.task;')],
+    ['opaque-input', illustration, afterRead('opaque(input);')],
+    ['envelope-alias', illustration, afterRead('const escaped = envelope;')],
+    ['opaque-envelope-copy', illustration, afterGuard('opaque({ envelope });')],
+    ['reflective-local-mutation', illustration, afterRead('eval("input.task.executionAttempt += 1; envelope.executionAttempt = input.task.executionAttempt");')],
+    ['arguments-task-mutation', illustration, afterRead('arguments[0].task.executionAttempt += 1;')],
+    ['wrong-store', illustration, editRoute(value => value.replace('session, store, authorize: callAuthority,', 'session, store: input.otherStore, authorize: callAuthority,'))],
+    ['wrong-session', illustration, editRoute(value => value.replace('session, store, authorize: callAuthority,', 'session: input.otherSession, store, authorize: callAuthority,'))],
+    ['wrong-Host', illustration, editRoute(value => value.replace('await runHostedNativeTask(', 'await otherHostedTask('))],
+    ...['taskId', 'runtimeId', 'model'].map(key => [`changed-${key}`, illustration,
+      editRoute(value => value.replace('config: { ...binding, goal:', `config: { ...binding, ${key}: 'wrong', goal:`))]),
+    ['Session-original-binding-mutation', session, value => value.replace('const binding = structuredClone(input.binding);',
+      "input.binding.imageReview.executionAttempt += 1;\n  const binding = structuredClone(input.binding);")],
+  ];
+  for (const [name, file, change] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p99-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[file, change]]), { sourceRef: 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e' });
+    const source = input.program.getSourceFiles().find(value => value.fileName.replaceAll('\\', '/').endsWith('/native-agent/illustration-task.ts'));
+    const owner = source.statements.find(node => input.ts.isFunctionDeclaration(node) && node.name?.text === 'runNativeImageReviewTask');
+    const statement = owner.body.statements.find(node => input.ts.isVariableStatement(node)
+      && node.declarationList.declarations.some(value => value.name.text === 'native'));
+    const line = source.getLineAndCharacterOfPosition(statement.declarationList.declarations[0].initializer.getStart()).line + 1;
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(!result.storeGraph.hosts.some(host => host.at.file.endsWith('/native-agent/illustration-task.ts') && host.at.line === line), `${name}: ${result.reason}`);
+    assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p99-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p99-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p99-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p99-exit', 0); }
+});
+
+test('current host message alias rejects changed history and suppliers using actual source symbols', async t => {
+  videoTimeoutObservation('p100-begin', 0);
+  try {
+
+  const sourceRef = 'ae6cb77e45ffc3e8f1ab0e93af2008898088ae5e';
+  const host = 'apps/agent-worker/src/native-agent/host-task.ts';
+  const cases = [
+    ['unawaited-history', value => value.replace('await validateSourceHistory(value);', 'validateSourceHistory(value);')],
+    ['late-history', value => value.replace('await validateSourceHistory(value);\n        const response = await input.session.complete(value);',
+      'const response = await input.session.complete(value);\n        await validateSourceHistory(value);')],
+    ['different-request', value => value.replace('validateSourceHistory(value);', 'validateSourceHistory({ ...value });'), 'HOST_HISTORY_ARGUMENT_UNBOUND'],
+    ['wrong-alias-supplier', value => value.replace('const message = response.choices[0]!.message;', 'const message = value;')],
+    ['mutable-alias', value => value.replace('const message =', 'let message =')],
+    ['alias-call', value => value.replace('const message = response.choices[0]!.message;', 'const message = escape(response.choices[0]!.message);')],
+    ['alias-getter', value => value.replace('const message = response.choices[0]!.message;',
+      'const message = { get tool_calls() { return response.choices[0]!.message.tool_calls; } };')],
+    ['alias-escape', value => value.replace('sequence: toolSequence++,', 'sequence: (escape(message), toolSequence++),')],
+    ['different-slot-source', value => value.replace('message.tool_calls ?? [] : []', 'value.tool_calls ?? [] : []')],
+    ['preauthorized-slots', value => value.replace('authorized: false, called: false', 'authorized: true, called: false')],
+    ['different-response-return', value => value.replace('return respond(res, 200, response);', 'return respond(res, 200, message);')],
+    ['extra-effect', value => value.replace('const message = response.choices[0]!.message;', 'const message = response.choices[0]!.message; escape(message);')],
+  ];
+  const chatOnly = change => value => {
+    const start = value.indexOf("      if (req.url === '/v1/chat/completions') {");
+    const end = value.indexOf('      if (!record(value)) blocked();', start);
+    assert.ok(start >= 0 && end > start);
+    const before = value.slice(start, end), after = change(before);
+    assert.notEqual(after, before);
+    return value.slice(0, start) + after + value.slice(end);
+  };
+  for (const [name, change, reason = 'HOST_HISTORY_CHECK_BYPASS'] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p100-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[host, chatOnly(change)]]), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.reason, reason);
+    assert.ok(!result.proven.includes('host-before-session'));
+    assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p100-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p100-n1-exit', 0); }
+});
+  await t.test('renamed-local-response-and-message-remain-bound', async () => {
+  videoTimeoutObservation('p100-n2-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[host, chatOnly(value => value.replace(/\bresponse\b/gu, 'completion')
+      .replace('const message =', 'const reply =').replace("'tool_calls' in message", "'tool_calls' in reply")
+      .replace('message.tool_calls', 'reply.tool_calls'))]]), { sourceRef });
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.ok(result.proven.includes('host-before-session'), result.reason);
+    assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p100-n2-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p100-n2-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p100-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p100-exit', 0); }
+});
+
+test('current and exact capable video ingress compose hybrid whole receipts through the original conditional chain', async () => {
+  videoTimeoutObservation('p101-begin', 0);
+  try {
+
+  // Actual597's original prover/fixture established EXTRA_MATERIALIZER_CALLER.
+  // Each ACTUAL Program/checker must supply the full wrapper/selected/receipt
+  // trace before entering the original conditional store chain. This fixture
+  // is neither an installed collector context nor release permission.
+  const components = selectedGuideSourceComponents();
+  for (const sourceRef of [undefined, '5979840b31d6aa02e5350b0e63c8c2c8b049b133']) {
+    const input = await videoIngressProgram(new Map(), { sourceRef });
+    const entry = components.illustrationWitness(input.ts, videoPairContext(input));
+    const file = input.program.getSourceFile(resolve(input.projectRoot, 'apps/agent-worker/src/native-agent/illustration-task.ts'));
+    assert.ok(entry.source === file, 'witness source must be the exact actual SourceFile');
+    assert.ok(entry.core.getSourceFile() === file, 'core must belong to the exact actual SourceFile');
+    assert.ok(entry.wrapper.getSourceFile() === file, 'wrapper must belong to the exact actual SourceFile');
+    assert.deepEqual([...entry.constructors].map(call => {
+      let owner = call.parent; while (owner && !(input.ts.isFunctionLike(owner) && owner.body)) owner = owner.parent;
+      return owner?.name?.text;
+    }).sort(), ['replayNativeVideoPlan', 'runNativeIllustrationTaskCore']);
+    assert.equal(entry.coreCalls.length, 2);
+    assert.equal(entry.ordinaryCalls.length, 1);
+    assert.equal(entry.selectedCalls.length, 1);
+    assert.ok(entry.selectedCoreCall.arguments[0].getSourceFile() === file, 'selected argument must belong to the exact actual SourceFile');
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown');
+    assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify({ reason: result.reason, at: result.at }));
+    assert.equal(result.proven.length, 8, JSON.stringify({ reason: result.reason, at: result.at, proven: result.proven }));
+    assert.ok(result.proven.includes('materializer-host'));
+    assert.ok(result.proven.includes('host-before-session'));
+    assert.ok(result.proven.includes('verified-base'));
+    assert.equal(result.privateStoreChain.status, 'conditional');
+    assert.equal(result.storeGraph.status, 'conditional');
+    assert.equal(result.releaseCompatible, false);
+  }
+
+  } catch (error) { videoTimeoutObservation('p101-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p101-exit', 0); }
+});
+
+test('hybrid receipt composition refuses changed whole values ordering images adoption and paid history', async t => {
+  videoTimeoutObservation('p102-begin', 0);
+  try {
+
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const host = 'apps/agent-worker/src/native-agent/host-task.ts', workspace = 'apps/agent-worker/src/workspace-guide.ts';
+  const session = 'apps/agent-worker/src/native-agent/session.ts';
+  const cases = [
+    ['video-settings-guard', illustration, "if (nativeVideo !== (input.settings.output === 'video' && input.settings.narrative === true))", 'if (false)'],
+    ['audio-flag-supplier', illustration, "const nativeVideoAudio = 'nativeVideoAudio' in profile && profile.nativeVideoAudio;", 'const nativeVideoAudio = true;'],
+    ['partial-whole-receipt', illustration, 'if (!isDeepStrictEqual(rebuilt, recorded)) stopped();', 'if (!isDeepStrictEqual(rebuilt.prompts, recorded.prompts)) stopped();'],
+    ['lost-prior-state', illustration, 'const before = { science, art, review, pendingScience, contextStyles };', 'const before = { science, art, review, pendingScience: undefined, contextStyles };'],
+    ['restore-noop', illustration, 'const restore = () => { ({ science, art, review, pendingScience, contextStyles } = before); };', 'const restore = () => {};'],
+    ['filtered-global-sequence', illustration, 'for (const [sequence, tool] of calls.entries())', "for (const [sequence, tool] of calls.filter(call => call.function.name.startsWith('paper_illustration_')).entries())"],
+    ['last-review-bypass', illustration, 'lastReview?.id !== currentReview.id', 'false'],
+    ['saved-arguments-bypass', illustration, 'if (saved && (name !== saved.name || !isDeepStrictEqual(args, saved.args))) stopped();', 'if (false) stopped();'],
+    ['receipt-map-escape', illustration, 'const savedIds = new Set<string>();', 'const savedIds = new Set<string>();\n  exposePrivateMap(savedIllustrationReceipts);'],
+    ['receipt-map-mutable', illustration, 'const savedIllustrationReceipts = new Map<string,', 'let savedIllustrationReceipts = new Map<string,'],
+    ['image-receipt-identity', illustration, "{ status: 'image_view_ready', selectedImage: input.selectedImage.binding } : undefined;", "{ status: 'image_view_ready', selectedImage: otherBinding } : undefined;"],
+    ['image-argument-bypass', illustration, 'Object.keys(args).length || !isDeepStrictEqual(result, imageReceipt)', 'false || !isDeepStrictEqual(result, imageReceipt)'],
+    ['wrong-stored-image-hash', illustration, "createHash('sha256').update(Buffer.from(message.images[0]!.data, 'base64')).digest('hex')", "createHash('sha256').update(Buffer.from('other', 'base64')).digest('hex')"],
+    ['context-order-bypass', illustration, 'calls.indexOf(contextCall) >= calls.indexOf(views[0]!)', 'false'],
+    ['reply-before-image', illustration, 'calls.indexOf(questions[0]!) <= calls.indexOf(views[0]!)', 'false'],
+    ['final-text-unbound', illustration, 'last.response.text !== native.finalResponse', 'false'],
+    ['foreign-completed-store', illustration, 'const completed = await store.read(); const last = completed?.turns.at(-1);', 'const completed = await otherStore.read(); const last = completed?.turns.at(-1);'],
+    ['lost-latest-image', host, 'const latest = value.messages.at(-1);', 'const latest = value.messages.at(0);'],
+    ['image-slot-argument', host, '!isDeepStrictEqual(slot.args, value.arguments) || !isDeepStrictEqual(slot.result, value.result)', '!isDeepStrictEqual(slot.args, otherArguments) || !isDeepStrictEqual(slot.result, value.result)'],
+    ['lost-image-prefix', host, 'slot.images = images.content; respond(res, 200, images);', 'respond(res, 200, images);'],
+    ['paid-response-adoption', workspace, 'cp.responseHash !== paid.responseHash', 'false'],
+    ['result-cas-adoption', workspace, 'result: { equals: current.result! }', 'result: { equals: otherResult }'],
+    ['paid-late-prefix-loss', session, 'await input.store.complete(started, completed);', 'await input.store.compareAndSet(started, completed);'],
+    ['global-host-sequence', host, 'sequence: toolSequence++,', 'sequence: 0,', 'host-before-session'],
+  ];
+  for (const [name, file, before, after, target = 'materializer-host'] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p102-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[file, value => {
+      value = value.replaceAll('\r\n', '\n'); assert.ok(value.includes(before), name);
+      const changed = value.replace(before, after); assert.notEqual(changed, value); return changed;
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown', name);
+    assert.equal(result.releaseCompatible, false, name);
+    assert.ok(!result.proven.includes(target), JSON.stringify({ name, reason: result.reason, at: result.at, proven: result.proven }));
+    assert.notEqual(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', name);
+    assert.notEqual(result.reason, 'SOURCE_ANALYSIS_UNKNOWN', 'a programming exception is not the requested source refusal');
+
+  } catch (error) { videoTimeoutObservation('p102-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p102-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p102-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p102-exit', 0); }
+});
+
+test('hybrid receipt signatures reject mutable flags and image default effects', async t => {
+  videoTimeoutObservation('p103-begin', 0);
+  try {
+
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const cases = [
+    ['mutable-video-flag', 'const nativeVideo = input.nativeVideo === true;', 'let nativeVideo = input.nativeVideo === true;'],
+    ['evaluate-default-effect', 'historicalExecution = false, approvedVideoPrompts = false)', 'historicalExecution = opaqueEffect(), approvedVideoPrompts = false)'],
+    ['image-default-effect', 'images: async (args: unknown, result: unknown) => {', 'images: async (args: unknown = opaqueEffect(), result: unknown) => {'],
+    ['sync-image-supplier', 'images: async (args: unknown, result: unknown) => {', 'images: (args: unknown, result: unknown) => {'],
+  ];
+  for (const [name, before, after] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p103-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[file, value => {
+      assert.ok(value.includes(before), name); return value.replace(before, after);
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.status, 'unknown'); assert.equal(result.releaseCompatible, false);
+    assert.ok(!result.proven.includes('materializer-host'), JSON.stringify({ name, reason: result.reason }));
+    assert.notEqual(result.reason, 'SOURCE_ANALYSIS_UNKNOWN', name);
+
+  } catch (error) { videoTimeoutObservation('p103-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p103-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p103-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p103-exit', 0); }
+});
+
+test('selected video source data producers refuse foreign paper claims style and pixels', async t => {
+  videoTimeoutObservation('p104-begin', 0);
+  try {
+
+  const file = 'apps/agent-worker/src/workspace-guide.ts', code = 'SELECTED_VIDEO_SOURCE_DATA_UNKNOWN';
+  const cases = [
+    ['scope-version', 'versionId: selected.binding.versionId, sourceClaimIds: selected.binding.sourceClaimIds', 'versionId: otherVersion, sourceClaimIds: selected.binding.sourceClaimIds'],
+    ['narrative-evidence', '}, scope, selected.evidence);', '}, scope, otherEvidence);'],
+    ['narrative-identity', 'if (narrative.identity !== selected.binding.narrativeSourceIdentity)', 'if (false)'],
+    ['attachment-mime', 'generatedImageReviewAttachment(pixels, selected.binding.contentHash, selected.binding.mimeType)', 'generatedImageReviewAttachment(pixels, selected.binding.contentHash, otherMime)'],
+    ['pixel-hash', 'const pixels = await readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash,', 'const pixels = await readPresentationInput(storage, selected.binding.objectKey, otherHash,'],
+    ['claim-source', 'selected.claims.filter(claim => selected.binding.sceneSourceClaimIds.includes(claim.id))', 'selected.claims.filter(claim => selected.binding.sourceClaimIds.includes(claim.id))'],
+    ['style-source', 'style: selected.settings.style, output:', 'style: otherStyle, output:'],
+    ['reauthorize-pixel-hash', 'const bytes = await readPresentationInput(storage, selected.binding.objectKey, selected.binding.contentHash,', 'const bytes = await readPresentationInput(storage, selected.binding.objectKey, otherHash,'],
+  ];
+  for (const [name, before, after] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p104-n1-begin', 0);
+  try {
+
+    const actual = await videoIngressProgram(new Map([[file, text => {
+      text = text.replaceAll('\r\n', '\n'); assert.ok(text.includes(before), name); return text.replace(before, after);
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(actual.ts, actual.program, actual.projectRoot);
+    assert.equal(result.reason, code, name);
+    assert.ok(!result.proven.includes('materializer-host'), name);
+    assert.equal(result.releaseCompatible, false, name);
+
+  } catch (error) { videoTimeoutObservation('p104-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p104-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p104-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p104-exit', 0); }
+});
+
+test('selected video saved supplier and retained tools refuse substituted state authority and history', async t => {
+  videoTimeoutObservation('p105-begin', 0);
+  try {
+
+  const illustration = 'apps/agent-worker/src/native-agent/illustration-task.ts', workspace = 'apps/agent-worker/src/workspace-guide.ts';
+  const session = 'apps/agent-worker/src/native-agent/session.ts', store = 'apps/agent-worker/src/native-agent/task-store.ts';
+  const saved = 'const saved = await store.read();';
+  // Actual source supplier mutations use the real existing tool definitions.
+  // They are not assertions that such a checkpoint exists online, nor APP runs.
+  const injected = tools => "const saved = { turns: [{ request: { options: { tools: " + tools
+    + ".map(tool => ({ type: 'function', function: tool })) } } }] } as NativeAgentSessionState;";
+  const taskCode = 'SELECTED_VIDEO_TASK_SUPPLIER_UNKNOWN', coreCode = 'SELECTED_VIDEO_CORE_STATE_UNKNOWN';
+  const firstCode = 'SELECTED_VIDEO_FIRST_TOOLS_UNKNOWN', refCode = 'SELECTED_VIDEO_SAVED_REFERENCE_UNKNOWN';
+  const retainedCode = 'SELECTED_VIDEO_RETAINED_STATE_UNKNOWN';
+  const cases = [
+    ['owner-row-task', workspace, 'all', 'where: { id: task.id },\n    include: { session: true }', 'where: { id: otherTask.id },\n    include: { session: true }', taskCode],
+    ['owner-payload', workspace, 'all', '!isDeepStrictEqual(ownerTask.payload, task.payload)', 'false', taskCode],
+    ['authority-attempt', workspace, 'all', '{ taskId: task.id, executionAttempt: task.executionAttempt! }),', '{ taskId: task.id, executionAttempt: otherTask.executionAttempt! }),', taskCode],
+    ['supplied-result', workspace, 'all', 'result: ownerTask.result },', 'result: task.payload },', taskCode],
+    ['authorizer-source', workspace, 'all', '!isDeepStrictEqual(current.selectedImageSource.binding, selected.binding)', '!isDeepStrictEqual(current.selectedImageSource.binding, otherBinding)', taskCode],
+    ['core-task-scope', illustration, 'core', 'taskId: input.task.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize', 'taskId: input.otherTask.id, executionAttempt: input.task.executionAttempt, execution, authorize: input.authorize', coreCode],
+    ['saved-opaque-supplier', illustration, 'core', saved, 'const saved = await otherStore.read();', coreCode],
+    ['saved-video-tools-image-label', illustration, 'core', saved, injected('OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS'), coreCode],
+    ['saved-mixed-tools-image-label', illustration, 'core', saved, injected('[...OPTIONAL_AUDIO_NATIVE_VIDEO_TOOLS, ...SELECTED_IMAGE_TOOLS]'), coreCode],
+    ['saved-profile-reset', illustration, 'core', 'nativeIllustrationToolProfile(saved, input.settings.output, execution.planningContract)', 'nativeIllustrationToolProfile(null, input.settings.output, execution.planningContract)', coreCode],
+    ['materializer-saved', illustration, 'core', 'savedState: saved, nativeVideo,', 'savedState: null, nativeVideo,', coreCode],
+    ['materializer-flag', illustration, 'core', 'savedState: saved, nativeVideo,', 'savedState: saved, nativeVideo: false,', coreCode],
+    ['different-session-store', illustration, 'core', 'binding, store, authorize });', 'binding, store: otherStore, authorize });', 'SELECTED_VIDEO_STORE_SUPPLIER_UNKNOWN'],
+    ['output-only-video-flag', illustration, 'profile', 'const nativeVideo = videoContext || Boolean(saved && scienceDescription === VIDEO_SCIENCE_DESCRIPTION\n    && contextDescription === CONTEXT_DESCRIPTION && isDeepStrictEqual(originalScience?.parameters, ORIGINAL_VIDEO_SCIENCE_SCHEMA));', "const nativeVideo = output === 'video';", firstCode],
+    ['selected-output-bypass', illustration, 'core', 'if (input.selectedImage && (!input.selectedImageAttachment || SELECTED_IMAGE_TOOLS.some(expected =>', "if (input.settings.output === 'video' && (!input.selectedImageAttachment || SELECTED_IMAGE_TOOLS.some(expected =>", firstCode],
+    ['lost-retained-tools', illustration, 'core', "allowedTools: saved ? [...saved.binding.allowedTools] : ['skills_list'", "allowedTools: false ? [...saved.binding.allowedTools] : ['skills_list'", firstCode],
+    ['different-first-tools', session, 'all', 'options.tools, state.turns[0]?.request.options.tools', 'options.tools, state.turns.at(-1)?.request.options.tools', firstCode],
+    ['missing-first-tools-guard', session, 'all', "if (state && !isDeepStrictEqual(options.tools, state.turns[0]?.request.options.tools)) blocked('tool definitions changed');", "if (false) blocked('tool definitions changed');", firstCode],
+    ['lost-prior-paid-turns', session, 'ordinary', '(state?.turns ?? []).map(turn =>', '(state?.turns ?? []).slice(-1).map(turn =>', retainedCode],
+    ['late-paid-live-authorization', session, 'ordinary', 'await input.store.complete(started, completed);', 'await input.store.compareAndSet(started, completed);', retainedCode],
+    ['cross-task-checkpoint', store, 'all', 'if (cp.taskId !== input.taskId) blocked();', 'if (cp.taskId !== cp.taskId) blocked();', refCode],
+    ['changed-SHA-validation', store, 'all', 'size !== cp.size || sha(bytes) !== cp.serializedSha256', 'size !== cp.size || false', refCode],
+    ['lost-known-membership', store, 'all', 'known.set(cp.serializedSha256, cp); return state;', 'return state;', refCode],
+  ];
+  const region = (text, scope) => {
+    if (scope === 'core') return [text.indexOf('async function runNativeIllustrationTaskCore('), text.length];
+    if (scope === 'profile') return [text.indexOf('export function nativeIllustrationToolProfile('), text.indexOf('export async function replayNativeVideoPlan(')];
+    if (scope === 'ordinary') return [text.indexOf('const started: NativeAgentSessionState = retry?.started'), text.indexOf('\n          break;', text.indexOf('const started: NativeAgentSessionState = retry?.started'))];
+    return [0, text.length];
+  };
+  for (const [name, file, scope, before, after, code] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p105-n1-begin', 0);
+  try {
+
+    const actual = await videoIngressProgram(new Map([[file, text => {
+      text = text.replaceAll('\r\n', '\n'); const [start, end] = region(text, scope);
+      assert.ok(start >= 0 && end > start, name); const selected = text.slice(start, end);
+      assert.ok(selected.includes(before), name); return text.slice(0, start) + selected.replace(before, after) + text.slice(end);
+    }]]));
+    const result = deployLock.proveNativeVideoReceiptIngress(actual.ts, actual.program, actual.projectRoot);
+    assert.equal(result.reason, code, name);
+    assert.ok(!result.proven.includes('materializer-host'), name);
+    assert.equal(result.releaseCompatible, false, name);
+
+  } catch (error) { videoTimeoutObservation('p105-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p105-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p105-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p105-exit', 0); }
+});
+
+test('actual video wrapper witness refuses changed ownership input and paper delegation', async t => {
+  videoTimeoutObservation('p106-begin', 0);
+  try {
+
+  const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
+  const ordinary = "export async function runNativeIllustrationTask(input: NativeIllustrationTaskInput) {\n  if (input.selectedImage) stopped();\n  const result = await runNativeIllustrationTaskCore(input);\n  if ('reply' in result) stopped();\n  return result;\n}";
+  const selectedPrefix = "if (input.settings.output !== 'image' || input.settings.narrativeSceneLimit !== 1) stopped();";
+  const cases = [
+    ['missing-wrapper-guard', ordinary, ordinary.replace('if (input.selectedImage) stopped();', '')],
+    ['inverted-wrapper-guard', ordinary, ordinary.replace('if (input.selectedImage)', 'if (!input.selectedImage)')],
+    ['nonterminal-wrapper-guard', ordinary, ordinary.replace('if (input.selectedImage) stopped();', 'if (input.selectedImage) observe();')],
+    ['unawaited-wrapper-core', ordinary, ordinary.replace('await runNativeIllustrationTaskCore(input)', 'runNativeIllustrationTaskCore(input)')],
+    ['substituted-wrapper-result', ordinary, ordinary.replace('return result;', 'return otherResult;')],
+    ['extra-core-caller', ordinary, ordinary + '\nasync function extra(input: NativeIllustrationTaskInput) { return runNativeIllustrationTaskCore(input); }'],
+    ['opaque-core-alias', ordinary, ordinary + '\nconst escapedCore = runNativeIllustrationTaskCore;'],
+    ['selected-input-escape', selectedPrefix, selectedPrefix + '\n  opaqueInputWriter(input);'],
+    ['selected-input-mutation', selectedPrefix, selectedPrefix + '\n  input.selectedImage = otherSelected;'],
+    ['rest-core-input', 'async function runNativeIllustrationTaskCore(input:', 'async function runNativeIllustrationTaskCore(...input:'],
+    ['second-source-initializer', 'const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools, input.semanticSearch);',
+      'const source = createNativePaperTools(input.sourceMap, input.renderPages, sourceTools, input.semanticSearch), leaked = opaque(input);'],
+    ['substituted-materializer', 'const materializer = createNativeIllustrationMaterializer({ ...input, savedState:',
+      'const materializer = otherMaterializer({ ...input, savedState:'],
+    ['substituted-paper-materializer', 'materializer.call(name, args, sequence!, callId!)', 'otherMaterializer.call(name, args, sequence!, callId!)'],
+    ['substituted-paper-source', ': source.call(name, args);', ': source.images(name, args);'],
+    ['substituted-paper-images', 'return source.images(args, result);', 'return source.images(result, args);'],
+  ];
+  const components = selectedGuideSourceComponents();
+  for (const [name, before, after] of cases) await t.test(name, async () => {
+  videoTimeoutObservation('p106-n1-begin', 0);
+  try {
+
+    const input = await videoIngressProgram(new Map([[file, text => {
+      text = text.replaceAll('\r\n', '\n'); assert.ok(text.includes(before), name); return text.replace(before, after);
+    }]]));
+    let refusal;
+    try { components.illustrationWitness(input.ts, videoPairContext(input)); }
+    catch (error) { refusal = { reason: error.reason, at: error.node?.getSourceFile?.().fileName }; }
+    assert.equal(refusal?.reason, 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', name);
+    const result = deployLock.proveNativeVideoReceiptIngress(input.ts, input.program, input.projectRoot);
+    assert.equal(result.reason, 'SELECTED_GUIDE_ILLUSTRATION_INPUT_OR_DELEGATION_CHANGED', name);
+    assert.ok(!result.proven.includes('materializer-host'), name);
+    assert.equal(result.releaseCompatible, false, name);
+
+  } catch (error) { videoTimeoutObservation('p106-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p106-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p106-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p106-exit', 0); }
 });
 
 test('video pair source projection preserves actual old runtime context and finite L/U closure', async () => {
+  videoTimeoutObservation('p107-begin', 0);
+  try {
+
   const components = videoPairSourceComponents(), actual = await historicalVideoIngressProgram(), left = videoPairContext(actual);
   const original = await historicalVideoIngressProgram(new Map(), 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6');
   const candidate = components.model(actual.ts, left), rollback = components.model(original.ts, videoPairContext(original));
@@ -3091,9 +4152,15 @@ test('video pair source projection preserves actual old runtime context and fini
   assert.equal(components.pair(actual.ts, [], [], actual.projectRoot, actual.projectRoot, components.roots), false);
   assert.equal(components.pair(actual.ts, JSON.parse(JSON.stringify([['module:example', 'same']])), [],
     actual.projectRoot, actual.projectRoot, components.roots), false);
+
+  } catch (error) { videoTimeoutObservation('p107-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p107-exit', 0); }
 });
 
 test('video pair source closure distinguishes a capable writer from dropping its readers', async () => {
+  videoTimeoutObservation('p108-begin', 0);
+  try {
+
   const components = videoPairSourceComponents(), actual = await historicalVideoIngressProgram();
   const file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
   const writer = await historicalVideoIngressProgram(new Map([[file, source => source
@@ -3108,9 +4175,15 @@ test('video pair source closure distinguishes a capable writer from dropping its
   const original = components.model(old.ts, videoPairContext(old));
   assert.equal(components.closure(candidate, original).reason, 'ROLLBACK_FAMILY_NOT_CLOSED');
   assert.equal(components.closure(original, rollback).reason, 'READER_CAPABILITY_REMOVED');
+
+  } catch (error) { videoTimeoutObservation('p108-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p108-exit', 0); }
 });
 
 test('video pair source projection consumes genuine imported aliases but not arbitrary A uses', async () => {
+  videoTimeoutObservation('p109-begin', 0);
+  try {
+
   const components = videoPairSourceComponents(), file = 'apps/agent-worker/src/native-agent/illustration-task.ts';
   const actual = await historicalVideoIngressProgram(), original = components.model(actual.ts, videoPairContext(actual));
   const aliased = await historicalVideoIngressProgram(new Map([[file, source => source.replaceAll('compileApprovedShotPrompt', 'approvedCompiler')
@@ -3122,15 +4195,27 @@ test('video pair source projection consumes genuine imported aliases but not arb
   const escaped = await historicalVideoIngressProgram(new Map([[file, source => source.replace('  const nativeVideo = input.nativeVideo === true;',
     '  const escapedCompiler = compileApprovedShotPrompt;\n  const nativeVideo = input.nativeVideo === true;')]]));
   assert.throws(() => components.model(escaped.ts, videoPairContext(escaped)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN');
+
+  } catch (error) { videoTimeoutObservation('p109-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p109-exit', 0); }
 });
 
 test('video pair source refuses the real earlier A writer whose legacy constructor was refactored', async () => {
+  videoTimeoutObservation('p110-begin', 0);
+  try {
+
   const components = videoPairSourceComponents();
   const earlier = await historicalVideoIngressProgram(new Map(), '36e8ce5228bc8d3109de171cc86f17eab3fe7f64');
   assert.throws(() => components.model(earlier.ts, videoPairContext(earlier)), error => error.reason === 'VIDEO_CONSTRUCTOR_NOT_PURE');
+
+  } catch (error) { videoTimeoutObservation('p110-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p110-exit', 0); }
 });
 
 test('video pair source grammar refuses saved-field adoption, foreign base indices and unbound spool values', async () => {
+  videoTimeoutObservation('p111-begin', 0);
+  try {
+
   const components = videoPairSourceComponents();
   for (const [file, before, after] of [
     ['apps/agent-worker/src/native-agent/illustration-task.ts', 'if (isDeepStrictEqual(approved, recorded)) return approved;', 'if (isDeepStrictEqual(approved, recorded)) return recorded;'],
@@ -3142,9 +4227,15 @@ test('video pair source grammar refuses saved-field adoption, foreign base indic
     const actual = await historicalVideoIngressProgram(new Map([[file, source => source.replaceAll('\r\n', '\n').replace(before, after)]]));
     assert.throws(() => components.model(actual.ts, videoPairContext(actual)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN', before);
   }
+
+  } catch (error) { videoTimeoutObservation('p111-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p111-exit', 0); }
 });
 
 test('video pair projection retains changed non-video and request-identity context', async () => {
+  videoTimeoutObservation('p112-begin', 0);
+  try {
+
   const components = videoPairSourceComponents(), actual = await historicalVideoIngressProgram(), baseline = components.model(actual.ts, videoPairContext(actual));
   for (const [file, before, after] of [
     ['apps/agent-worker/src/native-agent/illustration-task.ts', "if (!record(args)) throw new Error('object_required');", "if (!record(args)) throw new Error('different_context');"],
@@ -3154,9 +4245,15 @@ test('video pair projection retains changed non-video and request-identity conte
     const model = components.model(changed.ts, videoPairContext(changed));
     assert.notDeepEqual(videoPairRuntime(changed.ts, model.projected.get(file).text), videoPairRuntime(actual.ts, baseline.projected.get(file).text));
   }
+
+  } catch (error) { videoTimeoutObservation('p112-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p112-exit', 0); }
 });
 
 test('video pair source family bound rejects a pure constructor that changes scientific or audio context', async () => {
+  videoTimeoutObservation('p113-begin', 0);
+  try {
+
   const components = videoPairSourceComponents(), file = 'apps/agent-worker/src/presentation/synclip-video-spool.ts';
   for (const [before, after] of [
     ['storyboard.videoProduction!.visualContinuity', 'scene.visualAction'],
@@ -3169,13 +4266,19 @@ test('video pair source family bound rejects a pure constructor that changes sci
     }]]));
     assert.throws(() => components.model(changed.ts, videoPairContext(changed)), error => error.reason === 'VIDEO_TRANSFER_UNKNOWN', before);
   }
+
+  } catch (error) { videoTimeoutObservation('p113-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p113-exit', 0); }
 });
 
 test('video pair constructor component extracts actual legacy families without granting compatibility', async () => {
+  videoTimeoutObservation('p114-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
   assert.ok(component.startsWith('function finiteVideoConstructorTerms('));
-  const analyze = runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative });
+  const analyze = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 50), runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative }));
   const actual = await historicalVideoIngressProgram();
   const original = await historicalVideoIngressProgram(new Map(), 'ca0a5b1ce6b7228e04d0212a8a96b07d8adbf4a6');
   const inspect = ({ ts, program, projectRoot }) => analyze(ts, { program, checker: program.getTypeChecker(), root: projectRoot });
@@ -3189,12 +4292,18 @@ test('video pair constructor component extracts actual legacy families without g
   // This component returns actual nodes and symbolic constructor values only;
   // source-only Programs never acquire successful production-collector context.
   assert.equal(Object.hasOwn(candidate, 'releaseCompatible'), false);
+
+  } catch (error) { videoTimeoutObservation('p114-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p114-exit', 0); }
 });
 
 test('video pair constructor component refuses effects and unsupported bindings in actual source', async () => {
+  videoTimeoutObservation('p115-begin', 0);
+  try {
+
   const component = deployLockSource.slice(deployLockSource.indexOf('function finiteVideoConstructorTerms('),
     deployLockSource.indexOf('\nfunction rollbackComparisonDiagnostic('));
-  const analyze = runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative });
+  const analyze = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 51), runInNewContext(`${component}; finiteVideoConstructorTerms`, { relative }));
   const file = 'apps/agent-worker/src/presentation/synclip-video-spool.ts';
   const mutateApproved = mutate => source => {
     const start = source.indexOf('export function compileApprovedShotPrompt('), end = source.indexOf('\nexport class SynclipVideoSpool', start);
@@ -3212,9 +4321,15 @@ test('video pair constructor component refuses effects and unsupported bindings 
     assert.throws(() => analyze(ts, { program, checker: program.getTypeChecker(), root: projectRoot }),
       error => error.reason === 'VIDEO_CONSTRUCTOR_NOT_PURE', name);
   }
+
+  } catch (error) { videoTimeoutObservation('p115-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p115-exit', 0); }
 });
 
 test('video constructor ingress prototype reports genuine bindings and unresolved other consumers without permitting rollback', async () => {
+  videoTimeoutObservation('p116-begin', 0);
+  try {
+
   assert.equal(typeof deployLock.proveNativeVideoReceiptIngress, 'function');
   const { ts, program, projectRoot } = await historicalVideoIngressProgram();
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
@@ -3226,6 +4341,9 @@ test('video constructor ingress prototype reports genuine bindings and unresolve
   assert.ok(result.references.some(item => item.file.endsWith('/source-review-task.ts')));
   assert.ok(result.references.some(item => item.file.endsWith('/journal-task.ts')));
   assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p116-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p116-exit', 0); }
 });
 
 const videoIngressHighMutations = [
@@ -3367,6 +4485,9 @@ for (const [name, mutate, reason] of privateStoreChainMutations) test(`generic p
 });
 
 test('generic private store chain binds actual private references with unresolved complete-module premise', async () => {
+  videoTimeoutObservation('p117-begin', 0);
+  try {
+
   const { ts, program, projectRoot } = await historicalVideoIngressProgram();
   const result = deployLock.proveNativeVideoReceiptIngress(ts, program, projectRoot);
   assert.equal(result.reason, 'OTHER_PERSISTENCE_ORIGINS_UNPROVEN', JSON.stringify(result));
@@ -3379,6 +4500,9 @@ test('generic private store chain binds actual private references with unresolve
   assert.equal(result.unresolved.length, 13);
   assert.equal(result.status, 'unknown');
   assert.equal(result.releaseCompatible, false);
+
+  } catch (error) { videoTimeoutObservation('p117-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p117-exit', 0); }
 });
 
 const videoIngressMutations = [
@@ -3464,6 +4588,9 @@ export function readPersisted(input: SourceReviewNotSubmittedProof) { return cre
 }
 
 test('class supplier proof traces the real Gateway member through constructor and factory', async t => {
+  videoTimeoutObservation('p118-begin', 0);
+  try {
+
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   await mkdir(join(projectRoot, 'tmp'), { recursive: true });
   const root = await mkdtemp(join(projectRoot, 'tmp/r04-class-supplier-'));
@@ -3493,9 +4620,15 @@ test('class supplier proof traces the real Gateway member through constructor an
     for (const directory of [candidate, previous]) await writeFile(join(directory, 'consumer.ts'), variant);
     await deployLock.verifyApplicationRollbackReaders(options);
   }
+
+  } catch (error) { videoTimeoutObservation('p118-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p118-exit', 0); }
 });
 
 test('class supplier proof rejects unknown, escaped, rebound or mutable Gateway origins', async t => {
+  videoTimeoutObservation('p119-begin', 0);
+  try {
+
   const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
   await mkdir(join(projectRoot, 'tmp'), { recursive: true });
   const root = await mkdtemp(join(projectRoot, 'tmp/r04-class-supplier-negative-'));
@@ -3575,9 +4708,15 @@ export function readPersisted(input: Proof) { return factory().canRetrySourceRev
     for (const directory of [candidate, previous]) await writeFile(join(directory, 'consumer.ts'), unsafe);
     await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u, `unsafe class origin ${index}`);
   }
+
+  } catch (error) { videoTimeoutObservation('p119-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p119-exit', 0); }
 });
 
 test('rollback rejects the five unsafe runtime closure variants reproduced by independent High review', async t => {
+  videoTimeoutObservation('p120-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-runtime-closure-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const cases = [
@@ -3593,6 +4732,9 @@ test('rollback rejects the five unsafe runtime closure variants reproduced by in
       prefix: flag => `import { ${flag === 'true' ? 'isDeepStrictEqual' : 'format'} as accepts } from "node:util";`, helper: () => '' },
   ];
   for (const item of cases) await t.test(item.name, async () => {
+  videoTimeoutObservation('p120-n1-begin', 0);
+  try {
+
     const candidate = join(root, item.name, 'candidate'), previous = join(root, item.name, 'previous');
     for (const [directory, flag] of [[candidate, 'true'], [previous, 'false']]) {
       await mkdir(directory, { recursive: true });
@@ -3611,10 +4753,19 @@ test('rollback rejects the five unsafe runtime closure variants reproduced by in
       await writeFile(join(previous, 'helper.ts'), item.helper('false'));
       await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
     }
-  });
+
+  } catch (error) { videoTimeoutObservation('p120-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p120-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p120-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p120-exit', 0); }
 });
 
 test('rollback fails closed for missing generated modules and unresolved dynamic loading without executing source', async t => {
+  videoTimeoutObservation('p121-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-unknown-runtime-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const body of [
@@ -3632,9 +4783,15 @@ test('rollback fails closed for missing generated modules and unresolved dynamic
     await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
       compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   }
+
+  } catch (error) { videoTimeoutObservation('p121-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p121-exit', 0); }
 });
 
 test('an unused callback implementation cannot stand in for the missing reader consumer', async t => {
+  videoTimeoutObservation('p122-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-unused-callback-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const candidate = join(root, 'candidate'), previous = join(root, 'previous');
@@ -3644,9 +4801,15 @@ test('an unused callback implementation cannot stand in for the missing reader c
   }
   await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
     compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['reader.ts', 'readPersisted']] }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+
+  } catch (error) { videoTimeoutObservation('p122-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p122-exit', 0); }
 });
 
 test('callback compatibility follows the actual supplier argument rather than an unrelated typed object', async t => {
+  videoTimeoutObservation('p123-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-actual-callback-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const candidate = join(root, 'candidate'), previous = join(root, 'previous');
@@ -3683,9 +4846,15 @@ test('callback compatibility follows the actual supplier argument rather than an
   await writeFile(join(candidate, 'reader.ts'), prefix + concrete);
   await writeFile(join(previous, 'reader.ts'), prefix + concrete.replace('v==="new-profile"', 'false'));
   await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+
+  } catch (error) { videoTimeoutObservation('p123-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p123-exit', 0); }
 });
 
 test('static createRequire loaders retain module provenance and follow their literal dependencies', async t => {
+  videoTimeoutObservation('p124-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-static-loader-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const candidate = join(root, 'candidate'), previous = join(root, 'previous');
@@ -3717,9 +4886,15 @@ test('static createRequire loaders retain module provenance and follow their lit
     await fixture(body);
     await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   }
+
+  } catch (error) { videoTimeoutObservation('p124-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p124-exit', 0); }
 });
 
 test('generated Prisma runtime requires exact installed vendor and engine bytes while model readers remain compared', async t => {
+  videoTimeoutObservation('p125-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-prisma-vendor-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const trusted = createRequire(import.meta.url), upstreamPackageRoot = dirname(trusted.resolve('@prisma/client/package.json'));
@@ -3743,9 +4918,9 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
   const collectorSource = deployLockSource.match(/function rollbackReaderClosure\(ts, root, roots, vendorPackages\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(collectorSource);
   const closureContexts = new WeakMap();
-  const collect = runInNewContext(`${collectorSource}; rollbackReaderClosure`, { resolve, relative, dirname, join, existsSync, readFileSync,
+  const collect = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 52), runInNewContext(`${collectorSource}; rollbackReaderClosure`, { resolve, relative, dirname, join, existsSync, readFileSync,
     builtinModules, rollbackProofContexts: closureContexts, APPLICATION_ROLLBACK_READERS: [], verifyPrismaVendorRuntime: deployLock.verifyPrismaVendorRuntime,
-    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } });
+    rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); } }));
   const ts = trusted('typescript'), roots = [['packages/prisma-fixture/generated/client/index.js']], vendorPackages = { upstreamPackageRoot, enginePackageRoot };
   const currentEntries = collect(ts, candidate, roots, vendorPackages);
   const current = JSON.stringify(currentEntries);
@@ -3788,9 +4963,15 @@ test('generated Prisma runtime requires exact installed vendor and engine bytes 
   await writeFile(join(generated, 'schema.prisma'), 'generator client { provider = "prisma-client-js" binaryTargets = ["native", "linux-musl"] }\nmodel SavedProfile { id String @id }\n');
   await writeFile(join(generated, 'index.js'), 'const runtime = require("./runtime/library.js"); exports.readPersisted = value => ({model:"old-profile",value,runtime});');
   assert.notEqual(JSON.stringify(collect(ts, previous, roots, vendorPackages)), current);
+
+  } catch (error) { videoTimeoutObservation('p125-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p125-exit', 0); }
 });
 
 test('core Prisma verifier resolves the pnpm virtual-store client layout', async t => {
+  videoTimeoutObservation('p126-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-prisma-core-layout-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const trusted = createRequire(import.meta.url), upstreamPackageRoot = dirname(trusted.resolve('@prisma/client/package.json'));
@@ -3811,9 +4992,15 @@ test('core Prisma verifier resolves the pnpm virtual-store client layout', async
   await copyFile(join(enginePackageRoot, engine), join(generatedRoot, engine));
   assert.deepEqual(deployLock.verifyPrismaCoreClientRuntime({ sourceRoot: root, upstreamPackageRoot, enginePackageRoot }).binaryTargets,
     ['native', 'linux-musl']);
+
+  } catch (error) { videoTimeoutObservation('p126-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p126-exit', 0); }
 });
 
 test('ordinary rollback never permits an unknown reader because persisted-state diagnostics are empty', async t => {
+  videoTimeoutObservation('p127-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-reader-hold-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const candidate = join(root, 'candidate'), previous = join(root, 'previous');
@@ -3821,9 +5008,15 @@ test('ordinary rollback never permits an unknown reader because persisted-state 
   await assert.rejects(deployLock.verifyApplicationRollbackReaders({ candidateRoot: candidate, rollbackRoot: previous,
     compilerRoot: fileURLToPath(new URL('../../', import.meta.url)), roots: [['missing-reader.ts', 'readPersisted']] }),
   /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
+
+  } catch (error) { videoTimeoutObservation('p127-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p127-exit', 0); }
 });
 
 test('rollback cannot downgrade the private-cleanup reader after the protected archive was added', async t => {
+  videoTimeoutObservation('p128-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-rollback-cleaner-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const candidate = join(root, 'candidate'), previous = join(root, 'previous');
@@ -3840,9 +5033,15 @@ test('rollback cannot downgrade the private-cleanup reader after the protected a
   await writeFile(join(previous, 'infra/private-cleanup/runner.mjs'), body.replace(`, '${archive}'`, ''));
   await assert.rejects(deployLock.verifyApplicationRollbackReaders(options), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
   assert.equal(await readFile(join(candidate, 'infra/private-cleanup/runner.mjs'), 'utf8'), body);
+
+  } catch (error) { videoTimeoutObservation('p128-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p128-exit', 0); }
 });
 
 test('ordinary rollback compatibility failure preserves the candidate and journal and never stops producers', async t => {
+  videoTimeoutObservation('p129-begin', 0);
+  try {
+
   const operationSource = deployLockSource.match(/async function applicationRollbackPreflight\(options\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(operationSource);
   for (const persistence of [
@@ -3851,9 +5050,12 @@ test('ordinary rollback compatibility failure preserves the candidate and journa
     { native: false, paidUnknown: false, firstImage: true },
     { native: false, paidUnknown: false, firstImage: false },
   ]) await t.test(JSON.stringify(persistence), async () => {
+  videoTimeoutObservation('p129-n1-begin', 0);
+  try {
+
     const journal = { candidateSha: 'b'.repeat(40), rollbackSha: 'a'.repeat(40), phase: 'published' };
     const before = structuredClone(journal), calls = [], diagnostics = [];
-    const operation = runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
+    const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 53), runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
       async verifyProductionDeployLockOnHost() { calls.push('lock'); },
       async readTrustedJournal() { calls.push('journal-read'); return journal; },
       async nativeCommand(command, args) { calls.push(`${command}:${args.slice(0, 2).join(':')}`); assert.equal(command, 'docker'); assert.deepEqual(Array.from(args.slice(0, 2)), ['image', 'inspect']); return rollbackImageMetadataFixture(); },
@@ -3861,31 +5063,46 @@ test('ordinary rollback compatibility failure preserves the candidate and journa
       async queryNativeWork(candidate, checkpoint, rollback) { assert.equal(candidate, journal.candidateSha); assert.equal(checkpoint, null); assert.equal(rollback, true); calls.push('current-reader-diagnostics'); return { persistence }; },
       rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); },
       console: { error(value) { diagnostics.push(value); } },
-    });
+    }));
     await assert.rejects(operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
     assert.deepEqual(journal, before);
     assert.deepEqual(calls, ['lock', 'journal-read', 'docker:image:inspect', 'docker:image:inspect', 'reader-comparison', 'current-reader-diagnostics']);
     assert.equal(diagnostics.length, 1);
     assert.equal(diagnostics[0].includes(journal.candidateSha), false);
-  });
+
+  } catch (error) { videoTimeoutObservation('p129-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p129-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p129-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p129-exit', 0); }
 });
 
 test('compatible ordinary rollback verifies both image Node runtimes and skips live-state diagnostics', async () => {
+  videoTimeoutObservation('p130-begin', 0);
+  try {
+
   const operationSource = deployLockSource.match(/async function applicationRollbackPreflight\(options\) \{[\s\S]*?\n\}/u)?.[0];
   const calls = [];
   const journal = { candidateSha: 'b'.repeat(40), rollbackSha: 'a'.repeat(40), phase: 'switching' };
-  const operation = runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
+  const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 54), runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
     async verifyProductionDeployLockOnHost() { calls.push('lock'); }, async readTrustedJournal() { return journal; },
     async nativeCommand(command, args) { calls.push(args.at(-1)); return rollbackImageMetadataFixture(); },
     async verifyApplicationRollbackReaders() { calls.push('reader-comparison'); },
     async queryNativeWork() { throw Error('compatible rollback must not query/drain producers'); },
     rollbackCompatibilityUnknown() { throw Error('unknown'); }, console: { error() {} },
-  });
+  }));
   assert.equal(await operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
   assert.deepEqual(calls, ['lock', `openscience-agent-worker:${journal.candidateSha}`, `openscience-agent-worker:${journal.rollbackSha}`, 'reader-comparison']);
+
+  } catch (error) { videoTimeoutObservation('p130-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p130-exit', 0); }
 });
 
 test('selected history cannot reuse a W over R journal as the earlier R over legacy transaction', async () => {
+  videoTimeoutObservation('p131-begin', 0);
+  try {
+
   const extract = name => {
     const body = deployLockSource.match(new RegExp(`(?:async )?function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
     assert.ok(body, name); return body;
@@ -3904,7 +5121,7 @@ test('selected history cannot reuse a W over R journal as the earlier R over leg
   ]) {
     const journal = { schemaVersion: 1, candidateSha: fixture.journal[0], rollbackSha: fixture.journal[1], phase: fixture.journal[2], updatedAt: '2026-10-16T00:00:00.000Z' };
     const original = JSON.stringify(journal), calls = [], journalPath = '/production/.deploy-transaction.json';
-    const operation = runInNewContext(`${extract('exactObjectKeys')}\n${extract('readTrustedJournal')}\n${extract('applicationRollbackPreflight')}; applicationRollbackPreflight`, {
+    const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 55), runInNewContext(`${extract('exactObjectKeys')}\n${extract('readTrustedJournal')}\n${extract('applicationRollbackPreflight')}; applicationRollbackPreflight`, {
       SHA_PATTERN: /^[a-f0-9]{40}$/u, JOURNAL_PHASES: new Set(['prepared', 'migrating', 'switching', 'published']),
       process: { platform: 'linux', arch: 'x64' },
       async verifyProductionDeployLockOnHost() { calls.push('lock'); },
@@ -3917,7 +5134,7 @@ test('selected history cannot reuse a W over R journal as the earlier R over leg
         assert.equal(options.rollbackRoot, `/opt/openscience-releases/${fixture.requested[1]}`); },
       async queryNativeWork() { assert.fail('journal refusal does not consult queue emptiness or discard history'); },
       rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); }, console: { error() {} },
-    });
+    }));
     const request = { candidateSha: fixture.requested[0], rollbackSha: fixture.requested[1], journalPath, requiredUid: 0 };
     if (fixture.accepted) {
       assert.equal(await operation(request), 'APPLICATION_ROLLBACK_READERS_COMPATIBLE');
@@ -3930,38 +5147,53 @@ test('selected history cannot reuse a W over R journal as the earlier R over leg
     }
     assert.equal(JSON.stringify(journal), original);
   }
+
+  } catch (error) { videoTimeoutObservation('p131-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p131-exit', 0); }
 });
 
 test('different or missing image Node runtime is unknown even when reader source would match', async () => {
+  videoTimeoutObservation('p132-begin', 0);
+  try {
+
   const operationSource = deployLockSource.match(/async function applicationRollbackPreflight\(options\) \{[\s\S]*?\n\}/u)?.[0];
   for (const previousRuntime of [rollbackImageMetadataFixture(['NODE_VERSION=20.14.0']), rollbackImageMetadataFixture([]),
     rollbackImageMetadataFixture(['NODE_VERSION=22.20.0', 'NODE_VERSION=20.14.0']), rollbackImageMetadataFixture(undefined, 'windows'),
     rollbackImageMetadataFixture(undefined, 'linux', 'arm64')]) {
     let reads = 0, comparisons = 0;
     const journal = { candidateSha: 'b'.repeat(40), rollbackSha: 'a'.repeat(40), phase: 'switching' };
-    const operation = runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
+    const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 56), runInNewContext(`${operationSource}; applicationRollbackPreflight`, { process: {platform: 'linux', arch: 'x64'},
       async verifyProductionDeployLockOnHost() {}, async readTrustedJournal() { return journal; },
       async nativeCommand() { return reads++ === 0 ? rollbackImageMetadataFixture() : previousRuntime; },
       async verifyApplicationRollbackReaders() { comparisons += 1; }, async queryNativeWork() { throw Error('unknown current query'); },
       rollbackCompatibilityUnknown() { throw Error('ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN'); }, console: { error() {} },
-    });
+    }));
     await assert.rejects(operation({ candidateSha: journal.candidateSha, rollbackSha: journal.rollbackSha }), /ROLLBACK_FAILED_PERSISTENCE_COMPATIBILITY_UNKNOWN/u);
     assert.equal(comparisons, 0);
   }
+
+  } catch (error) { videoTimeoutObservation('p132-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p132-exit', 0); }
 });
 
 test('rollback diagnostics retain terminal Native, paid-unknown and first-image run/receipt/step obligations', async t => {
+  videoTimeoutObservation('p133-begin', 0);
+  try {
+
   const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
   assert.ok(declaration);
-  const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  const code = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 57), runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {}));
   for (const fixture of [
     { status: 'succeeded', native: true, error: null, first: { runs: false, receipts: false, steps: false }, expected: { native: true, paidUnknown: false, firstImage: false } },
     { status: 'failed', native: false, error: '[blocked] Previous paid image outcome unknown', first: { runs: false, receipts: false, steps: false }, expected: { native: false, paidUnknown: true, firstImage: false } },
     ...['runs', 'receipts', 'steps'].map(key => ({ status: 'succeeded', native: false, error: null,
       first: { runs: key === 'runs', receipts: key === 'receipts', steps: key === 'steps' }, expected: { native: false, paidUnknown: false, firstImage: true } })),
   ]) await t.test(JSON.stringify(fixture.expected), async () => {
+  videoTimeoutObservation('p133-n1-begin', 0);
+  try {
+
     let output = ''; const queries = [];
-    await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, {
+    await (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 58), runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, {
       process: { env: { DATABASE_URL: 'fixture-only', REDIS_URL: 'fixture-only' }, argv: ['node', 'none', 'rollback'], stdout: { write(text) { output += text; } } },
       AGENT_TASK_QUEUE: 'agent:queue', classifyNativeWorkSnapshot: deployLock.classifyNativeWorkSnapshot,
       readNativeAgentExecution(result) { return result?.nativeAgentExecution; },
@@ -3978,13 +5210,19 @@ test('rollback diagnostics retain terminal Native, paid-unknown and first-image 
         journalJob: { async findMany() { return []; } }, async $disconnect() {},
       }; },
       createRedisClient() { return { async lrange() { return []; }, async quit() {} }; },
-    });
+    }));
     assert.deepEqual(JSON.parse(output).persistence, fixture.expected);
     assert.equal(output.includes('private-task-identifier'), false);
     assert.match(queries[1], /hermes_research_runs/u);
     assert.match(queries[1], /audit_logs/u);
     assert.match(queries[1], /hermes_research_steps/u);
-  });
+
+  } catch (error) { videoTimeoutObservation('p133-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p133-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p133-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p133-exit', 0); }
 });
 
 function nativeJournalFixture() {
@@ -4001,6 +5239,9 @@ function nativeJournalFixture() {
 }
 
 test('Native journal validates original state and rejects malformed or foreign receipts', () => {
+  videoTimeoutObservation('p134-begin', 0);
+  try {
+
   const candidate = 'b'.repeat(40), original = nativeJournalFixture();
   assert.equal(typeof deployLock.validateNativeJournalState, 'function');
   const validated = deployLock.validateNativeJournalState(original, candidate);
@@ -4024,9 +5265,15 @@ test('Native journal validates original state and rejects malformed or foreign r
     { ...original, installState: 'installed', installation: { ...installation, timerDeferred: false } },
     { ...original, candidateCheckpoint: 'not-db-time' },
   ]) assert.throws(() => deployLock.validateNativeJournalState(invalid, candidate), /Native deployment state/u);
+
+  } catch (error) { videoTimeoutObservation('p134-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p134-exit', 0); }
 });
 
 test('Native journal preserves the original capture and rejects reset, late mode and receipt replacement', () => {
+  videoTimeoutObservation('p135-begin', 0);
+  try {
+
   const candidate = 'b'.repeat(40), before = nativeJournalFixture();
   assert.equal(typeof deployLock.preserveNativeJournalState, 'function');
   assert.equal(deployLock.preserveNativeJournalState(null, undefined, candidate, true), undefined);
@@ -4048,9 +5295,15 @@ test('Native journal preserves the original capture and rejects reset, late mode
     [{ nativeRefresh: completed }, attempted],
     [{ nativeRefresh: completed }, { ...completed, installation: { ...installation, runtimeId: 'foreign-runtime' } }],
   ]) assert.throws(() => deployLock.preserveNativeJournalState(previous, incoming, candidate, false), /Native deployment state/u);
+
+  } catch (error) { videoTimeoutObservation('p135-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p135-exit', 0); }
 });
 
 test('Native candidate identities are atomic and immutable without backfilling legacy checkpoints', () => {
+  videoTimeoutObservation('p136-begin', 0);
+  try {
+
   const candidate = 'b'.repeat(40), checkpoint = '2026-10-09T08:00:00.000Z';
   const installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`,
     skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
@@ -4081,9 +5334,15 @@ test('Native candidate identities are atomic and immutable without backfilling l
     [started, { ...started, candidateContainers: { ...containers, web: '7'.repeat(64) } }],
   ]) assert.throws(() => deployLock.preserveNativeJournalState({ nativeRefresh: previous }, next, candidate, false), /Native deployment state/u);
   assert.throws(() => deployLock.preserveNativeJournalState(null, started, candidate, true), /Native deployment state/u);
+
+  } catch (error) { videoTimeoutObservation('p136-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p136-exit', 0); }
 });
 
 test('Native refresh flag defaults off and forwards only the explicit sixth argument', () => {
+  videoTimeoutObservation('p137-begin', 0);
+  try {
+
   assert.match(launcherSource, /^REFRESH_NATIVE_RESOURCES=0$/mu);
   assert.match(launcherSource, /--refresh-native-resources\) REFRESH_NATIVE_RESOURCES=1; shift/u);
   const tail = launcherSource.match(/^NATIVE_REFRESH_ARG=""[\s\S]*$/mu)?.[0];
@@ -4101,9 +5360,15 @@ test('Native refresh flag defaults off and forwards only the explicit sixth argu
     const expected = `exec /bin/bash '/opt/openscience-releases/${candidate}/infra/scripts/production-deploy-transaction.sh' '${candidate}' '${rollback}' '0' '0' '0'${selected ? " '1'" : ''} </dev/null`;
     assert.equal(result.stdout.trim(), `fixture@example.invalid\n${expected}`);
   }
+
+  } catch (error) { videoTimeoutObservation('p137-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p137-exit', 0); }
 });
 
 test('Native refresh rejects invalid or excess transaction arguments before host operations', () => {
+  videoTimeoutObservation('p138-begin', 0);
+  try {
+
   const runner = fileURLToPath(new URL('./production-deploy-transaction.sh', import.meta.url)).replaceAll('\\', '/');
   const args = ['b'.repeat(40), 'a'.repeat(40), '0', '0', '0'];
   const invalid = spawnSync(bash, [runner, ...args, '2'], { encoding: 'utf8' });
@@ -4112,9 +5377,15 @@ test('Native refresh rejects invalid or excess transaction arguments before host
   const excess = spawnSync(bash, [runner, ...args, '0', 'extra'], { encoding: 'utf8' });
   assert.equal(excess.status, 64);
   assert.match(excess.stderr, /runner/u);
+
+  } catch (error) { videoTimeoutObservation('p138-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p138-exit', 0); }
 });
 
 test('Native transitions persist install and restore intent before accepting exact receipts', () => {
+  videoTimeoutObservation('p139-begin', 0);
+  try {
+
   const candidate = 'b'.repeat(40);
   let state = nativeJournalFixture();
   assert.equal(typeof deployLock.transitionNativeJournalState, 'function');
@@ -4138,9 +5409,15 @@ test('Native transitions persist install and restore intent before accepting exa
   transition('restore-complete', restored);
   assert.equal(state.restoreState, 'restored_verified');
   assert.equal(state.candidateCheckpoint, '2026-10-09T08:00:00.000Z');
+
+  } catch (error) { videoTimeoutObservation('p139-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p139-exit', 0); }
 });
 
 test('Native work classification preserves pending queues and holds unknown, live and candidate-bound work', () => {
+  videoTimeoutObservation('p140-begin', 0);
+  try {
+
   assert.equal(typeof deployLock.classifyNativeWorkSnapshot, 'function');
   const task = { id: 't1', status: 'pending', deletedAt: null, nativePending: true,
     providerUncertain: false, updatedAt: '2026-10-09T07:00:00.000Z' };
@@ -4154,9 +5431,15 @@ test('Native work classification preserves pending queues and holds unknown, liv
   assert.equal(deployLock.classifyNativeWorkSnapshot(snapshot, '2026-10-09T06:00:00.000Z').safe, false);
   assert.equal(deployLock.classifyNativeWorkSnapshot(snapshot, '2026-10-09T08:00:00.000Z').safe, true);
   assert.equal(deployLock.classifyNativeWorkSnapshot({ ...snapshot, tasks: [{ ...task, status: 'succeeded' }], queue: [], processing: [] }, '2026-10-09T06:00:00.000Z').safe, true);
+
+  } catch (error) { videoTimeoutObservation('p140-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p140-exit', 0); }
 });
 
 test('Native producer pause uses exact identities and infinite daemon stop; timeout, OOM and replacement remain held', async () => {
+  videoTimeoutObservation('p141-begin', 0);
+  try {
+
   const body = deployLockSource.match(/async function pauseNativeProducers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(body);
   const id = '1'.repeat(64);
@@ -4218,7 +5501,7 @@ test('Native producer pause uses exact identities and infinite daemon stop; time
         return JSON.stringify({ Status: 'exited', Running: false, ExitCode: mode.exitCode ?? 0, OOMKilled: false, Error: '', ...mode.stopped });
       },
     };
-    const pause = runInNewContext(`${body}; pauseNativeProducers`, context);
+    const pause = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 59), runInNewContext(`${body}; pauseNativeProducers`, context));
     const state = { before: { containers: { api: null, web: null, agentWorker: null,
       [service]: mode.originalIdentityChanged ? '4'.repeat(64) : id } } };
     if (mode.accepted) await assert.doesNotReject(pause(state, true), mode.name);
@@ -4231,6 +5514,9 @@ test('Native producer pause uses exact identities and infinite daemon stop; time
     } else assert.equal(calls.some(call => call.args[0] === 'stop'), false);
     assert.equal(calls.some(call => call.args.includes('kill') || call.args.includes('restart')), false);
   }
+
+  } catch (error) { videoTimeoutObservation('p141-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p141-exit', 0); }
 });
 
 function nativeRecoverySequenceFixture({ webProducer = true } = {}) {
@@ -4303,8 +5589,8 @@ function nativeRecoverySequenceFixture({ webProducer = true } = {}) {
     },
   };
   const createdVerifier = deployLockSource.match(/function verifyNeverStartedCandidate\([^)]*\) \{[\s\S]*?\n\}/u)?.[0] ?? '';
-  const operation = runInNewContext(`${extract('exactObjectKeys')}\n${queryDeclaration}\n${createdVerifier}\n${extract('pauseNativeProducers')}\n${extract('queryNativeWork')}\n${extract('nativeOperation')}; nativeOperation`, context);
-  context.NATIVE_WORK_QUERY = runInNewContext(`${queryDeclaration}; NATIVE_WORK_QUERY`, {});
+  const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 60), runInNewContext(`${extract('exactObjectKeys')}\n${queryDeclaration}\n${createdVerifier}\n${extract('pauseNativeProducers')}\n${extract('queryNativeWork')}\n${extract('nativeOperation')}; nativeOperation`, context));
+  context.NATIVE_WORK_QUERY = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 61), runInNewContext(`${queryDeclaration}; NATIVE_WORK_QUERY`, {}));
   const run = command => operation(command, options);
   return {
     journal, containers, calls, answers, faults, run, context, options,
@@ -4362,7 +5648,13 @@ function nativeRecoverySequenceFixture({ webProducer = true } = {}) {
 }
 
 test('Native recovery repeats certified original Web pause after pre-install failure and held rollback', async t => {
+  videoTimeoutObservation('p142-begin', 0);
+  try {
+
   await t.test('pre-install failure then direct recovery rechecks stopped Web1 without a second stop', async () => {
+  videoTimeoutObservation('p142-n1-begin', 0);
+  try {
+
     const fixture = nativeRecoverySequenceFixture();
     await fixture.quiesce(); await fixture.failBeforeInstall();
     await assert.doesNotReject(fixture.run('native-prepare-rollback'), 'certified original Web1 must remain recoverable');
@@ -4371,8 +5663,14 @@ test('Native recovery repeats certified original Web pause after pre-install fai
     assert.equal(fixture.calls.at(-1), 'old-binding');
     assert.equal(fixture.calls.filter(value => value === 'stop').length, 1);
     assert.equal(fixture.calls.includes('restore'), false);
-  });
+
+  } catch (error) { videoTimeoutObservation('p142-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p142-n1-exit', 0); }
+});
   await t.test('unsafe queries preserve a candidate checkpoint until a safe reentry', async () => {
+  videoTimeoutObservation('p142-n2-begin', 0);
+  try {
+
     const fixture = nativeRecoverySequenceFixture(), checkpoint = '2026-10-09T08:00:00.000Z';
     await fixture.quiesce(); await fixture.installed(checkpoint); fixture.answers.push(false, false, true);
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -4391,8 +5689,14 @@ test('Native recovery repeats certified original Web pause after pre-install fai
     const callsBefore = fixture.calls.length;
     await assert.rejects(fixture.run('native-prepare-rollback'), /held/u);
     assert.equal(fixture.calls.length, callsBefore, 'completed rollback has no new resume contract');
-  });
+
+  } catch (error) { videoTimeoutObservation('p142-n2-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p142-n2-exit', 0); }
+});
   await t.test('repeated hold then prepare completes the already-started rollback transition', async () => {
+  videoTimeoutObservation('p142-n3-begin', 0);
+  try {
+
     const fixture = nativeRecoverySequenceFixture();
     await fixture.quiesce(); await fixture.failBeforeInstall();
     await fixture.run('native-hold-producers');
@@ -4405,8 +5709,14 @@ test('Native recovery repeats certified original Web pause after pre-install fai
     assert.equal(fixture.calls.filter(value => value === 'journal:rollback_quiescing').length, 1);
     assert.equal(fixture.calls.filter(value => value === 'stop').length, 1);
     assert.equal(fixture.calls.at(-1), 'old-binding');
-  });
+
+  } catch (error) { videoTimeoutObservation('p142-n3-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p142-n3-exit', 0); }
+});
   await t.test('candidate hold preserves captured identities through unsafe and safe prepare', async () => {
+  videoTimeoutObservation('p142-n4-begin', 0);
+  try {
+
     const fixture = nativeRecoverySequenceFixture();
     await fixture.quiesce(); await fixture.installed('2026-10-09T08:00:00.000Z');
     const ids = structuredClone(fixture.journal.nativeRefresh.candidateContainers);
@@ -4419,10 +5729,19 @@ test('Native recovery repeats certified original Web pause after pre-install fai
     assert.equal(fixture.journal.nativeRefresh.restoreState, 'restored_verified');
     assert.deepEqual(fixture.journal.nativeRefresh.candidateContainers, ids);
     assert.equal(fixture.calls.filter(value => value === 'stop').length, 2);
-  });
+
+  } catch (error) { videoTimeoutObservation('p142-n4-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p142-n4-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p142-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p142-exit', 0); }
 });
 
 test('Native before-start captures only complete never-started candidate bindings', async () => {
+  videoTimeoutObservation('p143-begin', 0);
+  try {
+
   const fixture = nativeRecoverySequenceFixture();
   await fixture.quiesce(); await fixture.installed(); fixture.createCandidate();
   const ids = Object.fromEntries(Object.entries(fixture.containers).map(([key, container]) => [key, container.Id]));
@@ -4443,9 +5762,15 @@ test('Native before-start captures only complete never-started candidate binding
     assert.equal(bad.journal.nativeRefresh.candidateCheckpoint, null);
     assert.equal(Object.hasOwn(bad.journal.nativeRefresh, 'candidateContainers'), false);
   }
+
+  } catch (error) { videoTimeoutObservation('p143-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p143-exit', 0); }
 });
 
 test('Native recovery handles full and partial candidate create before a checkpoint without admitting unknown starts', async () => {
+  videoTimeoutObservation('p144-begin', 0);
+  try {
+
   for (const created of [['api', 'web', 'agentWorker'], ['web'], ['api', 'agentWorker']]) {
     const fixture = nativeRecoverySequenceFixture();
     await fixture.quiesce(); await fixture.installed(); fixture.createCandidate(created); fixture.answers.push(false);
@@ -4474,9 +5799,15 @@ test('Native recovery handles full and partial candidate create before a checkpo
     await assert.rejects(fixture.run('native-prepare-rollback'), /held|Native deployment state/u);
     assert.equal(fixture.calls.slice(callsBefore).some(value => value === 'stop' || value.startsWith('query:')), false);
   }
+
+  } catch (error) { videoTimeoutObservation('p144-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p144-exit', 0); }
 });
 
 test('Native saved candidate identities reject every replacement and legacy records cannot infer live identities', async () => {
+  videoTimeoutObservation('p145-begin', 0);
+  try {
+
   for (const role of ['api', 'web', 'agentWorker']) {
     const fixture = nativeRecoverySequenceFixture();
     await fixture.quiesce(); await fixture.installed('2026-10-09T08:00:00.000Z'); fixture.answers.push(false);
@@ -4494,9 +5825,15 @@ test('Native saved candidate identities reject every replacement and legacy reco
   const callsBefore = legacy.calls.length;
   await assert.rejects(legacy.run('native-prepare-rollback'), /held/u);
   assert.equal(legacy.calls.slice(callsBefore).some(value => value === 'stop' || value.startsWith('query:')), false);
+
+  } catch (error) { videoTimeoutObservation('p145-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p145-exit', 0); }
 });
 
 test('Native recovery refuses unproven Web exits, foreign identities and interrupted resource transitions', async () => {
+  videoTimeoutObservation('p146-begin', 0);
+  try {
+
   const changes = [
     ['before producer false', fixture => { fixture.containers.web.State.ExitCode = 1; }, { webProducer: false }],
     ['old ID replaced', fixture => { fixture.containers.web.Id = '9'.repeat(64); }],
@@ -4532,9 +5869,15 @@ test('Native recovery refuses unproven Web exits, foreign identities and interru
     assert.equal(fixture.calls.some(value => value.startsWith('query:')), false);
     assert.equal(fixture.calls.includes('restore'), false);
   }
+
+  } catch (error) { videoTimeoutObservation('p146-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p146-exit', 0); }
 });
 
 test('Native binding rejects stale source, mount, runtime and unhealthy API before producers are permitted', () => {
+  videoTimeoutObservation('p147-begin', 0);
+  try {
+
   const candidate = 'b'.repeat(40), runtimeId = `installed-native-continuation-${candidate}`, skillCatalogueId = `project-catalogue-${candidate}`;
   const expected = { service: 'api', releaseSha: candidate, runtimeId, skillCatalogueId, running: true };
   const container = {
@@ -4551,9 +5894,15 @@ test('Native binding rejects stale source, mount, runtime and unhealthy API befo
     c => { c.Config.Env[1] = 'HERMES_NATIVE_RUNTIME_ID=foreign'; },
     c => { c.Config.Env.push('HERMES_NATIVE_RUNTIME_ID=foreign'); },
   ]) { const changed = structuredClone(container); change(changed); assert.throws(() => deployLock.verifyNativeContainerBinding(changed, expected), /Native deployment state/u); }
+
+  } catch (error) { videoTimeoutObservation('p147-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p147-exit', 0); }
 });
 
 test('Native actual old-pair capture accepts enabled video flags and rejects cached environment and mounts before journal creation or producer stop', async t => {
+  videoTimeoutObservation('p148-begin', 0);
+  try {
+
   const timeout = deployLockSource.match(/function nativeCommandTimeout\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const capture = deployLockSource.match(/async function captureNativeState\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   const inventory = deployLockSource.match(/async function nativeContainers\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
@@ -4604,7 +5953,7 @@ test('Native actual old-pair capture accepts enabled video flags and rejects cac
         throw new Error('unexpected mutation');
       },
     };
-    const run = runInNewContext(`${timeout}\n${inventory}\n${capture}\n${operation}; nativeOperation`, context);
+    const run = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 62), runInNewContext(`${timeout}\n${inventory}\n${capture}\n${operation}; nativeOperation`, context));
     let captured, status = 0;
     const valid = ['matching', 'absent-worker', 'stopped-worker'].includes(mode);
     if (valid) captured = await run('native-capture', { candidateSha: candidate, rollbackSha: rollback });
@@ -4626,9 +5975,15 @@ test('Native actual old-pair capture accepts enabled video flags and rejects cac
     assert.equal(existsSync(trace), valid);
     if (valid) assert.deepEqual((await readFile(trace, 'utf8')).trim().split('\n'), ['journal', 'stop']);
   }
+
+  } catch (error) { videoTimeoutObservation('p148-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p148-exit', 0); }
 });
 
 test('Native Compose 2.26 startup adapter creates without starting before the pinned startup operation', async t => {
+  videoTimeoutObservation('p149-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-start-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const [target, failure] of [['candidate', ''], ['original', ''], ['candidate', 'native-verify-stopped'], ['candidate', 'native-before-start'], ['candidate', 'native-start-application']]) {
@@ -4649,6 +6004,9 @@ test('Native Compose 2.26 startup adapter creates without starting before the pi
     const expected = ['create-only', 'native-verify-stopped', ...(target === 'candidate' ? ['native-before-start'] : []), 'native-start-application'];
     assert.deepEqual(calls, failure ? expected.slice(0, expected.indexOf(failure) + 1) : expected);
   }
+
+  } catch (error) { videoTimeoutObservation('p149-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p149-exit', 0); }
 });
 
 async function nativeStartupFixture({ target = 'candidate', stopped = [], notAttempted = false } = {}) {
@@ -4736,14 +6094,20 @@ async function nativeStartupFixture({ target = 'candidate', stopped = [], notAtt
     const body = deployLockSource.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
     assert.ok(body, name); return body;
   }).join('\n');
-  Object.assign(ctx, runInNewContext(`${helpers}; ({nativeCommandTimeout,nativeContainers,startNativeApplication})`, ctx));
+  Object.assign(ctx, (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 63), runInNewContext(`${helpers}; ({nativeCommandTimeout,nativeContainers,startNativeApplication})`, ctx)));
   return { ...f, extra, startup, reads, startupFaults: faults, now: () => clock,
     start: () => f.run('native-start-application') };
 }
 
 test('Native exact-ID startup preserves producer order, original identities and stopped roles', async t => {
+  videoTimeoutObservation('p150-begin', 0);
+  try {
+
   for (const [target, stopped] of [['candidate', []], ['original', []], ['candidate', ['api']], ['candidate', ['web']], ['candidate', ['agentWorker']]]) {
     await t.test(`${target} / stopped ${stopped.join(',') || 'none'}`, async () => {
+  videoTimeoutObservation('p150-n1-begin', 0);
+  try {
+
       const f = await nativeStartupFixture({ target, stopped }), ids = Object.fromEntries(Object.entries(f.containers).map(([key, value]) => [key, value.Id]));
       const startIndex = f.calls.length;
       const unrelated = structuredClone(f.containers.api); unrelated.Id = 'f'.repeat(64);
@@ -4757,11 +6121,20 @@ test('Native exact-ID startup preserves producer order, original identities and 
       for (const key of stopped) assert.equal(f.containers[key].State.Running, false);
       await assert.rejects(f.start(), /Native deployment state|held/u, 'reentry must not replay starts');
       assert.equal(f.startup.length, 3 - stopped.length);
-    });
+
+  } catch (error) { videoTimeoutObservation('p150-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p150-n1-exit', 0); }
+});
   }
+
+  } catch (error) { videoTimeoutObservation('p150-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p150-exit', 0); }
 });
 
 test('Native exact-ID startup rejects replacements, extra oneoffs, failed health and bounded timeouts', async t => {
+  videoTimeoutObservation('p151-begin', 0);
+  try {
+
   const scenarios = {
     'legacy missing saved IDs': f => { delete f.journal.nativeRefresh.candidateContainers; },
     'missing checkpoint': f => { f.journal.nativeRefresh.candidateCheckpoint = null; delete f.journal.nativeRefresh.candidateContainers; },
@@ -4800,17 +6173,32 @@ test('Native exact-ID startup rejects replacements, extra oneoffs, failed health
     };
   };
   for (const [label, change] of Object.entries(scenarios)) await t.test(label, async () => {
+  videoTimeoutObservation('p151-n1-begin', 0);
+  try {
+
     const f = await nativeStartupFixture(); change(f);
     await assert.rejects(f.start(), /held|Native deployment|start|timer/u);
     assert.equal(f.startup.includes('agentWorker'), false);
     if (!label.includes('timer')) assert.equal(f.calls.includes('timer-enable'), false);
     if (label.includes('deadline')) { assert.equal(f.now(), 300_000); assert.ok(f.reads.some(read => read.timeout < 30_000)); }
     assert.equal(f.calls.some(value => /kill|recreate/u.test(value)), false);
-  });
+
+  } catch (error) { videoTimeoutObservation('p151-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p151-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p151-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p151-exit', 0); }
 });
 
 test('Native before-start capture rejects extra producer inventory without persisting a checkpoint', async t => {
+  videoTimeoutObservation('p152-begin', 0);
+  try {
+
   for (const role of ['api', 'web', 'agentWorker']) for (const oneoff of ['False', 'True']) await t.test(`${role}/${oneoff}`, async () => {
+  videoTimeoutObservation('p152-n1-begin', 0);
+  try {
+
     const f = await nativeStartupFixture();
     f.journal.nativeRefresh.candidateCheckpoint = null; delete f.journal.nativeRefresh.candidateContainers;
     const extra = structuredClone(f.containers[role]); extra.Id = 'e'.repeat(64); extra.Config.Labels['com.docker.compose.oneoff'] = oneoff; f.extra.push(extra);
@@ -4819,23 +6207,41 @@ test('Native before-start capture rejects extra producer inventory without persi
     assert.equal(f.journal.nativeRefresh.candidateCheckpoint, null);
     assert.equal(Object.hasOwn(f.journal.nativeRefresh, 'candidateContainers'), false);
     assert.deepEqual(f.startup, []);
-  });
+
+  } catch (error) { videoTimeoutObservation('p152-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p152-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p152-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p152-exit', 0); }
 });
 
 test('Native pinned startup CLI requires only exact target and existing transaction identity', () => {
+  videoTimeoutObservation('p153-begin', 0);
+  try {
+
   const body = deployLockSource.match(/function parseNativeCli\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(body);
-  const parse = runInNewContext(`${body}; parseNativeCli`, { SHA_PATTERN: /^[a-f0-9]{40}$/u,
-    PRODUCTION_JOURNAL: '/journal', PRODUCTION_LOCK_DIRECTORY: '/lock', invalidNativeState() { throw Error('held'); } });
+  const parse = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 64), runInNewContext(`${body}; parseNativeCli`, { SHA_PATTERN: /^[a-f0-9]{40}$/u,
+    PRODUCTION_JOURNAL: '/journal', PRODUCTION_LOCK_DIRECTORY: '/lock', invalidNativeState() { throw Error('held'); } }));
   const base = ['--candidate', 'b'.repeat(40), '--rollback', 'a'.repeat(40), '--lock-fd', '9', '--target', 'candidate'];
   assert.equal(parse(base, 'native-start-application').target, 'candidate');
   assert.equal(parse([...base.slice(0, -1), 'original'], 'native-start-application').target, 'original');
   for (const args of [base.slice(0, -2), [...base, '--service', 'api'], [...base, '--target', 'candidate'], [...base.slice(0, -1), 'foreign']])
     assert.throws(() => parse(args, 'native-start-application'), /held/u);
+
+  } catch (error) { videoTimeoutObservation('p153-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p153-exit', 0); }
 });
 
 test('Native partial startup rollback retains saved identities and never starts later producers', async t => {
+  videoTimeoutObservation('p154-begin', 0);
+  try {
+
   for (const failure of ['startFail', 'startTimeout', 'unhealthy']) await t.test(failure, async () => {
+  videoTimeoutObservation('p154-n1-begin', 0);
+  try {
+
     const f = await nativeStartupFixture(), saved = structuredClone(f.journal.nativeRefresh.candidateContainers);
     f.startupFaults[failure] = 'web';
     await assert.rejects(f.start(), /start|Native deployment|held/u);
@@ -4849,13 +6255,25 @@ test('Native partial startup rollback retains saved identities and never starts 
     assert.deepEqual(f.journal.nativeRefresh.candidateContainers, saved);
     assert.equal(f.journal.nativeRefresh.restoreState, 'restored_verified');
     assert.deepEqual(f.startup, ['api', 'web']);
-  });
+
+  } catch (error) { videoTimeoutObservation('p154-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p154-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p154-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p154-exit', 0); }
 });
 
 test('Native create-only failure hands full or mixed-created containers to checkpoint-null rollback without retry', async t => {
+  videoTimeoutObservation('p155-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-create-fail-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const [status, services] of [[16, ['api', 'web', 'agentWorker']], [124, ['api', 'web', 'agentWorker']], [16, ['web']], [124, ['api', 'agentWorker']]]) await t.test(`${status}/${services.join(',')}`, async () => {
+  videoTimeoutObservation('p155-n1-begin', 0);
+  try {
+
     const trace = join(root, `${status}-${services.join('-')}.log`).replaceAll('\\', '/');
     const script = ['set -eEuo pipefail', `TRACE='${trace}'`,
       'RELEASE_ROOT=/candidate; RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; COMPOSE_FILE=/candidate/compose; PROD_ENV=/private',
@@ -4872,10 +6290,19 @@ test('Native create-only failure hands full or mixed-created containers to check
     assert.equal(Object.hasOwn(f.journal.nativeRefresh, 'candidateContainers'), false);
     assert.equal(f.journal.nativeRefresh.restoreState, 'restored_verified');
     assert.equal(f.calls.filter(value => value === 'stop').length, 1, 'never-started new containers are not running producers');
-  });
+
+  } catch (error) { videoTimeoutObservation('p155-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p155-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p155-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p155-exit', 0); }
 });
 
 test('Native startup oneoff rejection remains held through candidate rollback before stop or restore', async () => {
+  videoTimeoutObservation('p156-begin', 0);
+  try {
+
   const f = await nativeStartupFixture(), saved = structuredClone(f.journal.nativeRefresh.candidateContainers);
   f.startupFaults.hook = phase => {
     if (phase !== 'inventory' || !f.startup.length || f.extra.length) return;
@@ -4886,9 +6313,15 @@ test('Native startup oneoff rejection remains held through candidate rollback be
   await assert.rejects(f.run('native-prepare-rollback'), /Native deployment|held/u);
   assert.deepEqual(f.journal.nativeRefresh.candidateContainers, saved);
   assert.equal(f.calls.slice(before).some(call => call === 'stop' || call === 'restore' || call.startsWith('query:')), false);
+
+  } catch (error) { videoTimeoutObservation('p156-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p156-exit', 0); }
 });
 
 test('Native original startup holds wrong recovery stages before any producer or timer write', async t => {
+  videoTimeoutObservation('p157-begin', 0);
+  try {
+
   const stages = [
     ['not_started', 'not_attempted', 'not_started'], ['quiescing', 'not_attempted', 'not_started'],
     ['quiesced', 'not_attempted', 'not_started'], ['rollback_quiescing', 'not_attempted', 'not_started'],
@@ -4897,6 +6330,9 @@ test('Native original startup holds wrong recovery stages before any producer or
     ['rollback_quiesced', 'installed', 'restore_attempting'], ['rollback_quiesced', 'installed', 'not_started'],
   ];
   for (const [quiesceState, installState, restoreState] of stages) await t.test(`${quiesceState}/${installState}/${restoreState}`, async () => {
+  videoTimeoutObservation('p157-n1-begin', 0);
+  try {
+
     const f = await nativeStartupFixture({ target: 'original' }), state = f.journal.nativeRefresh;
     Object.assign(state, { quiesceState, installState, restoreState });
     if (installState !== 'installed') delete state.installation;
@@ -4904,10 +6340,19 @@ test('Native original startup holds wrong recovery stages before any producer or
     await assert.rejects(f.start(), /Native deployment|held/u);
     assert.deepEqual(f.startup, []);
     assert.equal(f.calls.slice(before).some(call => call.startsWith('start:') || call.startsWith('timer-') || call.startsWith('query:')), false);
-  });
+
+  } catch (error) { videoTimeoutObservation('p157-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p157-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p157-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p157-exit', 0); }
 });
 
 test('Native original startup accepts rollback-quiesced after a held work gate with no install attempt', async () => {
+  videoTimeoutObservation('p158-begin', 0);
+  try {
+
   const f = await nativeStartupFixture({ target: 'original', notAttempted: true });
   assert.equal(f.journal.nativeRefresh.quiesceState, 'rollback_quiesced');
   assert.equal(f.journal.nativeRefresh.installState, 'not_attempted');
@@ -4915,10 +6360,19 @@ test('Native original startup accepts rollback-quiesced after a held work gate w
   await f.start();
   assert.deepEqual(f.startup, ['api', 'web', 'agentWorker']);
   assert.equal(f.calls.includes('resource-write'), false);
+
+  } catch (error) { videoTimeoutObservation('p158-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p158-exit', 0); }
 });
 
 test('Native checkpoint-null candidate rollback rejects running oneoffs before stop, query or restore', async t => {
+  videoTimeoutObservation('p159-begin', 0);
+  try {
+
   for (const role of ['api', 'web', 'agentWorker']) await t.test(role, async () => {
+  videoTimeoutObservation('p159-n1-begin', 0);
+  try {
+
     const f = await nativeStartupFixture();
     f.journal.nativeRefresh.candidateCheckpoint = null; delete f.journal.nativeRefresh.candidateContainers;
     const extra = structuredClone(f.containers[role]); extra.Id = 'e'.repeat(64);
@@ -4931,10 +6385,19 @@ test('Native checkpoint-null candidate rollback rejects running oneoffs before s
     assert.equal(f.journal.nativeRefresh.candidateCheckpoint, null);
     assert.equal(Object.hasOwn(f.journal.nativeRefresh, 'candidateContainers'), false);
     assert.deepEqual(f.startup, []);
-  });
+
+  } catch (error) { videoTimeoutObservation('p159-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p159-n1-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p159-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p159-exit', 0); }
 });
 
 test('Native real rollback adapter checks feasibility before restore and never starts old pair on held recovery', async t => {
+  videoTimeoutObservation('p160-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-rollback-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const failure of ['', 'preflight', 'restore']) {
@@ -4960,9 +6423,15 @@ test('Native real rollback adapter checks feasibility before restore and never s
     else if (failure === 'restore') assert.deepEqual(calls, ['preflight', 'native-prepare-rollback']);
     else assert.ok(calls.indexOf('native-prepare-rollback') < calls.indexOf('old-pair-start'));
   }
+
+  } catch (error) { videoTimeoutObservation('p160-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p160-exit', 0); }
 });
 
 test('Native actual rollback feasibility preflight is read-only and refuses reader, stale source and image incompatibility', async t => {
+  videoTimeoutObservation('p161-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-preflight-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const mode of ['healthy', 'reader', 'active', 'source', 'image', 'persisted-first-image', 'terminal-native', 'paid-unknown', 'unknown-empty']) {
@@ -4985,9 +6454,15 @@ test('Native actual rollback feasibility preflight is read-only and refuses read
     if (mode === 'source') assert.deepEqual(calls, ['active', 'source']);
     if (mode === 'healthy' || ['persisted-first-image', 'terminal-native', 'paid-unknown', 'unknown-empty'].includes(mode)) assert.deepEqual(calls, ['active', 'source', 'image', 'readers']);
   }
+
+  } catch (error) { videoTimeoutObservation('p161-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p161-exit', 0); }
 });
 
 test('Native journal CLI rejects unknown fields and malformed JSON without echoing their contents', () => {
+  videoTimeoutObservation('p162-begin', 0);
+  try {
+
   const utility = fileURLToPath(new URL('./production-deploy-lock.mjs', import.meta.url));
   const common = ['journal-start', '--journal', '/opt/openscience/.deploy-transaction.json', '--candidate', 'b'.repeat(40), '--rollback', 'a'.repeat(40), '--phase', 'prepared', '--lock-fd', '9'];
   const sentinel = 'private-content-must-not-appear';
@@ -5000,9 +6475,15 @@ test('Native journal CLI rejects unknown fields and malformed JSON without echoi
   const result = spawnSync(process.execPath, [utility, 'native-restore-timer', '--candidate', 'b'.repeat(40), '--rollback', 'a'.repeat(40), '--lock-fd', '9', '--target', '/arbitrary'], { encoding: 'utf8' });
   assert.equal(result.status, 64);
   assert.match(result.stderr, /Native deployment operation failed/u);
+
+  } catch (error) { videoTimeoutObservation('p162-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p162-exit', 0); }
 });
 
 test('Native work-query loader executes complete imports from Worker without root dependency links', async t => {
+  videoTimeoutObservation('p163-begin', 0);
+  try {
+
   const tempBase = await realpath(tmpdir()), root = await mkdtemp(join(tempBase, 'xgs-native-query-loader-'));
   t.after(async () => {
     const target = await realpath(root);
@@ -5069,7 +6550,7 @@ export function readNativeAgentExecution(){throw Error('unexpected task in empty
   assert.equal(existsSync(trace), false, 'failed root imports must invoke no mock clients');
   const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
   assert.ok(declaration);
-  const completeQuery = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  const completeQuery = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 65), runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {}));
   const loaded = spawnSync(process.execPath, ['--input-type=module', '-e', completeQuery, 'none'], { cwd: worker, env, encoding: 'utf8', timeout: 10_000 });
   assert.equal(loaded.status, 0, loaded.stderr);
   assert.deepEqual(JSON.parse(loaded.stdout), { safe: true, nativePending: false, nativeBoundPending: false, dbTime: '2026-10-09T08:00:00.000Z' });
@@ -5077,9 +6558,15 @@ export function readNativeAgentExecution(){throw Error('unexpected task in empty
     'load.database', 'load.domain', 'db.open', 'redis.open', 'db.tasks', 'db.journals',
     'redis.lrange:fixture:queue', 'redis.lrange:fixture:queue:processing', 'db.clock', 'db.close', 'redis.close',
   ].sort());
+
+  } catch (error) { videoTimeoutObservation('p163-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p163-exit', 0); }
 });
 
 test('Native query command selects Worker import origin and its real classifier path', async () => {
+  videoTimeoutObservation('p164-begin', 0);
+  try {
+
   const extract = name => {
     const body = deployLockSource.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`, 'u'))?.[0];
     assert.ok(body); return body;
@@ -5089,7 +6576,7 @@ test('Native query command selects Worker import origin and its real classifier 
   const candidate = 'b'.repeat(40), checkpoint = '2026-10-09T07:00:00.000Z';
   const result = { safe: true, nativePending: false, nativeBoundPending: false, dbTime: '2026-10-09T08:00:00.000Z' };
   let calls = 0;
-  const query = runInNewContext(`${extract('exactObjectKeys')}\n${declaration}\n${extract('queryNativeWork')}; queryNativeWork`, {
+  const query = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 66), runInNewContext(`${extract('exactObjectKeys')}\n${declaration}\n${extract('queryNativeWork')}; queryNativeWork`, {
     process: { env: {} }, invalidNativeState() { throw new Error('held'); },
     async nativeCommand(command, args, options) {
       calls += 1;
@@ -5104,15 +6591,21 @@ test('Native query command selects Worker import origin and its real classifier 
       assert.equal(options.timeout, 120_000);
       return JSON.stringify(result);
     },
-  });
+  }));
   assert.deepEqual(JSON.parse(JSON.stringify(await query(candidate, checkpoint))), result);
   assert.equal(calls, 1);
+
+  } catch (error) { videoTimeoutObservation('p164-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p164-exit', 0); }
 });
 
 test('Native actual work-query code only reads queues and task markers and returns bounded nonsecret status', async () => {
+  videoTimeoutObservation('p165-begin', 0);
+  try {
+
   const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
   assert.ok(declaration);
-  const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  const code = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 67), runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {}));
   const syntax = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: code, encoding: 'utf8' });
   assert.equal(syntax.status, 0, syntax.stderr);
   for (const [kind, queued, bound] of [['sdf.extract', true, false], ['sdf.extract', true, true], ['sdf.extract', false, true], ['presentation.generate', true, true], ['presentation.generate', false, true]]) {
@@ -5134,15 +6627,21 @@ test('Native actual work-query code only reads queues and task markers and retur
     }; },
     createRedisClient() { return { async lrange(key) { calls.push(key); return key.endsWith(':processing') || !queued ? [] : ['t1']; }, async quit() { calls.push('redis-close'); } }; },
   };
-  await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context);
+  await (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 68), runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context));
   assert.deepEqual(JSON.parse(output), { safe: true, nativePending: true, nativeBoundPending: bound, dbTime: '2026-10-09T08:00:00.000Z' });
   assert.equal(calls.at(-2), 'db-close'); assert.equal(calls.at(-1), 'redis-close');
   assert.equal(output.includes('t1'), false);
   assert.equal(output.includes(oldMarker.runtimeId), false);
   }
+
+  } catch (error) { videoTimeoutObservation('p165-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p165-exit', 0); }
 });
 
 test('Native SQL work projection uses actual image readers and keeps malformed bindings closed', async t => {
+  videoTimeoutObservation('p166-begin', 0);
+  try {
+
   const require = createRequire(import.meta.url), ts = require('typescript');
   const load = (file, dependencies = {}, names) => {
     let body = readFileSync(new URL(`../../packages/domain/src/${file}`, import.meta.url), 'utf8');
@@ -5158,9 +6657,9 @@ test('Native SQL work projection uses actual image readers and keeps malformed b
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
     assert.deepEqual(compiled.diagnostics.filter(item => item.category === ts.DiagnosticCategory.Error), []);
     const module = { exports: {} };
-    runInNewContext(compiled.outputText, { module, exports: module.exports, structuredClone,
+    (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 69), runInNewContext(compiled.outputText, { module, exports: module.exports, structuredClone,
       require(name) { assert.ok(Object.hasOwn(dependencies, name), `Unexpected reader dependency ${name}`); return dependencies[name]; },
-    }, { filename: file, timeout: 1_000 });
+    }, { filename: file, timeout: 1_000 }));
     return module.exports;
   };
   const imageReader = load('assets/native-image-review.ts', {
@@ -5171,7 +6670,7 @@ test('Native SQL work projection uses actual image readers and keeps malformed b
   }, ['record', 'hash', 'text', 'exact', 'blocked', 'nativeAgentMaxTurns', 'readNativeAgentExecution']);
   const declaration = deployLockSource.match(/const NATIVE_WORK_QUERY = `[\s\S]*?`;/u)?.[0];
   assert.ok(declaration);
-  const code = runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {});
+  const code = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 70), runInNewContext(`${declaration}; NATIVE_WORK_QUERY`, {}));
   const id = 'image-query-task', dbTime = '2026-10-09T08:00:00.000Z';
   const marker = { kind: 'hermes-agent', profile: 'image-review', runtimeId: 'installed-native-query-fixture',
     skillCatalogueId: 'query-catalogue-fixture', model: 'MiniMax-M3' };
@@ -5220,7 +6719,7 @@ test('Native SQL work projection uses actual image readers and keeps malformed b
         async quit() { calls.push('redis-close'); },
       }; },
     };
-    try { await runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context); }
+    try { await (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 71), runInNewContext(`(async()=>{${code.replace(/^import[^\n]+\n/gmu, '')}})()`, context)); }
     catch (caught) { failure = caught; }
     assert.deepEqual(storedResult, before, 'read-only query must leave stored evidence untouched');
     assert.deepEqual(calls.slice(-2), ['db-close', 'redis-close']);
@@ -5234,11 +6733,17 @@ test('Native SQL work projection uses actual image readers and keeps malformed b
   };
   for (const [label, result] of [['fresh', fresh()], ['prepared', prepared()], ['completed checkpoint', prepared(true)]]) {
     await t.test(`recognizes legitimate ${label} image pending while retaining the Native replacement hold`, async () => {
+  videoTimeoutObservation('p166-n1-begin', 0);
+  try {
+
       const observed = await run(result);
       accepted(observed);
       assert.deepEqual(Object.keys(observed.projected).sort(), ['nativeAgentExecution', 'nativeImageReview']);
       assert.deepEqual(observed.projected.nativeImageReview, result.nativeImageReview);
-    });
+
+  } catch (error) { videoTimeoutObservation('p166-n1-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p166-n1-exit', 0); }
+});
   }
   const invalid = {
     'missing envelope': result => { delete result.nativeImageReview; },
@@ -5259,32 +6764,62 @@ test('Native SQL work projection uses actual image readers and keeps malformed b
   };
   for (const [label, change] of Object.entries(invalid)) {
     await t.test(`rejects ${label} without downgrading to unbound`, async () => {
+  videoTimeoutObservation('p166-n2-begin', 0);
+  try {
+
       const result = prepared(true); change(result);
       const observed = await run(result);
       assert.equal(observed.failure?.name, 'PresentationAssetError');
       assert.equal(observed.failure?.code, 'VALIDATION_ERROR');
       assert.equal(observed.output, '');
       assert.equal(observed.calls.includes('clock'), false);
-    });
+
+  } catch (error) { videoTimeoutObservation('p166-n2-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p166-n2-exit', 0); }
+});
   }
   await t.test('retains the original paper pending classification without an image envelope', async () => {
+  videoTimeoutObservation('p166-n3-begin', 0);
+  try {
+
     const observed = await run({ nativeAgentExecution: { ...marker, profile: 'paper-understanding' } }, 'sdf.extract');
     accepted(observed);
-  });
+
+  } catch (error) { videoTimeoutObservation('p166-n3-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p166-n3-exit', 0); }
+});
   await t.test('retains unbound presentation pending without a Native Agent marker', async () => {
+  videoTimeoutObservation('p166-n4-begin', 0);
+  try {
+
     const observed = await run({ nativeImageReview: { mode: 'model-native', state: 'not_started' } });
     accepted(observed, { safe: true, nativePending: true, nativeBoundPending: false });
     assert.equal(observed.projected, null);
-  });
+
+  } catch (error) { videoTimeoutObservation('p166-n4-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p166-n4-exit', 0); }
+});
   await t.test('keeps queued started or unknown provider work unsafe', async () => {
+  videoTimeoutObservation('p166-n5-begin', 0);
+  try {
+
     const result = prepared(true), cp = result.nativeAgentExecution.checkpoint;
     cp.state = 'started'; delete cp.responseHash; delete cp.finishReason; delete cp.hasToolCalls;
     accepted(await run(result), { safe: false, nativePending: true, nativeBoundPending: true });
     accepted(await run(fresh(), 'presentation.generate', 'provider outcome unknown'), { safe: false, nativePending: true, nativeBoundPending: true });
-  });
+
+  } catch (error) { videoTimeoutObservation('p166-n5-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p166-n5-exit', 0); }
+});
+
+  } catch (error) { videoTimeoutObservation('p166-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p166-exit', 0); }
 });
 
 test('Native actual pause defers candidate-schema reads until migration and install rejects old-bound pending before resource writes', async () => {
+  videoTimeoutObservation('p167-begin', 0);
+  try {
+
   const body = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(body);
   const candidate = 'b'.repeat(40), installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`, skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
@@ -5308,7 +6843,7 @@ test('Native actual pause defers candidate-schema reads until migration and inst
       async rm() {}, randomUUID() { return 'fixture'; },
       async nativeCommand(command) { if (command === '/usr/bin/node') return '{}'; calls.push('installer'); return JSON.stringify(installation); },
     };
-    const operation = runInNewContext(`${body}; nativeOperation`, context), options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
+    const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 72), runInNewContext(`${body}; nativeOperation`, context)), options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
     assert.equal(await operation('native-pause-original', options), 'NATIVE_OPERATION_OK');
     assert.equal(calls.includes('candidate-db-read'), false);
     await assert.rejects(operation('native-install', options), /Native deployment state/u);
@@ -5327,9 +6862,15 @@ test('Native actual pause defers candidate-schema reads until migration and inst
     assert.ok(calls.indexOf('migration-complete') < calls.indexOf('candidate-db-read'));
     assert.equal(JSON.stringify(snapshot), preserved, 'pending rows/outbox and queues remain unchanged');
   }
+
+  } catch (error) { videoTimeoutObservation('p167-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p167-exit', 0); }
 });
 
 test('Native actual installer operation holds interrupted and unpersisted success instead of invoking restore', async () => {
+  videoTimeoutObservation('p168-begin', 0);
+  try {
+
   const body = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(body);
   const candidate = 'b'.repeat(40), installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`, skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
@@ -5359,7 +6900,7 @@ test('Native actual installer operation holds interrupted and unpersisted succes
         return JSON.stringify(mode === 'foreign-receipt' ? { ...installation, releaseSha: 'd'.repeat(40) } : installation);
       },
     };
-    const operation = runInNewContext(`${body}; nativeOperation`, context);
+    const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 73), runInNewContext(`${body}; nativeOperation`, context));
     const options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
     if (mode === 'success') {
       assert.equal(await operation('native-install', options), 'NATIVE_OPERATION_OK');
@@ -5373,9 +6914,15 @@ test('Native actual installer operation holds interrupted and unpersisted succes
     assert.ok(calls.indexOf('install_attempting') < calls.indexOf('installer'));
     assert.ok(calls.includes('snapshot-cleanup'));
   }
+
+  } catch (error) { videoTimeoutObservation('p168-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p168-exit', 0); }
 });
 
 test('Native actual restore operation records intent and holds partial or unverified restoration', async () => {
+  videoTimeoutObservation('p169-begin', 0);
+  try {
+
   const body = deployLockSource.match(/async function nativeOperation\([^)]*\) \{[\s\S]*?\n\}/u)?.[0];
   assert.ok(body);
   const candidate = 'b'.repeat(40), installation = { releaseSha: candidate, runtimeId: `installed-native-continuation-${candidate}`, skillCatalogueId: `project-catalogue-${candidate}`, timerDeferred: true };
@@ -5407,7 +6954,7 @@ test('Native actual restore operation records intent and holds partial or unveri
         if (mode === 'binding-failed') throw new Error('held');
       },
     };
-    const operation = runInNewContext(`${body}; nativeOperation`, context), options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
+    const operation = (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 74), runInNewContext(`${body}; nativeOperation`, context)), options = { candidateSha: candidate, rollbackSha: 'a'.repeat(40) };
     if (mode === 'success') {
       assert.equal(await operation('native-prepare-rollback', options), 'NATIVE_OPERATION_OK');
       assert.equal(journal.nativeRefresh.restoreState, 'restored_verified');
@@ -5421,9 +6968,15 @@ test('Native actual restore operation records intent and holds partial or unveri
     assert.ok(calls.indexOf('restore_attempting') < calls.indexOf('restore'));
     assert.equal(calls.filter(call => call === 'restore').length, 1);
   }
+
+  } catch (error) { videoTimeoutObservation('p169-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p169-exit', 0); }
 });
 
 test('Native quiesce persists switching before stopping producers and prepared uncertainty retains its journal', async t => {
+  videoTimeoutObservation('p170-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-native-phase-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const trace = join(root, 'trace').replaceAll('\\', '/');
@@ -5443,9 +6996,15 @@ test('Native quiesce persists switching before stopping producers and prepared u
   assert.equal(result.status, 70);
   assert.match(result.stderr, /ROLLBACK_FAILED_NATIVE_UNCERTAIN/u);
   assert.equal((await readFile(trace, 'utf8')).includes('cleared'), false);
+
+  } catch (error) { videoTimeoutObservation('p170-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p170-exit', 0); }
 });
 
 test('Native real journal preserves metadata on phase updates and refuses clearing interrupted installation under FD9', async t => {
+  videoTimeoutObservation('p171-begin', 0);
+  try {
+
   if (process.platform === 'win32' || spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
     t.skip('Linux CI executes the real Native inherited-FD atomic-journal behavior'); return;
   }
@@ -5480,6 +7039,9 @@ process.stdout.write('NATIVE_JOURNAL_PRESERVED\\n');
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), 'NATIVE_JOURNAL_PRESERVED');
   assert.deepEqual(JSON.parse(await readFile(journalPath, 'utf8')).nativeRefresh.before, fixture.before);
+
+  } catch (error) { videoTimeoutObservation('p171-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p171-exit', 0); }
 });
 
 function deploymentFunction(name) {
@@ -5489,6 +7051,9 @@ function deploymentFunction(name) {
 }
 
 test('production commit publishes durable rollback identity before exact retention', () => {
+  videoTimeoutObservation('p172-begin', 0);
+  try {
+
   const preflight = transactionSource.indexOf('production-release-retention.mjs" preflight');
   const sameSha = transactionSource.indexOf('if [ "$ACTIVE_RELEASE_SHA" = "$RELEASE_SHA" ]');
   const backupRefresh = transactionSource.indexOf('backup.sh.next');
@@ -5501,9 +7066,15 @@ test('production commit publishes durable rollback identity before exact retenti
   assert.ok(complete > commit && complete < unlock, 'post-commit retention must finish under inherited FD9');
   assert.match(transactionStateSource, /transaction_abort_rollback_intent[\s\S]*transaction_journal_clear/u);
   assert.doesNotMatch(retentionSource, /docker\s+(?:system|image|volume|builder)\s+prune/u);
+
+  } catch (error) { videoTimeoutObservation('p172-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p172-exit', 0); }
 });
 
 test('normal publication prunes inactive releases only after acceptance and keeps committed cleanup failure visible', async t => {
+  videoTimeoutObservation('p173-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-retention-publication-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const begin = transactionSource.indexOf('node "$SCRIPT_DIR/production-release-retention.mjs" prepare');
@@ -5544,6 +7115,9 @@ test('normal publication prunes inactive releases only after acceptance and keep
       assert.match(result.stderr, /DEPLOY_COMMITTED_RETENTION_PENDING/u);
     }
   }
+
+  } catch (error) { videoTimeoutObservation('p173-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p173-exit', 0); }
 });
 const workerDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile', import.meta.url), 'utf8');
 const parserDockerfile = readFileSync(new URL('../../apps/agent-worker/Dockerfile.parser', import.meta.url), 'utf8');
@@ -5560,6 +7134,9 @@ function webReadinessCode() {
 }
 
 test('public status acceptance reports the observed status and transport outcome while still denying failure', () => {
+  videoTimeoutObservation('p174-begin', 0);
+  try {
+
   const run = (status, curlExit) => spawnSync(bash, ['-c', [
     `curl() { printf '%s' '${status}'; return ${curlExit}; }; export -f curl`,
     deploymentFunction('run_remote'), deploymentFunction('expect_http_status'),
@@ -5570,9 +7147,15 @@ test('public status acceptance reports the observed status and transport outcome
   assert.match(mismatch.stderr, /url=https:\/\/public\.invalid\/ observed=502 expected=200 curl_exit=0/u);
   const unavailable = run('000', 28); assert.notEqual(unavailable.status, 0);
   assert.match(unavailable.stderr, /observed=000 expected=200 curl_exit=28/u);
+
+  } catch (error) { videoTimeoutObservation('p174-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p174-exit', 0); }
 });
 
 test('exact public release acceptance reports only an observed SHA or length, never the response body', () => {
+  videoTimeoutObservation('p175-begin', 0);
+  try {
+
   const expected = 'a'.repeat(40);
   const run = body => spawnSync(bash, ['-c', [
     `curl() { printf '%s' '${body}'; }; export -f curl`,
@@ -5585,12 +7168,15 @@ test('exact public release acceptance reports only an observed SHA or length, ne
   const unexpected = run('UNEXPECTED_RESPONSE_CONTENT'); assert.notEqual(unexpected.status, 0);
   assert.match(unexpected.stderr, /observed=not-sha/u);
   assert.doesNotMatch(unexpected.stderr, /UNEXPECTED_RESPONSE_CONTENT/u);
+
+  } catch (error) { videoTimeoutObservation('p175-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p175-exit', 0); }
 });
 
 async function runWebReadiness(origin, options = {}) {
   const calls = [];
   const outcome = new Promise(resolve => {
-    runInNewContext(webReadinessCode(), {
+    (videoTimeoutCount('vmCreated'), videoTimeoutObservation('vm-create', 75), runInNewContext(webReadinessCode(), {
       fetch: (url, init) => {
         const requested = new URL(url);
         assert.equal(requested.origin, 'http://127.0.0.1:3000');
@@ -5600,12 +7186,15 @@ async function runWebReadiness(origin, options = {}) {
       },
       AbortSignal: options.signal ?? AbortSignal,
       process: { exit: resolve },
-    });
+    }));
   });
   return { exit: await outcome, calls };
 }
 
 test('Web readiness rejects an HTTP server that is running but not ready, then accepts its actual homepage', async t => {
+  videoTimeoutObservation('p176-begin', 0);
+  try {
+
   let status = 503;
   const server = createServer((_request, response) => { response.writeHead(status); response.end(); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
@@ -5614,9 +7203,15 @@ test('Web readiness rejects an HTTP server that is running but not ready, then a
   assert.equal((await runWebReadiness(origin)).exit, 1);
   status = 200;
   assert.equal((await runWebReadiness(origin)).exit, 0);
+
+  } catch (error) { videoTimeoutObservation('p176-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p176-exit', 0); }
 });
 
 test('Web readiness does not hide a redirect behind a successful destination', async t => {
+  videoTimeoutObservation('p177-begin', 0);
+  try {
+
   const routes = [];
   const server = createServer((request, response) => {
     routes.push(request.url);
@@ -5626,9 +7221,15 @@ test('Web readiness does not hide a redirect behind a successful destination', a
   t.after(() => { server.closeAllConnections(); server.close(); });
   assert.equal((await runWebReadiness(`http://127.0.0.1:${server.address().port}`)).exit, 1);
   assert.deepEqual(routes, ['/']);
+
+  } catch (error) { videoTimeoutObservation('p177-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p177-exit', 0); }
 });
 
 test('Web readiness bounds an unresponsive HTTP request and denies connection failure', async t => {
+  videoTimeoutObservation('p178-begin', 0);
+  try {
+
   const server = createServer(() => {}); server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;
   t.after(() => { server.closeAllConnections(); server.close(); });
@@ -5639,6 +7240,9 @@ test('Web readiness bounds an unresponsive HTTP request and denies connection fa
   assert.equal(result.exit, 1);
   server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
   assert.equal((await runWebReadiness(origin)).exit, 1);
+
+  } catch (error) { videoTimeoutObservation('p178-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p178-exit', 0); }
 });
 const cloudSync = readFileSync(new URL('../../scripts/cloud-sync.mjs', import.meta.url), 'utf8');
 const releaseSyncCommand = readFileSync(new URL('../../scripts/release-sync-command.mjs', import.meta.url), 'utf8');
@@ -5664,6 +7268,9 @@ function composeService(name, nextName, compose = productionCompose) {
 }
 
 test('ScanSci controlled egress is private to the fixed retrieval subnet', () => {
+  videoTimeoutObservation('p179-begin', 0);
+  try {
+
   assert.match(squidConfig, /^http_port 127\.0\.0\.1:7891 name=loopback_listener$/mu);
   assert.match(squidConfig, /^http_port 172\.24\.0\.1:7891 name=scansci_listener$/mu);
   assert.match(squidConfig, /^acl scansci_retrieval src 172\.24\.0\.0\/24$/mu);
@@ -5687,9 +7294,15 @@ test('ScanSci controlled egress is private to the fixed retrieval subnet', () =>
   assert.doesNotMatch(squidConfig, /172\.26\.0\.|scansci_browser|browser_listener/u);
   assert.doesNotMatch(`${productionCompose}\n${developmentCompose}`, /browser_net|auth_net|scansci-(?:auth|legal|browser|secret-init)/u);
   assert.ok(squidConfig.indexOf('http_access allow scansci_retrieval scansci_listener CONNECT SSL_ports') < squidConfig.indexOf('http_access deny all'));
+
+  } catch (error) { videoTimeoutObservation('p179-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p179-exit', 0); }
 });
 
 test('candidate capability stays absent through prepublication and is exact-cleaned on either publish failure boundary', async (t) => {
+  videoTimeoutObservation('p180-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-candidate-capability-'));
   t.after(async () => rm(root, { recursive: true, force: true }));
   const oldSha = 'a'.repeat(40);
@@ -5741,9 +7354,15 @@ test('candidate capability stays absent through prepublication and is exact-clea
     assert.equal(existsSync(failed.capability), false, `${mode} left a candidate capability sidecar`);
     assert.equal(existsSync(`${failed.capability}.next`), false, `${mode} left a candidate capability staging file`);
   }
+
+  } catch (error) { videoTimeoutObservation('p180-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p180-exit', 0); }
 });
 
 test('ordinary rollback preserves paid video plans created after candidate exposure before commit', async t => {
+  videoTimeoutObservation('p181-begin', 0);
+  try {
+
   const base = fileURLToPath(new URL('../../tmp/synclip-optional-narration/r1/', import.meta.url));
   await mkdir(base, { recursive: true });
   const root = await mkdtemp(join(base, 'rollback-window-'));
@@ -5791,9 +7410,15 @@ test('ordinary rollback preserves paid video plans created after candidate expos
   }
   // Reader/admission behavior is covered by the actual ad99/a0f2 cross-version driver and Worker fixtures.
   // This exercises the real ordinary error/rollback state machine, with no Docker, DB, provider or model call.
+
+  } catch (error) { videoTimeoutObservation('p181-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p181-exit', 0); }
 });
 
 test('protected rollback sidecar survives candidate rejection and cleanup byte-for-byte', async (t) => {
+  videoTimeoutObservation('p182-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-protected-capability-'));
   t.after(async () => rm(root, { recursive: true, force: true }));
   const activeSha = 'a'.repeat(40);
@@ -5825,9 +7450,15 @@ test('protected rollback sidecar survives candidate rejection and cleanup byte-f
   assert.equal(await readFile(activeMarker, 'utf8'), `${activeSha}\n`);
   assert.equal(await readFile(rollbackMarker, 'utf8'), `${protectedSha}\n`);
   assert.equal(await readFile(protectedSidecar, 'utf8'), 'schema=3\nprotected=rollback\n');
+
+  } catch (error) { videoTimeoutObservation('p182-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p182-exit', 0); }
 });
 
 test('failed candidate CAS cleans only the sidecar created by the real publish path', async (t) => {
+  videoTimeoutObservation('p183-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-owned-capability-'));
   t.after(async () => rm(root, { recursive: true, force: true }));
   const activeSha = 'a'.repeat(40);
@@ -5867,12 +7498,21 @@ test('failed candidate CAS cleans only the sidecar created by the real publish p
   ].join('\n');
   const result = spawnSync(bash, ['-c', shell], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
+
+  } catch (error) { videoTimeoutObservation('p183-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p183-exit', 0); }
 });
 
 test('SSH runner does not misclassify a remote permission error as key authentication failure', () => {
+  videoTimeoutObservation('p184-begin', 0);
+  try {
+
   assert.match(sshRun, /\[ \$rc -eq 255 \]/u);
   assert.match(sshRun, /permission denied \\?\([^)]*(?:publickey|password|keyboard-interactive)[^)]*\\?\)/iu);
   assert.doesNotMatch(sshRun, /permission denied\|host key verification/iu);
+
+  } catch (error) { videoTimeoutObservation('p184-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p184-exit', 0); }
 });
 
 function observeSignalFixture(child) {
@@ -5921,6 +7561,9 @@ function observeSignalFixture(child) {
 }
 
 test('Tesseract is packaged only in the isolated document parser image', () => {
+  videoTimeoutObservation('p185-begin', 0);
+  try {
+
   assert.doesNotMatch(workerDockerfile, /tesseract(?:-ocr)?/i);
   assert.match(parserDockerfile, /tesseract-ocr/);
   assert.match(parserDockerfile, /USER node/);
@@ -5928,9 +7571,15 @@ test('Tesseract is packaged only in the isolated document parser image', () => {
   assert.match(parserDockerfile, /LABEL org\.openscience\.source=\$XGS_RELEASE_IMAGE_TAG/);
   const releaseImages = `${composeService('agent-worker', 'scansci-mcp')}\n${composeService('document-parser', 'embedding-model-init')}`;
   assert.equal(releaseImages.match(/XGS_RELEASE_IMAGE_TAG: \$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/g)?.length, 2);
+
+  } catch (error) { videoTimeoutObservation('p185-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p185-exit', 0); }
 });
 
 test('production search runtime is isolated, bounded and source locked', () => {
+  videoTimeoutObservation('p186-begin', 0);
+  try {
+
   const api = productionCompose.split('\n  api:')[1]?.split('\n  malware-scanner:')[0] ?? '';
   const agentWorker = productionCompose.split('\n  agent-worker:')[1]?.split('\n  document-parser:')[0] ?? '';
   const embeddingInit = productionCompose.split('\n  embedding-model-init:')[1]?.split('\n  embedding-worker:')[0] ?? '';
@@ -5968,9 +7617,15 @@ test('production search runtime is isolated, bounded and source locked', () => {
   );
   assert.match(transactionSource, /node scripts\/verify-embedding-runtime\.mjs/u);
   assert.match(transactionSource, /model-init\.py --validate --seed \/opt\/bge-m3-seed --target \/models\/bge-m3/u);
+
+  } catch (error) { videoTimeoutObservation('p186-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p186-exit', 0); }
 });
 
 test('embedding Python supply chain is complete, immutable and hash enforced', () => {
+  videoTimeoutObservation('p187-begin', 0);
+  try {
+
   const requirementLines = embeddingRequirements
     .split(/\r?\n/)
     .filter((line) => line !== '' && !line.startsWith('#') && !line.startsWith('--'));
@@ -5984,9 +7639,15 @@ test('embedding Python supply chain is complete, immutable and hash enforced', (
   assert.match(embeddingEvaluatorDockerfile, /ARG RUNTIME_IMAGE/);
   assert.match(embeddingEvaluatorDockerfile, /FROM \$\{RUNTIME_IMAGE\}/);
   assert.match(readFileSync(new URL('./evaluate-embedding-models.sh', import.meta.url), 'utf8'), /apps\/embedding-worker\/Dockerfile/);
+
+  } catch (error) { videoTimeoutObservation('p187-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p187-exit', 0); }
 });
 
 test('database backup atomically publishes a private, single-flight dual-database set', () => {
+  videoTimeoutObservation('p188-begin', 0);
+  try {
+
   assert.match(backup, /umask 077/);
   assert.match(backup, /flock -n/);
   assert.match(backup, /install -d -m 0700/);
@@ -6023,9 +7684,15 @@ test('database backup atomically publishes a private, single-flight dual-databas
   assert.match(backupRunbook, /createdb --username="\$DB_ADMIN_ROLE" --/);
   assert.match(backupRunbook, /--dbname="\$CORE_RESTORE"/);
   assert.match(backupRunbook, /--dbname="\$SEARCH_RESTORE"/);
+
+  } catch (error) { videoTimeoutObservation('p188-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p188-exit', 0); }
 });
 
 test('database backup retention inventory fails closed when its producer fails', () => {
+  videoTimeoutObservation('p189-begin', 0);
+  try {
+
   const inventoryFunction = backup.match(/count_retained_db_sets\(\) \{[\s\S]*?^\}/m)?.[0];
   assert.ok(inventoryFunction, 'backup must expose the exact retention inventory function under test');
   const result = spawnSync(bash, ['-c', `
@@ -6043,9 +7710,15 @@ fi
   assert.equal(result.status, 42, result.stderr);
   assert.doesNotMatch(result.stdout, /BACKUP_OK/);
   assert.match(result.stderr, /BACKUP_FAIL/);
+
+  } catch (error) { videoTimeoutObservation('p189-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p189-exit', 0); }
 });
 
 test('embedding capability is strict, release-versioned and rollback-safe', () => {
+  videoTimeoutObservation('p190-begin', 0);
+  try {
+
   assert.match(source, /count=\\\$\(grep -c '\^\$\{key\}='/);
   assert.match(source, /read_prod_value BGE_M3_DEPLOY/);
   assert.match(source, /case "\$BGE_M3_DEPLOY_VALUE" in[\s\S]*true\)[\s\S]*false\)[\s\S]*\*\)/);
@@ -6086,9 +7759,15 @@ test('embedding capability is strict, release-versioned and rollback-safe', () =
       < source.indexOf('same-SHA disabled：收敛残留 embedding-worker'),
     'same-SHA cleanup must only happen after public identity verification',
   );
+
+  } catch (error) { videoTimeoutObservation('p190-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p190-exit', 0); }
 });
 
 test('production compose up receives the same env file used by migrate and validation', () => {
+  videoTimeoutObservation('p191-begin', 0);
+  try {
+
   assert.match(
     source,
     /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA docker compose --project-directory \$RELEASE_ROOT --env-file \$PROD_ENV -f \$COMPOSE_FILE \$1/,
@@ -6107,9 +7786,15 @@ test('production compose up receives the same env file used by migrate and valid
     source.indexOf('verify-database-isolation.mjs') < source.indexOf('migrate-cli.js deploy'),
     'database identity must be checked before the first migration',
   );
+
+  } catch (error) { videoTimeoutObservation('p191-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p191-exit', 0); }
 });
 
 test('parser starts first and must become healthy before the worker is converged', () => {
+  videoTimeoutObservation('p192-begin', 0);
+  try {
+
   assert.match(source, /compose_current "build agent-worker document-parser"/);
   assert.match(
     source,
@@ -6118,30 +7803,54 @@ test('parser starts first and must become healthy before the worker is converged
   assert.doesNotMatch(source, /restart api web agent-worker document-parser/);
   assert.match(source, /up -d --force-recreate --wait --wait-timeout 300 api web agent-worker/);
   assert.doesNotMatch(source, /wait_for_healthy\s*\n/);
+
+  } catch (error) { videoTimeoutObservation('p192-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p192-exit', 0); }
 });
 
 test('deployment fails unless application health and public status checks pass', () => {
+  videoTimeoutObservation('p193-begin', 0);
+  try {
+
   assert.match(source, /wait_for_healthy api web agent-worker/);
   assert.match(source, /verify-embedding-runtime\.mjs/);
   assert.match(source, /expect_http_status .*auth\/me 401/);
   assert.doesNotMatch(source, /curl[^\n]+\|\| true/);
+
+  } catch (error) { videoTimeoutObservation('p193-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p193-exit', 0); }
 });
 
 test('clean release uses the frozen lockfile and generates Prisma before compiling any workspace package', () => {
+  videoTimeoutObservation('p194-begin', 0);
+  try {
+
   const candidateBuild = 'cd $RELEASE_ROOT && with-proxy npx pnpm@9.15.0 install --ignore-scripts --frozen-lockfile && with-proxy npx pnpm@9.15.0 --filter @openscience/database generate && with-proxy npx pnpm@9.15.0 build';
   assert.ok(source.includes(candidateBuild));
   assert.doesNotMatch(source, /首次版本化发布|first-transition-adapter/);
+
+  } catch (error) { videoTimeoutObservation('p194-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p194-exit', 0); }
 });
 
 test('deployment publishes and verifies the exact immutable release identity', () => {
+  videoTimeoutObservation('p195-begin', 0);
+  try {
+
   assert.match(source, /verify-release-source\.mjs" --root "\$PROJECT_ROOT" --ref "\$RELEASE_REF"/);
   assert.match(source, /cas-active --marker '\$REMOTE_ROOT\/\.release-id' --expected '\$ROLLBACK_SHA' --next '\$RELEASE_SHA' --lock-fd 9/);
   assert.match(source, /expect_http_body .*\/__release "\$RELEASE_SHA"/);
   assert.match(launcherSource, /ANCESTRY_ARGS=\(--ancestor "\$ROLLBACK_SHA"\)/);
   assert.ok(launcherSource.indexOf('"${ANCESTRY_ARGS[@]}"') < launcherSource.indexOf('scripts/cloud-sync.mjs'));
+
+  } catch (error) { videoTimeoutObservation('p195-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p195-exit', 0); }
 });
 
 test('release source guard accepts forward history and rejects missing, backward or sibling releases', async t => {
+  videoTimeoutObservation('p196-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-release-ancestry-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const guard = fileURLToPath(new URL('../../scripts/verify-release-source.mjs', import.meta.url));
@@ -6167,9 +7876,15 @@ test('release source guard accepts forward history and rejects missing, backward
   assert.match(missing.stderr, /fetch its history/);
   git('merge', '--no-ff', active, '-m', 'integrate active');
   assert.equal(check(active).status, 0, 'integrating both branches restores forward deployment');
+
+  } catch (error) { videoTimeoutObservation('p196-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p196-exit', 0); }
 });
 
 test('release source guard rejects dirty trees and refs other than HEAD', async () => {
+  videoTimeoutObservation('p197-begin', 0);
+  try {
+
   const root = await mkdtemp(join(tmpdir(), 'xgs-release-guard-'));
   const guard = fileURLToPath(new URL('../../scripts/verify-release-source.mjs', import.meta.url));
   try {
@@ -6191,9 +7906,15 @@ test('release source guard rejects dirty trees and refs other than HEAD', async 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p197-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p197-exit', 0); }
 });
 
 test('cloud sync materializes the complete commit in an immutable release directory', () => {
+  videoTimeoutObservation('p198-begin', 0);
+  try {
+
   assert.match(
     cloudSync,
     /\['-c', 'core\.autocrlf=false', 'archive', '--format=tar\.gz', releaseSha\]/,
@@ -6209,9 +7930,15 @@ test('cloud sync materializes the complete commit in an immutable release direct
   assert.match(productionCompose, /context: \$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}/);
   assert.match(productionCompose, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience/);
   assert.match(productionCompose, /\$\{XGS_RELEASE_ROOT:\?XGS_RELEASE_ROOT required\}:\/opt\/openscience:ro/);
+
+  } catch (error) { videoTimeoutObservation('p198-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p198-exit', 0); }
 });
 
 test('release materialization is write-once and cleans only a failed stage', async () => {
+  videoTimeoutObservation('p199-begin', 0);
+  try {
+
   const { buildReleaseMaterializeCommand } = await import('../../scripts/release-sync-command.mjs');
   const releaseRoot = `/opt/openscience-releases/${'a'.repeat(40)}`;
   const command = buildReleaseMaterializeCommand(releaseRoot, 'a'.repeat(40));
@@ -6224,9 +7951,15 @@ test('release materialization is write-once and cleans only a failed stage', asy
   const parsed = spawnSync(bash, ['-n', '-c', command], { encoding: 'utf8' });
   assert.equal(parsed.status, 0, parsed.stderr);
   assert.throws(() => buildReleaseMaterializeCommand('/tmp/not-production', 'a'.repeat(40)));
+
+  } catch (error) { videoTimeoutObservation('p199-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p199-exit', 0); }
 });
 
 test('deployment keeps an application rollback trap until public health succeeds', () => {
+  videoTimeoutObservation('p200-begin', 0);
+  try {
+
   assert.match(source, /--rollback-ref/);
   assert.match(source, /ROLLBACK_SHA=/);
   assert.match(source, /ACTIVE_RELEASE_SHA=.*\.release-id/);
@@ -6253,9 +7986,15 @@ test('deployment keeps an application rollback trap until public health succeeds
   assert.match(source, /! -e "\$REMOTE_ROOT\/\.release-failed"/);
   assert.match(source, /云上缺少 active release identity，拒绝猜测 rollback/);
   assert.doesNotMatch(source, /systemctl reload nginx" \|\| exit 1/);
+
+  } catch (error) { videoTimeoutObservation('p200-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p200-exit', 0); }
 });
 
 test('confirmed deployment materializes only an immutable candidate before the lock-in active check', () => {
+  videoTimeoutObservation('p201-begin', 0);
+  try {
+
   assert.match(source, /--require-parser-acceptance/);
   assert.match(source, /REQUIRE_PARSER_ACCEPTANCE=1/);
   assert.match(source, /--confirm[^\n]+--require-parser-acceptance|--require-parser-acceptance[^\n]+--confirm/);
@@ -6273,9 +8012,15 @@ test('confirmed deployment materializes only an immutable candidate before the l
     /\$SCRIPT_DIR\/release-input-manifest\.mjs/,
     'the source verifier lives under the immutable release root scripts directory',
   );
+
+  } catch (error) { videoTimeoutObservation('p201-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p201-exit', 0); }
 });
 
 test('one foreground SSH runs the complete transaction under its own inherited FD9', () => {
+  videoTimeoutObservation('p202-begin', 0);
+  try {
+
   const runRemote = transactionSource.match(/run_remote\(\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
   assert.equal((launcherSource.match(/^"\$SSH_EXECUTABLE" /gm) ?? []).length, 1);
   assert.match(launcherSource, /System32\/OpenSSH\/ssh\.exe/u);
@@ -6298,6 +8043,9 @@ test('one foreground SSH runs the complete transaction under its own inherited F
   assert.ok(manifestVerify >= 0 && stateSource > manifestVerify, 'state module loads only after locked source verification');
   assert.match(transactionSource, /cas-active[^\n]+--lock-fd 9/);
   assert.match(transactionSource, /journal-start[\s\S]*journal-update[\s\S]*journal-clear/);
+
+  } catch (error) { videoTimeoutObservation('p202-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p202-exit', 0); }
 });
 
 function transactionLockHarness(lockDirectory, requiredUid, body) {
@@ -6377,6 +8125,9 @@ function transactionStateHarness(root, requiredUid, phase, event) {
 }
 
 test('production transaction lock is nonblocking and remains held throughout its payload', async (t) => {
+  videoTimeoutObservation('p203-begin', 0);
+  try {
+
   if (spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
     t.skip('flock is unavailable in the local Git Bash; Linux CI executes this behavior gate');
     return;
@@ -6411,9 +8162,15 @@ test('production transaction lock is nonblocking and remains held throughout its
   } finally {
     await rm(sandbox, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p203-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p203-exit', 0); }
 });
 
 test('production transaction lock rejects pre-positioned directory and lock symlinks without truncating targets', async (t) => {
+  videoTimeoutObservation('p204-begin', 0);
+  try {
+
   if (process.platform === 'win32') {
     t.skip('Linux ownership and no-follow semantics are enforced by this gate');
     return;
@@ -6442,9 +8199,15 @@ test('production transaction lock rejects pre-positioned directory and lock syml
   } finally {
     await rm(sandbox, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p204-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p204-exit', 0); }
 });
 
 test('terminating the transaction connection process group stops its in-lock payload', async (t) => {
+  videoTimeoutObservation('p205-begin', 0);
+  try {
+
   if (spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
     t.skip('flock is unavailable in the local Git Bash; Linux CI executes this behavior gate');
     return;
@@ -6474,9 +8237,15 @@ test('terminating the transaction connection process group stops its in-lock pay
     try { process.kill(-child.pid, 'SIGKILL'); } catch {}
     await rm(sandbox, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p205-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p205-exit', 0); }
 });
 
 test('durable journal and active CAS stay on inherited FD9 across crash and TERM recovery', async (t) => {
+  videoTimeoutObservation('p206-begin', 0);
+  try {
+
   if (process.platform === 'win32'
     || spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
     t.skip('Linux CI executes the real inherited-FD, signal and durable-journal gate');
@@ -6594,9 +8363,15 @@ try {
     if (errors.length) throw new AggregateError(primaryError ? [primaryError, ...errors] : errors, 'signal fixture cleanup failed; sandbox retained');
     await rm(sandbox, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p206-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p206-exit', 0); }
 });
 
 test('shared production state machine traps every durable phase and commits without stdin or signal ambiguity', async (t) => {
+  videoTimeoutObservation('p207-begin', 0);
+  try {
+
   if (process.platform === 'win32'
     || spawnSync(bash, ['-c', 'command -v flock >/dev/null 2>&1']).status !== 0) {
     t.skip('Ubuntu CI executes the production state module with isolated test adapters');
@@ -6757,9 +8532,15 @@ test('shared production state machine traps every durable phase and commits with
   } finally {
     for (const root of fixtures) await rm(root, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p207-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p207-exit', 0); }
 });
 
 test('active release mutator rejects every call without the inherited production FD9', async () => {
+  videoTimeoutObservation('p208-begin', 0);
+  try {
+
   const { compareAndSwapActiveRelease } = await import('./production-deploy-lock.mjs');
   const sandbox = await mkdtemp(join(tmpdir(), 'xgs-active-cas-'));
   const markerPath = join(sandbox, '.release-id');
@@ -6778,9 +8559,15 @@ test('active release mutator rejects every call without the inherited production
   } finally {
     await rm(sandbox, { recursive: true, force: true });
   }
+
+  } catch (error) { videoTimeoutObservation('p208-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p208-exit', 0); }
 });
 
 test('confirmed deployment acquires the remote flock before reading active state and retains it through publication', () => {
+  videoTimeoutObservation('p209-begin', 0);
+  try {
+
   const execution = transactionSource.indexOf('=== 执行单一 SSH/flock');
   const acquire = transactionSource.indexOf('acquire_production_deploy_lock', execution);
   const activeRead = transactionSource.indexOf('ACTIVE_RELEASE_SHA=', acquire);
@@ -6795,9 +8582,15 @@ test('confirmed deployment acquires the remote flock before reading active state
   assert.match(transactionStateSource, /trap 'transaction_rollback_application 143' TERM/);
   assert.match(transactionStateSource, /trap 'transaction_on_exit' EXIT/);
   assert.match(transactionStateSource, /trap - ERR EXIT HUP INT TERM/);
+
+  } catch (error) { videoTimeoutObservation('p209-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p209-exit', 0); }
 });
 
 test('production Compose operations pin the immutable release as project directory', () => {
+  videoTimeoutObservation('p210-begin', 0);
+  try {
+
   const transactionComposeCalls = transactionSource.match(/docker compose[^\n]*/gu) ?? [];
   assert.ok(transactionComposeCalls.length > 0, 'production transaction must contain Compose operations');
   for (const call of transactionComposeCalls) {
@@ -6811,9 +8604,15 @@ test('production Compose operations pin the immutable release as project directo
     transactionStateSource,
     /docker compose --project-directory '\$RELEASE_ROOT' --profile embedding/u,
   );
+
+  } catch (error) { videoTimeoutObservation('p210-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p210-exit', 0); }
 });
 
 test('official-only rollback verifies the legacy schema-5 MCP with the candidate verifier', () => {
+  videoTimeoutObservation('p211-begin', 0);
+  try {
+
   assert.match(
     source,
     /\/usr\/bin\/node '\$RELEASE_ROOT\/infra\/scripts\/verify-scansci-mcp-runtime\.mjs' --release-root '\$PREVIOUS_RELEASE_ROOT'/u,
@@ -6823,9 +8622,15 @@ test('official-only rollback verifies the legacy schema-5 MCP with the candidate
     /\/usr\/bin\/node '\$PREVIOUS_RELEASE_ROOT\/infra\/scripts\/verify-scansci-mcp-runtime\.mjs'/u,
   );
   assert.ok(source.includes('test -z \\"\\$containers\\"'));
+
+  } catch (error) { videoTimeoutObservation('p211-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p211-exit', 0); }
 });
 
 test('final parser acceptance report and exact image IDs are verified after build and before switch', () => {
+  videoTimeoutObservation('p212-begin', 0);
+  try {
+
   const imageBuild = source.indexOf('compose_current "build agent-worker document-parser"');
   const workerImage = source.indexOf('openscience-agent-worker:$RELEASE_SHA', imageBuild);
   const parserImage = source.indexOf('openscience-document-parser:$RELEASE_SHA', imageBuild);
@@ -6836,9 +8641,15 @@ test('final parser acceptance report and exact image IDs are verified after buil
   assert.ok(workerImage > imageBuild && parserImage > imageBuild, 'final exact image IDs must be inspected after build');
   assert.ok(report > imageBuild && verifier > report, 'fixed acceptance report must be passed to the formal verifier');
   assert.ok(verifier < switchBoundary, 'acceptance mismatch must block before SWITCH_STARTED');
+
+  } catch (error) { videoTimeoutObservation('p212-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p212-exit', 0); }
 });
 
 test('production rebuild restores the accepted runtime permissions before image and report verification', () => {
+  videoTimeoutObservation('p213-begin', 0);
+  try {
+
   const workspaceBuild = transactionSource.indexOf('npx pnpm@9.15.0 build');
   const normalize = transactionSource.indexOf(
     'runtime-normalize --root "$RELEASE_ROOT" --sha "$RELEASE_SHA"',
@@ -6850,9 +8661,15 @@ test('production rebuild restores the accepted runtime permissions before image 
   assert.ok(normalize > workspaceBuild, 'fresh build outputs must be permission-normalized');
   assert.ok(imageBuild > normalize, 'images must use the normalized runtime closure');
   assert.ok(verifier > imageBuild, 'formal acceptance verification must follow normalization and image build');
+
+  } catch (error) { videoTimeoutObservation('p213-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p213-exit', 0); }
 });
 
 test('deployment revalidates active source, report and mutable image tags after migrations and checks started container image IDs', () => {
+  videoTimeoutObservation('p214-begin', 0);
+  try {
+
   const migration = transactionSource.indexOf('seed-quota.mjs --confirm');
   const preSwitch = transactionSource.indexOf('verify_candidate_switch_contract pre-switch', migration);
   const switchBoundary = transactionSource.indexOf('transaction_mark_phase switching', preSwitch);
@@ -6866,9 +8683,15 @@ test('deployment revalidates active source, report and mutable image tags after 
   assert.ok(workerUp > parserImage && workerImage > workerUp && publication > workerImage);
   assert.match(source, /current_active[\s\S]*ROLLBACK_SHA/);
   assert.match(source, /FINAL_WORKER_IMAGE_ID[\s\S]*FINAL_PARSER_IMAGE_ID/);
+
+  } catch (error) { videoTimeoutObservation('p214-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p214-exit', 0); }
 });
 
 test('switch identity validator rejects active drift, post-acceptance retags and wrong running images', async () => {
+  videoTimeoutObservation('p215-begin', 0);
+  try {
+
   const { validateProductionSwitchState } = await import('./production-deploy-lock.mjs');
   const activeSha = 'a'.repeat(40);
   const acceptedWorkerImageId = `sha256:${'b'.repeat(64)}`;
@@ -6893,9 +8716,15 @@ test('switch identity validator rejects active drift, post-acceptance retags and
   assert.throws(() => validateProductionSwitchState({
     ...valid, runningParserImageId: `sha256:${'f'.repeat(64)}`,
   }), /container image differs/i);
+
+  } catch (error) { videoTimeoutObservation('p215-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p215-exit', 0); }
 });
 
 test('root unit-test command includes the release-contract gate exactly once', () => {
+  videoTimeoutObservation('p216-begin', 0);
+  try {
+
   const focused = [
     'scripts/release-input-manifest.test.mjs',
     'infra/scripts/accept-document-parser-release.test.mjs',
@@ -6908,9 +8737,15 @@ test('root unit-test command includes the release-contract gate exactly once', (
   }
   assert.match(rootPackage.scripts.test, /test:release-contract/);
   assert.equal(rootPackage.scripts.test.split('test:release-contract').length - 1, 1);
+
+  } catch (error) { videoTimeoutObservation('p216-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p216-exit', 0); }
 });
 
 test('worker and parser images are immutable per release and rollback uses exact previous tags', () => {
+  videoTimeoutObservation('p217-begin', 0);
+  try {
+
   assert.match(productionCompose, /image: openscience-agent-worker:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/);
   assert.match(productionCompose, /image: openscience-document-parser:\$\{XGS_RELEASE_IMAGE_TAG:\?XGS_RELEASE_IMAGE_TAG required\}/);
   assert.match(source, /docker image inspect openscience-agent-worker:\$PREVIOUS_RELEASE_SHA openscience-document-parser:\$PREVIOUS_RELEASE_SHA/);
@@ -6918,9 +8753,15 @@ test('worker and parser images are immutable per release and rollback uses exact
   assert.doesNotMatch(source, /cd \$PREVIOUS_RELEASE_ROOT && with-proxy npx pnpm@9\.15\.0 install/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$RELEASE_SHA/);
   assert.match(source, /XGS_RELEASE_IMAGE_TAG=\$PREVIOUS_RELEASE_SHA/);
+
+  } catch (error) { videoTimeoutObservation('p217-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p217-exit', 0); }
 });
 
 test('application containers run non-root with read-only release mounts', () => {
+  videoTimeoutObservation('p218-begin', 0);
+  try {
+
   for (const serviceName of ['api', 'agent-worker', 'web']) {
     const section = productionCompose.split(`\n  ${serviceName}:`)[1]?.split(/\n  [a-z]/)[0] ?? '';
     assert.match(section, /user: node/);
@@ -6928,15 +8769,27 @@ test('application containers run non-root with read-only release mounts', () => 
   }
   const web = productionCompose.split('\n  web:')[1]?.split(/\n  [a-z]/)[0] ?? '';
   assert.match(web, /tmpfs:[\s\S]*\/opt\/openscience\/apps\/web\/\.next\/cache:[^\n]*uid=1000[^\n]*gid=1000/);
+
+  } catch (error) { videoTimeoutObservation('p218-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p218-exit', 0); }
 });
 
 test('an already-active SHA exits before install or build', () => {
+  videoTimeoutObservation('p219-begin', 0);
+  try {
+
   assert.match(source, /ACTIVE_RELEASE_SHA/);
   assert.match(source, /already active/);
   assert.ok(source.indexOf('already active') < source.indexOf('npx pnpm@9.15.0 install'));
+
+  } catch (error) { videoTimeoutObservation('p219-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p219-exit', 0); }
 });
 
 test('scheduled backup resolves the active immutable release and is refreshed by deployment', () => {
+  videoTimeoutObservation('p220-begin', 0);
+  try {
+
   assert.match(backup, /RELEASE_SHA=.*\.release-id/);
   assert.match(backup, /export XGS_RELEASE_ROOT="\$RELEASE_ROOT" XGS_RELEASE_IMAGE_TAG="\$RELEASE_SHA"/);
   assert.doesNotMatch(backup, /SCANSCI_BROWSER|scansci-legal/u);
@@ -6946,6 +8799,9 @@ test('scheduled backup resolves the active immutable release and is refreshed by
   assert.match(source, /bash -n .*backup\.sh\.next/);
   assert.match(source, /mv .*backup\.sh\.next \/usr\/local\/bin\/backup\.sh/);
   assert.ok(source.indexOf('expect_http_body') < source.lastIndexOf('backup.sh.next'));
+
+  } catch (error) { videoTimeoutObservation('p220-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p220-exit', 0); }
 });
 
 function expectNonzero(result) {
@@ -6953,12 +8809,21 @@ function expectNonzero(result) {
 }
 
 test('parser reuses the production worker base that is available on ECS', () => {
+  videoTimeoutObservation('p221-begin', 0);
+  try {
+
   const workerBase = workerDockerfile.match(/^FROM (\S+)/m)?.[1];
   const parserBase = parserDockerfile.match(/^FROM (\S+)/m)?.[1];
   assert.equal(parserBase, workerBase);
+
+  } catch (error) { videoTimeoutObservation('p221-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p221-exit', 0); }
 });
 
 test('parser build reaches registries through the ECS egress proxy without changing runtime isolation', () => {
+  videoTimeoutObservation('p222-begin', 0);
+  try {
+
   const parserService = productionCompose.split('\n  document-parser:')[1]?.split('\n  web:')[0] ?? '';
   const workerService = productionCompose.split('\n  agent-worker:')[1]?.split('\n  document-parser:')[0] ?? '';
   assert.match(parserService, /build:\r?\n[\s\S]*network: host/);
@@ -6967,4 +8832,7 @@ test('parser build reaches registries through the ECS egress proxy without chang
   assert.match(workerService, /HTTPS_PROXY: http:\/\/127\.0\.0\.1:7891/);
   assert.match(parserService, /network_mode: none/);
   assert.match(parserService, /cpus: 2/);
+
+  } catch (error) { videoTimeoutObservation('p222-throw', 0); throw error; }
+  finally { videoTimeoutObservation('p222-exit', 0); }
 });
