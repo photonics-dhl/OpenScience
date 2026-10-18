@@ -144,7 +144,6 @@ body[data-hermes-compact-navigation='true'] .hermes-dock-anchor--floating { disp
 .hermes-workbench-conversation [data-hermes-in-conversation='true'] .hermes-companion-actor { inset: 0; }
 @media (min-width: 1024px) and (max-height: 800px) {
   .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-header { padding-block: 4px 8px; }
-  .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-transcript { padding-block: 12px; }
   .hermes-inline-assistant.hermes-workbench-conversation .hermes-conversation-composer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
