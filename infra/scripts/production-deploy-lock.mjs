@@ -2723,6 +2723,7 @@ function emitPrivateRollbackDiagnostic(ts, current, previous, candidateRoot, rol
       const data = (object, name) => object && (typeof object === 'object' || typeof object === 'function')
         && !nodeUtilTypes.isProxy(object) ? Object.getOwnPropertyDescriptor(object, name)?.value : undefined;
       const selected = new Set(['SELECTED_GUIDE_AGENT_RESIDUAL_UNKNOWN', 'SELECTED_GUIDE_AUXILIARY_RUNTIME_CHANGED',
+        'SELECTED_GUIDE_SAVED_READER_UNKNOWN', 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN',
         'SELECTED_GUIDE_BYTE_READER_CHANGED', 'SELECTED_GUIDE_DECLARATION_OR_ESCAPE_UNKNOWN', 'SELECTED_GUIDE_DORMANT_MODULE_UNKNOWN',
         'SELECTED_GUIDE_EAGER_INITIALIZATION_UNKNOWN', 'SELECTED_GUIDE_FAMILY_NOT_CLOSED', 'SELECTED_GUIDE_FRESH_WRITER_UNKNOWN',
         'SELECTED_GUIDE_HANDLER_INITIALIZATION_CHANGED', 'SELECTED_GUIDE_HTTP_LIBRARY_IDENTITY_UNKNOWN',
@@ -9035,6 +9036,978 @@ function finiteSelectedGuideResultOriginTerms(ts, context, rollbackContext, resi
     projection: residual.publicReader.ordinaryRelation, transfers, marker, terminalGate: terminal.body.statements.slice(gate, gate + 2) };
 }
 
+function finiteSelectedGuideWriterRemainderTerms(ts, context, rollbackContext, exceptions, collected) {
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_WRITER_ACTIVATION_UNKNOWN', node }; };
+  const original = context.originalContext ?? context, previousOriginal = rollbackContext.originalContext ?? rollbackContext;
+  // This validates the ORIGINAL WeakMap array/context, captured SourceFile and
+  // module-key premises before any captured entry is deferred. The ordinary
+  // outer pair comparison still checks every nonprojected emitted fingerprint.
+  const initialization = finiteSelectedGuideInitializationTerms(ts, original, previousOriginal, collected);
+  const source = (owner, path) => { const parsed = owner.program.getSourceFile(resolve(owner.root, path));
+    if (!parsed || parsed.isDeclarationFile) fail(parsed); return parsed; };
+  const runtime = (parsed, owner) => {
+    const compiled = ts.transpileModule(parsed.text, { fileName: parsed.fileName, reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX, removeComments: true } });
+    if (compiled.diagnostics?.some(value => value.category === ts.DiagnosticCategory.Error)) fail(parsed);
+    const emitted = ts.createSourceFile('runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    if (emitted.parseDiagnostics.length) fail(parsed); return JSON.stringify(owner.canonical(emitted));
+  };
+  for (const parsed of context.program.getSourceFiles()) {
+    if (parsed.isDeclarationFile || exceptions.has(parsed)) continue;
+    const path = relative(context.root, parsed.fileName).replaceAll('\\', '/');
+    if (!/^(?:apps|packages)\//u.test(path)) continue;
+    const previous = source(rollbackContext, path);
+    if (collected !== undefined && original.modules?.has(resolve(parsed.fileName))) {
+      if (original.modules.get(resolve(parsed.fileName)) !== parsed
+        || original.program.getSourceFile(parsed.fileName) !== parsed
+        || previousOriginal.modules?.get(resolve(previous.fileName)) !== previous
+        || previousOriginal.program.getSourceFile(previous.fileName) !== previous) fail(parsed);
+      // Keep the collector's emitted literal identities. Re-transpiling here
+      // would discard its proven generated-client location/consumer mapping.
+      continue;
+    }
+    if (parsed.text.replaceAll('\r\n', '\n') !== previous.text.replaceAll('\r\n', '\n') && runtime(parsed, context) !== runtime(previous, rollbackContext)) fail(parsed);
+  }
+  for (const parsed of rollbackContext.program.getSourceFiles()) {
+    const path = relative(rollbackContext.root, parsed.fileName).replaceAll('\\', '/');
+    if (!parsed.isDeclarationFile && /^(?:apps|packages)\//u.test(path)) source(context, path);
+  }
+  return initialization;
+}
+
+
+// Reader-only separation on an ALREADY capable predecessor. This is a complete
+// paired reconstruction, never the first-install removal of the selected guard.
+function finiteSelectedGuideSavedReaderSeparation(ts, context, rollbackContext, collected) {
+  let separationSite = 'source';
+  const fail = node => { throw { reason: 'SELECTED_GUIDE_SAVED_READER_UNKNOWN', separationSite, node }; };
+  const need = (value, node) => { if (!value) fail(node); };
+  const left = finiteSelectedGuideSupplementaryTerms(ts, context, { ui: false });
+  const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext, { ui: false });
+  const path = 'packages/domain/src/assets/presentation-asset.ts';
+  const source = left.program.getSourceFile(resolve(left.root, path));
+  const previous = right.program.getSourceFile(resolve(right.root, path));
+  need(source && previous, source);
+  const fn = (owner, name) => { const rows = owner.statements.filter(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
+    need(rows.length === 1 && rows[0].body, owner); return rows[0]; };
+  const symbol = (node, owner = left) => { let value = ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node
+    ? owner.checker.getShorthandAssignmentValueSymbol(node.parent) : owner.checker.getSymbolAtLocation(node);
+    if (value?.flags & ts.SymbolFlags.Alias) value = owner.checker.getAliasedSymbol(value); return value?.valueDeclaration; };
+  const nodes = (root, predicate) => { const found = []; const visit = node => { if (predicate(node)) found.push(node); ts.forEachChild(node, visit); }; visit(root); return found; };
+  const one = (rows, node) => { need(rows.length === 1, node); return rows[0]; };
+  const equal = (a, b) => JSON.stringify(left.canonical(a)) === JSON.stringify(right.canonical(b));
+  const body = text => { const parsed = ts.createSourceFile('saved-reader-frame.ts', `async function frame(tx: unknown, input: unknown) ${text}`, ts.ScriptTarget.ES2022, true);
+    need(!parsed.parseDiagnostics.length, source); return parsed.statements[0].body; };
+  const same = (node, text) => { const parsed = ts.createSourceFile('saved-reader-term.ts', text, ts.ScriptTarget.ES2022, true);
+    need(!parsed.parseDiagnostics.length && parsed.statements.length === 1 && equal(node, parsed.statements[0]), node); };
+  const signature = (target, exported, count) => {
+    need(!target.asteriskToken && target.parameters.length === count && target.parameters.every((parameter, index) => ts.isIdentifier(parameter.name)
+      && parameter.name.text === ['tx', 'input', 'expected'][index] && !parameter.initializer && !parameter.dotDotDotToken
+      && !parameter.modifiers?.length
+      && Boolean(parameter.questionToken) === (index === 2)), target);
+    need(target.modifiers?.length === (exported ? 2 : 1) && target.modifiers.at(-1).kind === ts.SyntaxKind.AsyncKeyword
+      && (!exported || target.modifiers[0].kind === ts.SyntaxKind.ExportKeyword), target);
+  };
+  const replace = (frame, changes) => { let text = frame.getText(); const offset = frame.getStart();
+    for (const [node, value] of [...changes].sort((a, b) => b[0].getStart() - a[0].getStart())) {
+      need(node.getSourceFile() === frame.getSourceFile() && node.getStart() >= offset && node.end <= frame.end, node);
+      text = text.slice(0, node.getStart() - offset) + value + text.slice(node.end - offset);
+    } return text; };
+  const reader = fn(source, 'readSelectedImageGuideProposal'), production = fn(source, 'requireSelectedImageGuideProduction');
+  const parent = fn(source, 'requireSelectedImageGuideParent'), submit = fn(source, 'submitPresentationGeneration');
+  const oldProduction = fn(previous, production.name.text), oldParent = fn(previous, parent.name.text), oldSubmit = fn(previous, submit.name.text);
+  separationSite = 'reader-frame';
+  signature(reader, false, 2); signature(production, true, 2); signature(parent, true, 3);
+  signature(oldProduction, true, 2); signature(oldParent, true, 3);
+  need(!previous.statements.some(node => node.name?.text === reader.name.text), reader);
+  const cut = one(reader.body.statements.filter(node => ts.isIfStatement(node) && node.getText().includes("reply.kind !== 'proposal'")), reader);
+  same(cut, "if (reply.kind !== 'proposal') return undefined;");
+  const oldCut = one(oldProduction.body.statements.filter(node => ts.isIfStatement(node) && node.getText().includes("reply.kind !== 'proposal'")), oldProduction);
+  same(oldCut, "if (reply.kind !== 'proposal' || !selectedImageProductionIntent(payload.goal)) return undefined;");
+  need(equal(body(replace(reader.body, [[cut, oldCut.getText()]])), oldProduction.body), reader);
+  separationSite = 'production-wrapper';
+  need(equal(production.body, body(`{
+    const authority = await readSelectedImageGuideProposal(tx, input);
+    return authority && selectedImageProductionIntent(authority.payload.goal) ? authority : undefined;
+  }`)), production);
+  const wrapperCall = one(nodes(production, node => ts.isCallExpression(node) && node.expression.getText() === reader.name.text), production);
+  const parentCall = one(nodes(parent, node => ts.isCallExpression(node) && node.expression.getText() === reader.name.text), parent);
+  const intent = fn(left.program.getSourceFile(resolve(left.root, 'packages/domain/src/agent/workspace-guide-contract.ts')), 'selectedImageProductionIntent');
+  for (const call of [wrapperCall, parentCall]) {
+    need(symbol(call.expression) === reader && call.arguments.length === 2
+      && call.arguments.every((argument, index) => symbol(argument) === (call === wrapperCall ? production : parent).parameters[index]), call);
+  }
+  const wrapperIntent = one(nodes(production, node => ts.isCallExpression(node) && node.expression.getText() === intent.name.text), production);
+  need(symbol(wrapperIntent.expression) === intent, wrapperIntent);
+  separationSite = 'parent-frame';
+  const rejection = one(nodes(parent.body, node => ts.isStringLiteral(node) && node.text === 'Selected guide has no authentic image proposal'), parent);
+  need(equal(body(replace(parent.body, [[parentCall.expression, oldProduction.name.text],
+    [rejection, "'Selected guide does not authorize image production'"]])), oldParent.body), parent);
+  separationSite = 'private-reference';
+  const allowed = new Set([reader.name, wrapperCall.expression, parentCall.expression]);
+  for (const parsed of left.program.getSourceFiles()) if (!parsed.isDeclarationFile)
+    for (const use of nodes(parsed, ts.isIdentifier)) if (symbol(use) === reader) need(allowed.has(use), use);
+  const publicReferences = [];
+  for (const parsed of left.program.getSourceFiles()) if (!parsed.isDeclarationFile) {
+    for (const use of nodes(parsed, ts.isIdentifier)) {
+      if (![production, parent].includes(symbol(use)) || use === production.name || use === parent.name) continue;
+      if (ts.isImportSpecifier(use.parent) || ts.isExportSpecifier(use.parent)) { publicReferences.push(use); continue; }
+      const expression = ts.isPropertyAccessExpression(use.parent) && use.parent.name === use ? use.parent : use;
+      need(ts.isCallExpression(expression.parent) && expression.parent.expression === expression, use);
+      publicReferences.push(expression.parent);
+    }
+    for (const namespace of nodes(parsed, ts.isNamespaceImport)) {
+      const imported = namespace.parent.parent, moduleSymbol = left.checker.getSymbolAtLocation(imported.moduleSpecifier);
+      if (!moduleSymbol || !left.checker.getExportsOfModule(moduleSymbol).some(value => {
+        const target = value.flags & ts.SymbolFlags.Alias ? left.checker.getAliasedSymbol(value) : value;
+        return [production, parent].includes(target.valueDeclaration);
+      })) continue;
+      const binding = left.checker.getSymbolAtLocation(namespace.name);
+      for (const use of nodes(parsed, ts.isIdentifier)) if (use !== namespace.name && left.checker.getSymbolAtLocation(use) === binding)
+        need(ts.isPropertyAccessExpression(use.parent) && use.parent.expression === use, use);
+    }
+  }
+  separationSite = 'booking-insertion';
+  const inserted = one(nodes(submit, node => ts.isIfStatement(node) && node.expression.getText() === '!selectedImageProductionIntent(selected.payload.goal)'), submit);
+  same(inserted, "if (!selectedImageProductionIntent(selected.payload.goal)) throw new PresentationAssetError('VALIDATION_ERROR', 'Selected-image production intent is required for a new child');");
+  const bookingBody = inserted.parent; need(ts.isBlock(bookingBody), inserted);
+  const position = bookingBody.statements.indexOf(inserted);
+  need(position === 2, inserted);
+  same(bookingBody.statements[1], 'const selected = await requireSelectedImageGuideParent(tx, { userId: input.userId, guideTaskId: parentOwner.id, executionAttempt: parentOwner.executionAttempt });');
+  const selectedCall = one(nodes(bookingBody.statements[1], ts.isCallExpression), inserted);
+  need(symbol(selectedCall.expression) === parent && symbol(one(nodes(inserted.expression, node => ts.isIdentifier(node) && node.text === intent.name.text), inserted)) === intent, inserted);
+  const callback = bookingBody.parent.parent;
+  need(ts.isBlock(callback) && ts.isArrowFunction(callback.parent) && callback.parent.parameters.length === 1, bookingBody);
+  const tx = callback.parent.parameters[0];
+  need(ts.isIdentifier(tx.name) && tx.name.text === 'tx' && !tx.initializer && !tx.dotDotDotToken
+    && symbol(selectedCall.arguments[0]) === tx, selectedCall);
+  need(equal(body(replace(submit.body, [[inserted, '']])), oldSubmit.body), submit);
+  const restoredSubmit = ts.createSourceFile('restored-submit.ts', replace(submit, [[inserted, '']]), ts.ScriptTarget.ES2022, true);
+  need(!restoredSubmit.parseDiagnostics.length && equal(restoredSubmit.statements[0], oldSubmit), submit);
+  separationSite = 'whole-presentation';
+  const inverse = replace(source, [[reader, ''], [production, oldProduction.getText()], [parent, oldParent.getText()], [submit, oldSubmit.getText()]]);
+  const runtime = (text, owner) => { const compiled = ts.transpileModule(text, { reportDiagnostics: true,
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, removeComments: true } });
+    need(!compiled.diagnostics?.some(row => row.category === ts.DiagnosticCategory.Error), source);
+    const parsed = ts.createSourceFile('saved-runtime.js', compiled.outputText, ts.ScriptTarget.ES2022, true, ts.ScriptKind.JS);
+    need(!parsed.parseDiagnostics.length, source); return JSON.stringify(owner.canonical(parsed)); };
+  need(runtime(inverse, left) === runtime(previous.text, right), source);
+  separationSite = 'initialization';
+
+  // Establish the REAL predecessor's cold producer graph. Complete current
+  // remainder equality below plus the exact reject-only submit insertion
+  // transfers this graph; do not feed the old "remove whole guard" theorem a
+  // predecessor that already contains that guard.
+  const decoder = finiteSelectedGuideDecoderTerms(ts, right, right);
+  const fresh = finiteSelectedGuideFreshTerms(ts, right, decoder, right);
+  need(fresh.fresh === 'legacy', fresh.strictCall);
+  separationSite = 'remaining-source';
+  const initialization = finiteSelectedGuideWriterRemainderTerms(ts, left, right, new Set([source]), collected);
+  // The additional false-intent path may reject before the old predicate.
+  // Follow its actual owned callees; unresolved calls/writes are UNKNOWN.
+  // This only models read capabilities propagated from the SAME original tx.
+  separationSite = 'new-validation-effects';
+  const effectCalls = [], effectReads = [], effectFunctions = new Set(), effectsSeen = new Map();
+  const callable = declaration => declaration && (ts.isFunctionDeclaration(declaration)
+    || ts.isArrowFunction(declaration) || ts.isFunctionExpression(declaration)) && declaration.body ? declaration
+    : declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+      && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) ? declaration.initializer : undefined;
+  const localDeclaration = declaration => { for (let owner = declaration?.parent; owner; owner = owner.parent) {
+    if (ts.isFunctionLike(owner)) return true;
+    if (ts.isSourceFile(owner)) return false;
+  } return false; };
+  const unwrap = value => { let node = value; while (node && (ts.isAsExpression(node) || ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node))) node = node.expression; return node; };
+  const builtin = (node, name) => ts.isIdentifier(node) && node.text === name
+    && !(left.checker.getSymbolAtLocation(node)?.declarations ?? []).some(value => !value.getSourceFile().isDeclarationFile);
+  const localBuiltin = (node, name) => { const local = left.checker.getSymbolAtLocation(node)?.declarations?.find(ts.isImportSpecifier);
+    const statement = local?.parent.parent.parent;
+    return ts.isIdentifier(node) && node.text === name && statement && ts.isImportDeclaration(statement)
+      && statement.moduleSpecifier.text === ({ createHash: 'node:crypto', isDeepStrictEqual: 'node:util' })[name]
+      && (local.propertyName?.text ?? local.name.text) === name; };
+  const hash = raw => { const node = unwrap(raw); return ts.isCallExpression(node)
+    && (ts.isIdentifier(node.expression) && localBuiltin(node.expression, 'createHash')
+      || ts.isPropertyAccessExpression(node.expression) && ['update', 'digest'].includes(node.expression.name.text) && hash(node.expression.expression)); };
+  const localError = declaration => {
+    if (!declaration || !ts.isClassDeclaration(declaration) || declaration.heritageClauses?.length !== 1
+      || declaration.heritageClauses[0].types.length !== 1 || !builtin(declaration.heritageClauses[0].types[0].expression, 'Error')
+      || declaration.members.length !== 1 || !ts.isConstructorDeclaration(declaration.members[0])) return false;
+    const constructor = declaration.members[0];
+    if (!constructor.body || constructor.parameters.some(parameter => parameter.initializer || parameter.dotDotDotToken)
+      || constructor.body.statements.length !== 2) return false;
+    const [base, name] = constructor.body.statements;
+    return ts.isExpressionStatement(base) && ts.isCallExpression(base.expression) && base.expression.expression.kind === ts.SyntaxKind.SuperKeyword
+      && base.expression.arguments.every(argument => ts.isIdentifier(argument) && constructor.parameters.some(parameter => symbol(argument) === parameter))
+      && ts.isExpressionStatement(name) && ts.isBinaryExpression(name.expression) && name.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isPropertyAccessExpression(name.expression.left) && name.expression.left.expression.kind === ts.SyntaxKind.ThisKeyword
+      && name.expression.left.name.text === 'name' && (ts.isStringLiteral(name.expression.right)
+        || ts.isPropertyAccessExpression(name.expression.right) && ts.isMetaProperty(name.expression.right.expression)
+          && name.expression.right.name.text === 'name');
+  };
+  // test/exec can mutate lastIndex on a shared /g or /y instance. Source
+  // equality alone does not make that newly evaluated effect read-only.
+  const regexpRead = (raw, shared = false, seen = new Set()) => {
+    const node = unwrap(raw); if (!node) return false;
+    if (ts.isRegularExpressionLiteral(node)) return !shared || !/[gy]/u.test(node.getText().slice(node.getText().lastIndexOf('/') + 1));
+    if (ts.isIdentifier(node)) {
+      const declaration = symbol(node); if (!declaration || seen.has(declaration)) return false;
+      seen.add(declaration);
+      return ts.isVariableDeclaration(declaration) && declaration.initializer
+        && regexpRead(declaration.initializer, !localDeclaration(declaration), seen);
+    }
+    return false;
+  };
+  // Origins belong to actual invocations, not TypeScript annotations. The
+  // finite facts below do not execute JavaScript or invoke iterable protocols.
+  const unresolvedEffects = [], unresolvedEffectNodes = new Set(), originCallFacts = new Map();
+  const effectNeed = (value, node) => {
+    if (!value && !unresolvedEffectNodes.has(node)) { unresolvedEffectNodes.add(node); unresolvedEffects.push(node); }
+    return Boolean(value);
+  };
+  const identities = new WeakMap(); let identitySequence = 0;
+  const identity = node => { if (!identities.has(node)) identities.set(node, ++identitySequence); return identities.get(node); };
+  const origins = new Map();
+  const fact = (key, fields) => {
+    if (!origins.has(key)) origins.set(key, { id: origins.size, ...fields });
+    return origins.get(key);
+  };
+  const unknown = fact('unknown', { kind: 'unknown' }), absent = fact('undefined', { kind: 'undefined' });
+  const never = fact('no-normal-return', { kind: 'never' });
+  const stored = fact('persistent-plain', { kind: 'stored' }), transaction = fact('transaction', { kind: 'tx' });
+  const delegate = fact('delegate', { kind: 'delegate' });
+  const primitive = type => fact(`primitive:${type}`, { kind: 'primitive', type });
+  const join = values => {
+    const members = [...new Map(values.flatMap(value => value?.kind === 'union' ? value.members : [value ?? unknown]).filter(value => value !== never)
+      .map(value => [value.id, value])).values()].sort((a, b) => a.id - b.id);
+    if (!members.length) return never;
+    if (members.some(value => value === unknown) || members.length > 16) return unknown;
+    return members.length === 1 ? members[0] : fact(`union:${members.map(value => value.id)}`, { kind: 'union', members });
+  };
+  const choices = value => value.kind === 'union' ? value.members : [value];
+  const array = (elements, fresh = false) => fact(`array:${fresh}:${elements.map(value => value.id)}`, {
+    kind: 'array', elements, element: join(elements), fresh,
+  });
+  const record = (fields, fallback = absent, fresh = false) => {
+    const entries = [...fields].sort(([a], [b]) => a.localeCompare(b));
+    return fact(`record:${fresh}:${fallback.id}:${entries.map(([key, value]) => `${JSON.stringify(key)}=${value.id}`).join(',')}`,
+      { kind: 'record', fields: new Map(entries), fallback, fresh });
+  };
+  const standardError = () => record(new Map([['name', primitive('string')], ['message', primitive('string')]]));
+  const sharedLocations = new Set(), capturedContentWrites = new Set(), unresolvedModuleWrites = new Set();
+  const writable = value => choices(value).every(item => item.fresh && item.location && !sharedLocations.has(item.location));
+  const collection = (kind, element, value = absent, fresh = false) =>
+    fact(`${kind}:${fresh}:${element.id}:${value.id}`, { kind, element, value, fresh });
+  const deepData = (value, seen = new Set()) => {
+    if (seen.has(value)) return false;
+    const next = new Set(seen); next.add(value);
+    return choices(value).every(item => ['primitive', 'stored', 'undefined', 'never'].includes(item.kind)
+      || item.kind === 'array' && item.elements.every(child => deepData(child, next))
+      || item.kind === 'record' && deepData(item.fallback, next) && [...item.fields.values()].every(child => deepData(child, next)));
+  };
+  const readable = value => choices(value).every(item => !['unknown', 'callable'].includes(item.kind));
+  const elements = value => join(choices(value).map(item => {
+    if (item === never) return never;
+    if (item.kind === 'array' || item.kind === 'set') return item.element;
+    if (item.kind === 'map') return array([item.element, item.value]);
+    if (item.kind === 'stored') return stored;
+    if (item.kind === 'primitive' && item.type === 'string') return primitive('string');
+    if (item.kind === 'undefined' || item.kind === 'primitive' && item.type === 'null') return absent;
+    return unknown;
+  }));
+  const member = (value, key) => join(choices(value).map(item => {
+    if (item === never) return never;
+    if (item.kind === 'tx') return key && !key.startsWith('$') ? delegate : unknown;
+    if (item.kind === 'stored') return stored;
+    if (item.kind === 'record') return key === undefined ? join([...item.fields.values(), item.fallback]) : item.fields.get(key) ?? item.fallback;
+    if (item.kind === 'array') return key === 'length' ? primitive('number')
+      : key !== undefined && /^\d+$/u.test(key) ? item.elements[Number(key)] ?? item.element : item.element;
+    if (['map', 'set'].includes(item.kind) && key === 'size') return primitive('number');
+    if (item.kind === 'primitive' && item.type === 'string' && key === 'length') return primitive('number');
+    if (item.kind === 'undefined' || item.kind === 'primitive' && item.type === 'null') return absent;
+    return unknown;
+  }));
+  const lexicalNodes = root => {
+    const found = [];
+    const visit = node => {
+      found.push(node);
+      // Creating a closure does not run its body/defaults. Its actual call
+      // below supplies the invocation environment and walks those effects.
+      if (node !== root && ts.isFunctionLike(node)) return;
+      ts.forEachChild(node, visit);
+    };
+    visit(root); return found;
+  };
+  const functionOwner = node => { for (let owner = node?.parent; owner; owner = owner.parent) if (ts.isFunctionLike(owner)) return owner; return undefined; };
+  const uniqueWrite = (raw, env) => {
+    let root = unwrap(raw);
+    if (!ts.isIdentifier(root)) return false;
+    const declaration = symbol(root), owner = environmentFor(declaration, env);
+    if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer || !owner
+      || ![ts.SyntaxKind.ObjectLiteralExpression, ts.SyntaxKind.ArrayLiteralExpression, ts.SyntaxKind.NewExpression]
+        .includes(unwrap(declaration.initializer).kind)) return false;
+    // No heap inference: a supported local writer must have no whole-object
+    // alias, supplied parameter, return, spread or escape anywhere in its scope.
+    return nodes(owner.target.body, node => ts.isIdentifier(node) && symbol(node) === declaration).every(use => {
+      if (use === declaration.name) return true;
+      if ((ts.isPropertyAccessExpression(use.parent) || ts.isElementAccessExpression(use.parent)) && use.parent.expression === use) return true;
+      // A finite return carries its already-recorded contents to the caller;
+      // it does not license writes through a returned alias (parameters and
+      // owned-call results never qualify as local writers here).
+      let outer = use;
+      while (ts.isShorthandPropertyAssignment(outer.parent) || ts.isPropertyAssignment(outer.parent)
+        || ts.isSpreadAssignment(outer.parent) || ts.isObjectLiteralExpression(outer.parent)
+        || ts.isArrayLiteralExpression(outer.parent) || ts.isConditionalExpression(outer.parent)
+        || ts.isParenthesizedExpression(outer.parent) || ts.isAsExpression(outer.parent)) outer = outer.parent;
+      return ts.isReturnStatement(outer.parent);
+    });
+  };
+  const capturedWrite = (raw, env) => {
+    const root = unwrap(raw);
+    return !ts.isIdentifier(root) || environmentFor(symbol(root), env) !== env;
+  };
+  const retainCapturedContentWrite = (raw, env, value) => {
+    if (!capturedWrite(raw, env)) return;
+    for (const item of choices(value)) if (item.location) {
+      capturedContentWrites.add(item.location);
+      // Even a derived return can have lost its stale empty container's
+      // location. The enclosing module initializer must therefore retain
+      // this unresolved effect, not only the returned origin graph.
+      for (let owner = env; owner; owner = owner.parent)
+        if (owner.calledAt && !functionOwner(owner.calledAt)) unresolvedModuleWrites.add(owner.calledAt);
+    }
+  };
+  const environmentFor = (declaration, env) => {
+    const owner = functionOwner(declaration);
+    for (let current = env; current; current = current.parent) if (current.target === owner) return current;
+    return owner ? undefined : env;
+  };
+  const staticKey = node => !node ? undefined : ts.isIdentifier(node) || ts.isStringLiteralLike(node) || ts.isNumericLiteral(node) ? node.text : undefined;
+  const callableFact = (target, env) => {
+    const owner = functionOwner(target), captured = [];
+    const lexicalOwners = new Set();
+    for (let ancestor = target.parent; ancestor && !ts.isSourceFile(ancestor); ancestor = ancestor.parent)
+      if (ts.isFunctionLike(ancestor)) lexicalOwners.add(ancestor);
+    for (let current = env; current; current = current.parent) {
+      if (!owner || !lexicalOwners.has(current.target)) continue;
+      captured.push(...[...current.caps].map(([binding, value]) => `${identity(binding)}=${value.id}`));
+    }
+    return fact(`callable:${identity(target)}:${captured.join(',')}`, { kind: 'callable', target, env });
+  };
+  const nativeSource = left.program.getSourceFile(resolve(left.root, 'packages/domain/src/agent/native-agent-execution.ts'));
+  const videoSource = left.program.getSourceFile(resolve(left.root, 'packages/domain/src/assets/video.ts'));
+  const videoNode = fn(videoSource, 'requireNativeVideoStoryboardNode');
+  const terminalSource = fn(nativeSource, 'requireNativeIllustrationTerminalSource');
+  const selectedGuide = fn(nativeSource, 'selectedGuide');
+  const objectReadOnly = (binding, target, before = Infinity, after = -Infinity, seen = new Set()) => {
+    const key = `${identity(binding)}:${before}:${after}`; if (seen.has(key)) return false;
+    const next = new Set(seen); next.add(key);
+    return nodes(target.body, node => ts.isIdentifier(node) && symbol(node) === binding && node.pos > after && node.pos < before).every(use => {
+      if (use === binding.name) return true;
+      let expression = use;
+      while (ts.isAsExpression(expression.parent) || ts.isParenthesizedExpression(expression.parent)
+        || ts.isNonNullExpression(expression.parent)) expression = expression.parent;
+      if ((ts.isPropertyAccessExpression(expression.parent) || ts.isElementAccessExpression(expression.parent)) && expression.parent.expression === expression) {
+        while (ts.isPropertyAccessExpression(expression.parent) || ts.isElementAccessExpression(expression.parent)) expression = expression.parent;
+        const parent = expression.parent;
+        return !(ts.isDeleteExpression(parent) || (ts.isPrefixUnaryExpression(parent) || ts.isPostfixUnaryExpression(parent))
+          && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
+          || ts.isBinaryExpression(parent) && parent.left === expression
+            && parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment);
+      }
+      const call = expression.parent;
+      if (!ts.isCallExpression(call)) return false;
+      const callee = callable(symbol(call.expression)), index = call.arguments.indexOf(expression);
+      return index >= 0 && callee && callee.parameters[index] && objectReadOnly(callee.parameters[index], callee, Infinity, -Infinity, next);
+    });
+  };
+  const guardedVideoTask = (declaration, env, at, value) => {
+    if (env.target !== videoNode || !ts.isVariableDeclaration(declaration) || !declaration.initializer || value.kind !== 'stored') return value;
+    const initializer = unwrap(declaration.initializer);
+    if (!ts.isAwaitExpression(initializer) || !ts.isCallExpression(initializer.expression)
+      || initializer.expression.expression.getText() !== `${videoNode.parameters[0].name.getText()}.agentTask.findUnique`) return value;
+    const guards = videoNode.body.statements.filter(statement => ts.isIfStatement(statement)
+      && statement.pos > declaration.end && statement.end < at.pos
+      && nodes(statement.expression, candidate => ts.isBinaryExpression(candidate)
+        && candidate.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+        && ts.isPropertyAccessExpression(candidate.left) && symbol(candidate.left.expression) === declaration
+        && candidate.left.name.text === 'kind' && ts.isStringLiteral(candidate.right) && candidate.right.text === 'presentation.generate').length === 1
+      && ts.isBlock(statement.thenStatement) && statement.thenStatement.statements.length === 1
+      && ts.isThrowStatement(statement.thenStatement.statements[0]));
+    if (guards.length !== 1 || !objectReadOnly(declaration, videoNode, at.end, guards[0].end)) return value;
+    same(guards[0], `if (!task || task.id !== asset.id || task.deletedAt || task.status !== 'succeeded' || task.kind !== 'presentation.generate' || task.error !== null
+      || task.session.deletedAt || task.session.researchObjectId !== payload.researchObjectId) {
+      throw new PresentationAssetError('VALIDATION_ERROR', 'Native video storyboard owner is not completed');
+    }`);
+    const kind = fact('literal:presentation.generate', { kind: 'primitive', type: 'string', literal: 'presentation.generate' });
+    return fact(`task-snapshot:${identity(declaration)}@${env.key}`, { kind: 'record', fields: new Map([['kind', kind]]), fallback: stored, fresh: false });
+  };
+  // Only a real same-binding runtime test dominates a primitive read. A cast
+  // or `typeof object` never proves accessor-free object/array ownership.
+  const narrowed = (expression, at, env, current) => {
+    const reference = raw => {
+      const value = unwrap(raw);
+      if (ts.isIdentifier(value)) { const declaration = symbol(value); return declaration ? { declaration, key: String(identity(declaration)) } : undefined; }
+      if (ts.isPropertyAccessExpression(value)) { const base = reference(value.expression); return base && { declaration: base.declaration, key: `${base.key}.${value.name.text}` }; }
+      return undefined;
+    };
+    const subject = reference(expression), declaration = subject?.declaration;
+    if (!declaration) return undefined;
+    const owner = environmentFor(declaration, env)?.target;
+    if (!owner || nodes(owner.body, node => ts.isBinaryExpression(node)
+      && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      && ts.isIdentifier(node.left) && symbol(node.left) === declaration
+      || (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+        && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+        && ts.isIdentifier(node.operand) && symbol(node.operand) === declaration).length) return undefined;
+    const from = (raw, truth) => {
+      const test = unwrap(raw);
+      if (ts.isPrefixUnaryExpression(test) && test.operator === ts.SyntaxKind.ExclamationToken) return from(test.operand, !truth);
+      if (reference(test)?.key === subject.key && truth && current)
+        return join(choices(current).filter(value => value !== absent && !(value.kind === 'primitive' && value.type === 'null')));
+      if (ts.isBinaryExpression(test)) {
+        if (test.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && truth
+          || test.operatorToken.kind === ts.SyntaxKind.BarBarToken && !truth) return from(test.right, truth) ?? from(test.left, truth);
+        if ([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken,
+          ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(test.operatorToken.kind)) {
+          const equal = [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken].includes(test.operatorToken.kind);
+          for (const [type, literal] of [[unwrap(test.left), unwrap(test.right)], [unwrap(test.right), unwrap(test.left)]])
+            if (equal === truth && ts.isTypeOfExpression(type)
+              && reference(type.expression)?.key === subject.key && ts.isStringLiteral(literal)
+              && ['string', 'number', 'boolean', 'bigint', 'undefined'].includes(literal.text))
+              return literal.text === 'undefined' ? absent : primitive(literal.text);
+        }
+      }
+      return undefined;
+    };
+    const terminates = statement => ts.isReturnStatement(statement) || ts.isThrowStatement(statement)
+      || ts.isBlock(statement) && statement.statements.length && terminates(statement.statements.at(-1))
+      || ts.isExpressionStatement(statement) && ts.isCallExpression(statement.expression)
+        && env.calls.get(statement.expression) === never;
+    for (let child = at, parent = child.parent; parent && parent !== owner; child = parent, parent = parent.parent) {
+      let value;
+      if (ts.isBinaryExpression(parent) && child === parent.right)
+        value = parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ? from(parent.left, true)
+          : parent.operatorToken.kind === ts.SyntaxKind.BarBarToken ? from(parent.left, false) : undefined;
+      if (ts.isConditionalExpression(parent) && child !== parent.condition) value = from(parent.condition, child === parent.whenTrue);
+      if (ts.isIfStatement(parent) && child !== parent.expression) value = from(parent.expression, child === parent.thenStatement);
+      if (value) return value;
+      if (ts.isBlock(parent)) for (const previous of parent.statements) {
+        if (previous.pos >= child.pos) break;
+        if (ts.isIfStatement(previous) && !previous.elseStatement && terminates(previous.thenStatement)) {
+          value = from(previous.expression, false); if (value) return value;
+        }
+      }
+    }
+    return undefined;
+  };
+  const invocations = new Map(), activeInvocations = new Set(), invocationStack = [], unresolvedOrigins = [];
+  const site = node => ({ path: relative(left.root, node.getSourceFile().fileName).replaceAll('\\', '/'),
+    line: node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1, term: node.getText().slice(0, 180) });
+  let originBudget = 0;
+  const origin = (raw, env, at = raw, seen = new Set()) => {
+    const node = unwrap(raw); if (!node) return unknown;
+    const point = `${identity(node)}@${env.key}:${identity(at)}`;
+    if (env.origins.has(point)) return env.origins.get(point);
+    if (++originBudget > 250000) { effectNeed(false, node); return unknown; }
+    if (seen.has(point)) return unknown;
+    const next = new Set(seen); next.add(point);
+    let value = transfer(node, env, at, next);
+    if (value.fresh && !value.location && (ts.isObjectLiteralExpression(node) || ts.isArrayLiteralExpression(node)
+      || ts.isNewExpression(node) || ts.isCallExpression(node))) {
+      const { id, ...allocation } = value;
+      value = fact(`allocation:${identity(node)}@${env.key}:${id}`, { ...allocation, location: `${identity(node)}@${env.key}` });
+    }
+    if (ts.isCallExpression(node) && !functionOwner(node)) {
+      effectNeed(!unresolvedModuleWrites.has(node), node);
+      shareReachable(value, env, node);
+    }
+    env.origins.set(point, value); return value;
+  };
+  const shareReachable = (value, env, at, seen = new Set()) => {
+    if (seen.has(value)) return;
+    const next = new Set(seen); next.add(value);
+    // Captured callees may insert children absent from the caller's lexical
+    // content snapshot. Until those writes have an actual location summary,
+    // that location cannot escape as a supposedly complete data-container graph.
+    effectNeed(!value.location || !capturedContentWrites.has(value.location), at);
+    if (value.location) sharedLocations.add(value.location);
+    if (value.kind === 'union') for (const item of value.members) shareReachable(item, env, at, next);
+    if (value.kind === 'array') for (const item of value.elements) shareReachable(item, env, at, next);
+    if (value.kind === 'record') { for (const item of value.fields.values()) shareReachable(item, env, at, next); shareReachable(value.fallback, env, at, next); }
+    if (['map', 'set'].includes(value.kind)) { shareReachable(value.element, env, at, next); shareReachable(value.value, env, at, next); }
+    if (value.kind === 'unknown') effectNeed(false, at);
+    // An escaped closure can expose children inserted after its creation.
+    // This finite data-container relation does not model that lifetime. Refuse
+    // it rather than pretending a lexical-use snapshot covers future writes.
+    if (value.kind === 'callable') effectNeed(false, at);
+  };
+  const transfer = (node, env, at, next) => {
+    const evaluate = value => origin(value, env, at, next);
+    const refined = narrowed(node, at, env); if (refined) return refined;
+    if (ts.isIdentifier(node)) {
+      if (builtin(node, 'undefined')) return absent;
+      if (['NaN', 'Infinity'].some(name => builtin(node, name))) return primitive('number');
+      const declaration = symbol(node), actual = environmentFor(declaration, env);
+      if (actual?.caps.has(declaration)) {
+        const supplied = actual.caps.get(declaration);
+        return narrowed(node, at, env, supplied) ?? supplied;
+      }
+      if (callable(declaration)) return callableFact(callable(declaration), actual ?? env);
+      if (declaration && ts.isBindingElement(declaration)) {
+        const pattern = declaration.parent, parent = pattern.parent;
+        const sourceOrigin = ts.isParameter(parent) ? actual?.caps.get(parent) ?? unknown
+          : ts.isVariableDeclaration(parent) && parent.initializer ? origin(parent.initializer, actual ?? env, at, next) : unknown;
+        const value = member(sourceOrigin, ts.isArrayBindingPattern(pattern) ? String(pattern.elements.indexOf(declaration))
+          : staticKey(declaration.propertyName ?? declaration.name));
+        return declaration.initializer ? join(choices(value).map(item => item === absent ? evaluate(declaration.initializer) : item)) : value;
+      }
+      if (declaration && ts.isVariableDeclaration(declaration) && actual) {
+        if (ts.isCatchClause(declaration.parent)) {
+          const clause = declaration.parent, attempt = clause.parent.tryBlock;
+          const raised = [standardError()];
+          for (const statement of lexicalNodes(attempt)) {
+            if (ts.isThrowStatement(statement)) raised.push(origin(statement.expression, actual, statement.expression, next));
+            if (ts.isCallExpression(statement)) { inspectCall(statement, actual); raised.push(actual.callThrows.get(statement) ?? unknown); }
+          }
+          return join(raised);
+        }
+        const parent = declaration.parent?.parent;
+        if (parent && ts.isForOfStatement(parent)) return elements(origin(parent.expression, actual, at, next));
+        let value = declaration.initializer ? origin(declaration.initializer, actual, at, next) : absent;
+        const writes = actual.syntax.filter(candidate => ts.isBinaryExpression(candidate)
+          && candidate.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(candidate.left)
+          && symbol(candidate.left) === declaration && (actual !== env || candidate.pos < at.pos));
+        if (writes.length) value = join([value, ...writes.map(write => origin(write.right, actual, write.right, next))]);
+        // Allocation and deep contents are independent: local writes retain
+        // the actual inserted field/element origins, including ambient ones.
+        for (const mutation of actual.syntax) {
+          if (actual === env && mutation.pos >= at.pos) continue;
+          const priorContents = value;
+          if (ts.isCallExpression(mutation) && ts.isPropertyAccessExpression(mutation.expression)
+            && ts.isIdentifier(mutation.expression.expression) && symbol(mutation.expression.expression) === declaration) {
+            const method = mutation.expression.name.text, args = mutation.arguments.map(argument => origin(argument, actual, argument, next));
+            if (value.kind === 'array' && method === 'push') value = array([join([value.element, ...args])], value.fresh);
+            if (value.kind === 'array' && ['pop', 'reverse', 'sort'].includes(method))
+              value = array([join([value.element, ...(method === 'pop' ? [absent] : [])])], value.fresh);
+            if (value.kind === 'set' && method === 'add') value = collection('set', join([value.element, args[0] ?? absent]), absent, value.fresh);
+            if (value.kind === 'map' && method === 'set') value = collection('map', join([value.element, args[0] ?? absent]), join([value.value, args[1] ?? absent]), value.fresh);
+          }
+          if (value.kind === 'record' && ts.isBinaryExpression(mutation) && mutation.operatorToken.kind === ts.SyntaxKind.EqualsToken
+            && (ts.isPropertyAccessExpression(mutation.left) || ts.isElementAccessExpression(mutation.left))
+            && ts.isIdentifier(mutation.left.expression) && symbol(mutation.left.expression) === declaration) {
+            const key = ts.isPropertyAccessExpression(mutation.left) ? mutation.left.name.text : staticKey(mutation.left.argumentExpression);
+            const inserted = origin(mutation.right, actual, mutation.right, next), fields = new Map(value.fields);
+            if (key !== undefined) fields.set(key, join([member(value, key), inserted]));
+            value = record(fields, key === undefined ? join([value.fallback, inserted]) : value.fallback, value.fresh);
+          }
+          if (value.kind === 'array' && ts.isBinaryExpression(mutation) && mutation.operatorToken.kind === ts.SyntaxKind.EqualsToken
+            && ts.isElementAccessExpression(mutation.left) && ts.isIdentifier(mutation.left.expression)
+            && symbol(mutation.left.expression) === declaration)
+            value = array([join([value.element, origin(mutation.right, actual, mutation.right, next)])], value.fresh);
+          if (value !== priorContents && priorContents.location) {
+            const { id, ...contents } = value;
+            value = fact(`contents:${priorContents.location}:${id}`, { ...contents, location: priorContents.location });
+          }
+        }
+        return guardedVideoTask(declaration, actual, at, value);
+      }
+      return unknown;
+    }
+    if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) return primitive('string');
+    if (ts.isNumericLiteral(node)) return primitive('number');
+    if ([ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(node.kind)) return primitive('boolean');
+    if (node.kind === ts.SyntaxKind.NullKeyword) return primitive('null');
+    if (ts.isRegularExpressionLiteral(node)) return fact(`regexp:${identity(node)}`, { kind: 'regexp', node });
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return callableFact(node, env);
+    if (ts.isAwaitExpression(node)) return evaluate(node.expression);
+    if (ts.isTypeOfExpression(node)) return primitive('string');
+    if (ts.isPrefixUnaryExpression(node)) return node.operator === ts.SyntaxKind.ExclamationToken ? primitive('boolean')
+      : deepData(evaluate(node.operand)) ? primitive('number') : unknown;
+    if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) return member(evaluate(node.expression),
+      ts.isPropertyAccessExpression(node) ? node.name.text : staticKey(unwrap(node.argumentExpression)));
+    if (ts.isArrayLiteralExpression(node)) {
+      const parts = []; let dynamic = false;
+      for (const item of node.elements) {
+        if (!ts.isSpreadElement(item)) parts.push(evaluate(item));
+        else { const value = evaluate(item.expression);
+          if (value.kind === 'array') parts.push(...value.elements);
+          else { dynamic = true; parts.push(elements(value)); }
+        }
+      }
+      return array(dynamic ? [join(parts)] : parts, Boolean(functionOwner(node)));
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      const fields = new Map(); let fallback = absent;
+      for (const property of node.properties) {
+        if (ts.isSpreadAssignment(property)) {
+          const value = evaluate(property.expression);
+          const alternatives = choices(value);
+          if (alternatives.some(item => !['record', 'stored', 'undefined'].includes(item.kind)
+            && !(item.kind === 'primitive' && item.type === 'null'))) return unknown;
+          const keys = new Set([...fields.keys(), ...alternatives.flatMap(item => item.kind === 'record' ? [...item.fields.keys()] : [])]);
+          for (const key of keys) fields.set(key, join(alternatives.map(item => {
+            const supplied = member(item, key); return supplied === absent ? fields.get(key) ?? fallback : supplied;
+          })));
+          fallback = join([fallback, ...alternatives.map(item => item.kind === 'stored' ? stored : item.fallback ?? absent)]);
+        } else if (ts.isPropertyAssignment(property) && staticKey(property.name) !== undefined && staticKey(property.name) !== '__proto__') fields.set(staticKey(property.name), evaluate(property.initializer));
+        else if (ts.isShorthandPropertyAssignment(property)) fields.set(property.name.text, evaluate(property.name));
+        else return unknown;
+      }
+      return record(fields, fallback, Boolean(functionOwner(node)));
+    }
+    if (ts.isConditionalExpression(node)) return join([origin(node.whenTrue, env, node.whenTrue, next), origin(node.whenFalse, env, node.whenFalse, next)]);
+    if (ts.isBinaryExpression(node)) {
+      const operator = node.operatorToken.kind;
+      if ([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(operator))
+        return join([evaluate(node.left), origin(node.right, env, node.right, next)]);
+      if (operator === ts.SyntaxKind.EqualsToken) return evaluate(node.right);
+      if ([ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken,
+        ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.LessThanToken, ts.SyntaxKind.GreaterThanToken,
+        ts.SyntaxKind.LessThanEqualsToken, ts.SyntaxKind.GreaterThanEqualsToken, ts.SyntaxKind.InKeyword].includes(operator)) return primitive('boolean');
+      return deepData(evaluate(node.left)) && deepData(evaluate(node.right)) ? primitive(operator === ts.SyntaxKind.PlusToken ? 'scalar' : 'number') : unknown;
+    }
+    if (ts.isCallExpression(node)) return inspectCall(node, env);
+    if (ts.isNewExpression(node)) {
+      const args = (node.arguments ?? []).map(evaluate);
+      if (['Error', 'TypeError'].some(name => builtin(node.expression, name)) || localError(symbol(node.expression)))
+        return args.every(value => deepData(value)) ? standardError() : unknown;
+      if (builtin(node.expression, 'Set')) return collection('set', args.length ? elements(args[0]) : absent, absent, Boolean(functionOwner(node)));
+      if (builtin(node.expression, 'Map')) { const entry = args.length ? elements(args[0]) : absent;
+        return collection('map', args.length ? member(entry, '0') : absent, args.length ? member(entry, '1') : absent, Boolean(functionOwner(node))); }
+      if (builtin(node.expression, 'Array')) return array(args.length === 1 && args[0].type === 'number' ? [absent] : args, Boolean(functionOwner(node)));
+      if (builtin(node.expression, 'Date') && args.every(value => deepData(value))) return fact(`date:${Boolean(functionOwner(node))}`, { kind: 'date', fresh: Boolean(functionOwner(node)) });
+      return unknown;
+    }
+    return unknown;
+  };
+  const inspectCall = (node, env) => {
+    if (env.calls.has(node)) return env.calls.get(node);
+    env.calls.set(node, unknown); env.callThrows.set(node, standardError()); effectCalls.push(node);
+    const output = value => { env.calls.set(node, value); return value; };
+    const args = node.arguments.map(argument => origin(argument, env));
+    if (args.includes(never)) return output(never);
+    const called = origin(node.expression, env);
+    if (called.kind === 'callable') {
+      const execution = inspectEffects(called.target, args, called.env, undefined, node);
+      env.callThrows.set(node, execution?.thrown ?? unknown);
+      return output(execution?.returned ?? unknown);
+    }
+    if (ts.isIdentifier(node.expression)) {
+      if (builtin(node.expression, 'Boolean')) return output(primitive('boolean'));
+      if (['String', 'Number', 'BigInt', 'parseInt', 'parseFloat'].some(name => builtin(node.expression, name))) {
+        effectNeed(args.every(value => deepData(value)), node); return output(args.every(value => deepData(value)) ? primitive(node.expression.text === 'String' ? 'string' : 'number') : unknown);
+      }
+      if (builtin(node.expression, 'structuredClone')) { effectNeed(args.length === 1 && deepData(args[0]), node); return output(deepData(args[0] ?? unknown) ? args[0] : unknown); }
+      if (localBuiltin(node.expression, 'createHash')) return output(fact('hash', { kind: 'hash' }));
+      if (localBuiltin(node.expression, 'isDeepStrictEqual')) { effectNeed(args.every(value => deepData(value)), node); return output(primitive('boolean')); }
+      effectNeed(false, node); return output(unknown);
+    }
+    if (!effectNeed(ts.isPropertyAccessExpression(node.expression), node)) return output(unknown);
+    const receiverNode = node.expression.expression, method = node.expression.name.text;
+    const receiver = origin(receiverNode, env);
+    if (receiver === never) return output(never);
+    originCallFacts.set(node, { caller: env.target.name?.getText() ?? '<owned callable>', method,
+      receiver: choices(receiver).map(value => value.kind), arguments: args.map(value => choices(value).map(item => item.kind)),
+      parameters: [...env.caps].map(([binding, value]) => ({ name: binding.name.getText(), origin: choices(value).map(item => item.kind) })) });
+    const callback = (index, values) => {
+      const supplied = args[index];
+      if (!effectNeed(supplied?.kind === 'callable', node.arguments[index] ?? node)) return unknown;
+      const execution = inspectEffects(supplied.target, values, supplied.env, undefined, node);
+      env.callThrows.set(node, join([env.callThrows.get(node), execution?.thrown ?? unknown]));
+      return execution?.returned ?? unknown;
+    };
+    if (receiver.kind === 'delegate') {
+      effectNeed(['findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirstOrThrow', 'findMany', 'count', 'aggregate', 'groupBy'].includes(method), node);
+      effectReads.push(node); return output(stored);
+    }
+    if (builtin(receiverNode, 'Object')) {
+      const input = args[0] ?? unknown;
+      effectNeed(['keys', 'values', 'entries', 'fromEntries', 'hasOwn', 'freeze'].includes(method) && readable(input), node);
+      if (method === 'keys') return output(array([primitive('string')], true));
+      if (method === 'values' || method === 'entries') { const values = member(input);
+        return output(array([method === 'entries' ? array([primitive('string'), values]) : values], true)); }
+      if (method === 'fromEntries') return output(record(new Map(), member(elements(input), '1'), true));
+      if (method === 'freeze') effectNeed(choices(input).every(item => item.fresh), node);
+      return output(method === 'hasOwn' ? primitive('boolean') : input);
+    }
+    if (builtin(receiverNode, 'Array')) {
+      effectNeed(['isArray', 'from'].includes(method), node);
+      if (method === 'isArray') return output(primitive('boolean'));
+      const input = args[0] ?? unknown, element = elements(input);
+      effectNeed(choices(input).every(item => ['array', 'set', 'map', 'stored'].includes(item.kind)
+        || item.kind === 'primitive' && item.type === 'string'), node);
+      return output(array([args.length > 1 && args[1] !== absent ? callback(1, [element, primitive('number')]) : element], true));
+    }
+    if (builtin(receiverNode, 'JSON')) {
+      effectNeed(['parse', 'stringify'].includes(method) && args.length === 1 && deepData(args[0]), node);
+      return output(deepData(args[0] ?? unknown) ? method === 'parse' ? stored : primitive('string') : unknown);
+    }
+    if (builtin(receiverNode, 'Promise')) { effectNeed(method === 'all' && readable(args[0] ?? unknown), node); return output(array([elements(args[0] ?? unknown)])); }
+    if (builtin(receiverNode, 'Number')) { effectNeed(['isFinite', 'isInteger', 'isSafeInteger'].includes(method), node); return output(primitive('boolean')); }
+    if (builtin(receiverNode, 'Math')) { effectNeed(['min', 'max', 'abs', 'round', 'floor', 'ceil'].includes(method) && args.every(value => deepData(value)), node); return output(primitive('number')); }
+    if (!effectNeed(readable(receiver), node)) return output(unknown);
+    const resolvedMember = left.checker.getSymbolAtLocation(node.expression.name);
+    if (!effectNeed(!(resolvedMember?.declarations ?? []).some(declaration => !declaration.getSourceFile().isDeclarationFile), node)) return output(unknown);
+    if (['update', 'digest'].includes(method)) { effectNeed(hash(receiverNode) && args.every(value => deepData(value)), node); return output(method === 'digest' ? primitive('string') : fact('hash', { kind: 'hash' })); }
+    if (['test', 'exec'].includes(method)) { effectNeed(regexpRead(receiverNode) && args.every(value => deepData(value)), node); return output(method === 'test' ? primitive('boolean') : array([primitive('string')])); }
+    const element = elements(receiver);
+    if (['map', 'filter', 'find', 'some', 'every', 'forEach', 'flatMap'].includes(method)) {
+      effectNeed(choices(receiver).every(item => ['array', 'stored', 'undefined'].includes(item.kind)
+        || item.kind === 'primitive' && item.type === 'null'), node);
+      const result = callback(0, [element, primitive('number'), receiver]);
+      return output(['some', 'every'].includes(method) ? primitive('boolean') : method === 'forEach' ? absent : method === 'find' ? join([element, absent])
+        : array([method === 'filter' ? element : method === 'flatMap' ? elements(result) : result], true));
+    }
+    if (method === 'reduce') {
+      let accumulator = args.length > 1 ? args[1] : element;
+      const visited = new Set();
+      while (!visited.has(accumulator.id) && visited.size < 8) {
+        visited.add(accumulator.id);
+        accumulator = join([accumulator, callback(0, [accumulator, element, primitive('number'), receiver])]);
+      }
+      if (!visited.has(accumulator.id)) { effectNeed(false, node); accumulator = unknown; }
+      return output(accumulator);
+    }
+    if (['push', 'pop', 'set', 'add', 'sort', 'reverse'].includes(method)) {
+      effectNeed(writable(receiver), node);
+      retainCapturedContentWrite(receiverNode, env, receiver);
+      if (['push', 'set', 'add'].includes(method)) effectNeed(uniqueWrite(receiverNode, env), node);
+      if (['push', 'set', 'add'].includes(method) && capturedWrite(receiverNode, env))
+        effectNeed(args.every(value => deepData(value)), node);
+      if (method === 'sort' && args.length) callback(0, [element, element]);
+      if (['pop', 'sort', 'reverse'].includes(method)) effectNeed(deepData(element), node);
+      return output(method === 'push' ? primitive('number') : method === 'pop' ? join([element, absent]) : receiver);
+    }
+    if (['get', 'has', 'values', 'entries', 'keys'].includes(method)) {
+      effectNeed(choices(receiver).every(item => ['map', 'set', 'stored'].includes(item.kind)), node);
+      return output(method === 'has' ? primitive('boolean') : method === 'get' ? join(choices(receiver).map(item => item.kind === 'map' ? item.value : stored))
+        : array([method === 'entries' ? array([element, join(choices(receiver).map(item => item.value ?? stored))]) : element]));
+    }
+    if (['slice', 'concat', 'flat', 'at', 'includes', 'indexOf', 'lastIndexOf', 'join'].includes(method)) {
+      effectNeed(element !== unknown && args.every(value => deepData(value)), node);
+      if (method === 'join') effectNeed(deepData(element), node);
+      return output(method === 'includes' ? primitive('boolean') : ['indexOf', 'lastIndexOf'].includes(method) ? primitive('number')
+        : method === 'join' ? primitive('string') : method === 'at' ? join([element, absent])
+          : array([method === 'flat' ? elements(element) : method === 'concat' ? join([element, ...args.map(elements)]) : element], true));
+    }
+    if (['trim', 'split', 'replace', 'replaceAll', 'match', 'matchAll', 'padStart', 'padEnd', 'charAt', 'charCodeAt', 'codePointAt',
+      'normalize', 'startsWith', 'endsWith', 'toLowerCase', 'toUpperCase', 'toString', 'localeCompare', 'toISOString', 'getTime'].includes(method)) {
+      effectNeed(choices(receiver).every(item => ['primitive', 'stored', 'date', 'undefined'].includes(item.kind)), node);
+      if (['replace', 'replaceAll'].includes(method) && args[1]?.kind === 'callable') callback(1, [primitive('string'), primitive('string'), primitive('number'), primitive('string')]);
+      else effectNeed(args.every(value => deepData(value) || value.kind === 'regexp'), node);
+      return output(['startsWith', 'endsWith'].includes(method) ? primitive('boolean') : ['charCodeAt', 'codePointAt', 'localeCompare', 'getTime'].includes(method) ? primitive('number')
+        : ['split', 'match', 'matchAll'].includes(method) ? array([primitive('string')], true) : primitive('string'));
+    }
+    effectNeed(false, node); return output(unknown);
+  };
+  const inspectEffects = (target, supplied, inherited, statements, calledAt) => {
+    if (!effectNeed(target?.body && !target.getSourceFile().isDeclarationFile, target)) return undefined;
+    const caps = new Map(), env = { target, parent: inherited, calledAt, caps, calls: new Map(), callThrows: new Map(), origins: new Map(),
+      key: `${identity(target)}@${calledAt ? identity(calledAt) : 'root'}`, syntax: lexicalNodes(target.body), returned: unknown, thrown: unknown };
+    for (const [index, parameter] of target.parameters.entries()) {
+      let value = index < supplied.length ? supplied[index] : absent;
+      if (value === 'db') value = transaction;
+      if (value === 'data') value = stored;
+      if (parameter.initializer) value = join(choices(value).map(item => item === absent ? origin(parameter.initializer, env) : item));
+      caps.set(parameter, value ?? unknown);
+    }
+    const lexical = [];
+    for (let owner = target.parent; owner && !ts.isSourceFile(owner); owner = owner.parent) if (ts.isFunctionLike(owner))
+      for (const parameter of owner.parameters) lexical.push(`${identity(parameter)}=${environmentFor(parameter, inherited)?.caps.get(parameter)?.id ?? unknown.id}`);
+    env.key = `${identity(target)}@${calledAt ? identity(calledAt) : 'root'}:${[...caps.values()].map(value => value.id)}:${lexical.join(',')}`;
+    if (invocations.has(env.key)) {
+      const previous = invocations.get(env.key);
+      if (previous.analyzing) {
+        effectNeed(false, calledAt ?? target);
+        unresolvedOrigins.push({ kind: 'recursive-invocation', callee: site(target), caller: calledAt && site(calledAt),
+          actualArguments: [...caps].map(([parameter, value]) => ({ name: parameter.name.getText(), origins: choices(value).map(item => item.kind) })),
+          stack: invocationStack.slice(-14) });
+      }
+      return previous;
+    }
+    if (activeInvocations.has(identity(target)) || invocations.size > 2048) {
+      effectNeed(false, calledAt ?? target);
+      unresolvedOrigins.push({ kind: activeInvocations.has(identity(target)) ? 'recursive-origin-context' : 'finite-context-limit',
+        callee: site(target), caller: calledAt && site(calledAt), actualArguments: [...caps].map(([parameter, value]) => ({ name: parameter.name.getText(),
+          origins: choices(value).map(item => item.kind) })), stack: invocationStack.slice(-14) });
+      return undefined;
+    }
+    activeInvocations.add(identity(target)); invocationStack.push({ callee: target.name?.getText() ?? '<owned callable>',
+      caller: calledAt && site(calledAt) }); env.analyzing = true; invocations.set(env.key, env); effectFunctions.add(target);
+    let regions = statements ?? [target.body];
+    if (target === selectedGuide && member(caps.get(target.parameters[0]) ?? unknown, 'kind').literal === 'presentation.generate') {
+      const guard = target.body.statements[0];
+      if (ts.isIfStatement(guard) && guard.expression.getText() === "task?.kind !== 'workspace.guide'"
+        && ts.isReturnStatement(guard.thenStatement) && builtin(guard.thenStatement.expression, 'undefined')
+        && objectReadOnly(target.parameters[0], target)) regions = [guard];
+      else effectNeed(false, guard);
+    }
+    if (target === terminalSource) {
+      const branch = target.body.statements.find(statement => ts.isIfStatement(statement) && statement.expression.getText() === 'guide');
+      const binding = branch && symbol(branch.expression);
+      if (binding && ts.isVariableDeclaration(binding) && binding.initializer && ts.isCallExpression(binding.initializer)
+        && symbol(binding.initializer.expression) === selectedGuide && binding.initializer.arguments.length === 1
+        && symbol(binding.initializer.arguments[0]) === target.parameters[1]
+        && objectReadOnly(target.parameters[1], target) && origin(binding.initializer, env) === absent)
+        regions = target.body.statements.filter(statement => statement !== branch);
+    }
+    env.syntax = regions.flatMap(lexicalNodes);
+    const executable = [...target.parameters.flatMap(parameter => lexicalNodes(parameter)), ...env.syntax];
+    for (const parameter of target.parameters) {
+      effectNeed(!parameter.dotDotDotToken && !parameter.modifiers?.length, parameter);
+      for (const binding of nodes(parameter.name, ts.isBindingElement)) effectNeed(!binding.dotDotDotToken, binding);
+    }
+    for (const node of executable) {
+      if (ts.isTemplateExpression(node)) effectNeed(node.templateSpans.every(span => deepData(origin(span.expression, env))), node);
+      if (ts.isBinaryExpression(node) && [ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken,
+        ts.SyntaxKind.SlashToken, ts.SyntaxKind.PercentToken, ts.SyntaxKind.LessThanToken, ts.SyntaxKind.GreaterThanToken,
+        ts.SyntaxKind.LessThanEqualsToken, ts.SyntaxKind.GreaterThanEqualsToken,
+        ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(node.operatorToken.kind))
+        effectNeed(deepData(origin(node.left, env, node.left)) && deepData(origin(node.right, env, node.right)), node);
+      if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+        if (!(ts.isCallExpression(node.parent) && node.parent.expression === node)) {
+          effectNeed(readable(origin(node.expression, env, node)), node);
+          const resolved = left.checker.getSymbolAtLocation(ts.isPropertyAccessExpression(node) ? node.name : node);
+          effectNeed(!(resolved?.declarations ?? []).some(declaration => ts.isGetAccessorDeclaration(declaration) || ts.isSetAccessorDeclaration(declaration)), node);
+          if (ts.isElementAccessExpression(node)) effectNeed(deepData(origin(node.argumentExpression, env)), node);
+        }
+      }
+      if (ts.isDeleteExpression(node)) {
+        effectNeed(uniqueWrite(node.expression.expression, env) && writable(origin(node.expression.expression, env)), node);
+        retainCapturedContentWrite(node.expression.expression, env, origin(node.expression.expression, env));
+      }
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+        if (ts.isIdentifier(node.left)) effectNeed(localDeclaration(symbol(node.left)) && !capturedWrite(node.left, env)
+          && !['tx', 'delegate', 'callable'].includes(origin(node.left, env).kind), node);
+        else effectNeed((ts.isPropertyAccessExpression(node.left) || ts.isElementAccessExpression(node.left))
+          && (ts.isPropertyAccessExpression(node.left) ? node.left.name.text : staticKey(node.left.argumentExpression)) !== '__proto__'
+          && uniqueWrite(node.left.expression, env) && writable(origin(node.left.expression, env))
+          && choices(origin(node.left.expression, env)).every(value => value.kind === 'record'
+            || value.kind === 'array' && ts.isElementAccessExpression(node.left)
+              && origin(node.left.argumentExpression, env).type === 'number'), node);
+        if (!ts.isIdentifier(node.left) && (ts.isPropertyAccessExpression(node.left) || ts.isElementAccessExpression(node.left))
+          && capturedWrite(node.left.expression, env)) {
+          effectNeed(deepData(origin(node.right, env)), node);
+          retainCapturedContentWrite(node.left.expression, env, origin(node.left.expression, env));
+        }
+        if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) effectNeed(deepData(origin(node.left, env)) && deepData(origin(node.right, env)), node);
+      }
+      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator))
+        effectNeed(ts.isIdentifier(node.operand) && localDeclaration(symbol(node.operand)) && deepData(origin(node.operand, env)), node);
+      if (ts.isNewExpression(node)) {
+        effectNeed(['Error', 'TypeError', 'Map', 'Set', 'Array', 'Date'].some(name => builtin(node.expression, name)) || localError(symbol(node.expression)), node);
+        effectNeed(origin(node, env) !== unknown, node);
+        if (['Map', 'Set'].some(name => builtin(node.expression, name)) && node.arguments?.length) {
+          const input = origin(node.arguments[0], env);
+          effectNeed(choices(input).every(value => ['array', 'set', 'map', 'stored', 'undefined'].includes(value.kind)
+            || value.kind === 'primitive' && ['string', 'null'].includes(value.type)), node);
+          if (builtin(node.expression, 'Map')) effectNeed(readable(elements(input)), node);
+        }
+      }
+      if (ts.isCallExpression(node)) inspectCall(node, env);
+    }
+    const returns = ts.isBlock(target.body) ? env.syntax.filter(ts.isReturnStatement).map(node => node.expression ? origin(node.expression, env) : absent) : [origin(target.body, env)];
+    const terminates = node => ts.isReturnStatement(node) || ts.isThrowStatement(node)
+      || ts.isBlock(node) && node.statements.length && terminates(node.statements.at(-1))
+      || ts.isIfStatement(node) && node.elseStatement && terminates(node.thenStatement) && terminates(node.elseStatement)
+      || ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) && env.calls.get(node.expression) === never;
+    if (ts.isBlock(target.body) && (!target.body.statements.length || !terminates(target.body.statements.at(-1)))) returns.push(absent);
+    env.returned = join(returns);
+    env.thrown = join([standardError(), ...env.syntax.filter(ts.isThrowStatement).map(node => origin(node.expression, env)), ...env.callThrows.values()]);
+    env.analyzing = false; invocationStack.pop(); activeInvocations.delete(identity(target)); return env;
+  };
+
+  const extra = reader.body.statements.slice(reader.body.statements.indexOf(cut) + 1);
+  // The newly evaluated ROOT itself has receiver/assignment/initializer
+  // effects, not just calls which happen to resolve to an owned function.
+  // Its actual original tx and input bindings seed the same finite rules.
+  inspectEffects(reader, ['db', 'data'], undefined, extra);
+  if (unresolvedEffects.length) throw { reason: 'SELECTED_GUIDE_SAVED_READER_UNKNOWN', separationSite, node: unresolvedEffects[0],
+    originFacts: unresolvedEffects.flatMap(node => originCallFacts.has(node) ? [{ term: node.getText().slice(0, 120), ...originCallFacts.get(node) }] : []).slice(0, 8),
+    originEvaluation: { demandedTerms: originBudget, contexts: invocations.size, facts: origins.size },
+    unresolvedOrigins: unresolvedOrigins.slice(0, 5),
+    effectSites: unresolvedEffects.map(node => ({ path: relative(left.root, node.getSourceFile().fileName).replaceAll('\\', '/'),
+      line: node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1, term: node.getText().slice(0, 120) })) };
+  // Bind the ACTUAL unchanged failure/retention transfers, including the
+  // already-consumed claim prefix. No zero-prior-write or refund assumption.
+  separationSite = 'retained-rejection-transfer';
+  const shared = (file, name) => {
+    const current = left.program.getSourceFile(resolve(left.root, file)), old = right.program.getSourceFile(resolve(right.root, file));
+    need(current && old, current);
+    const value = fn(current, name); need(equal(value, fn(old, name)), value); return value;
+  };
+  const agentPath = 'packages/domain/src/agent/agent.ts', workerPath = 'apps/agent-worker/src/index.ts';
+  const poll = shared(workerPath, 'createPollOnce'), handlers = shared(workerPath, 'createHandlers');
+  const mark = shared(agentPath, 'markTaskProgress'), markOnce = shared(agentPath, 'markTaskProgressOnce');
+  const claim = shared(agentPath, 'claimAgentTask'), recovery = shared(agentPath, 'prepareAgentTaskForCrashRecovery');
+  const projection = shared(agentPath, 'selectedImageChildTaskView'), ordinaryView = shared(agentPath, 'projectAgentTaskResult');
+  const terminal = shared('packages/domain/src/agent/native-agent-execution.ts', 'nativeAgentTerminalResult');
+  const claimWrite = one(nodes(claim, node => ts.isCallExpression(node) && node.expression.getText() === 'tx.agentTask.updateMany'), claim);
+  const claimData = one(claimWrite.arguments[0].properties.filter(property => ts.isPropertyAssignment(property) && property.name.getText() === 'data'), claimWrite);
+  const claimGrammar = ts.createSourceFile('claim-data.ts', "const data = { status: 'running', progress: 10, error: null, executionAttempt: { increment: 1 } };", ts.ScriptTarget.ES2022, true);
+  need(equal(claimData.initializer, claimGrammar.statements[0].declarationList.declarations[0].initializer), claimData);
+  const adopt = fn(source, 'adoptSelectedImageGuide');
+  same(adopt.body.statements[0], "const initial = await deps.prisma.$transaction(tx => requireSelectedImageGuideProduction(tx, input), { isolationLevel: 'Serializable' });");
+  same(adopt.body.statements[1], 'if (!initial) return undefined;');
+  const productionCalls = nodes(adopt, node => ts.isCallExpression(node) && symbol(node.expression) === production);
+  need(productionCalls.length === 2 && productionCalls.every(call => call.arguments.length === 2 && call.arguments[1].getText() === 'input'), adopt);
+  const failure = one(nodes(poll, node => ts.isCallExpression(node) && symbol(node.expression) === mark
+    && ts.isObjectLiteralExpression(node.arguments[1]) && node.arguments[1].properties.some(property => ts.isPropertyAssignment(property)
+      && property.name.getText() === 'status' && property.initializer.getText() === "'failed'")), poll);
+  same(failure.parent.parent.parent.parent, `await markTaskProgress(deps, {
+    taskId, status: 'failed', error: e instanceof Error ? e.message.slice(0, 1000) : String(e), expectedExecutionAttempt: claimed?.executionAttempt,
+  }).catch(() => undefined);`);
+  let failedCatch = failure.parent;
+  while (failedCatch && !ts.isCatchClause(failedCatch)) failedCatch = failedCatch.parent;
+  need(failedCatch && ts.isTryStatement(failedCatch.parent) && failedCatch.parent.finallyBlock, failure);
+  need(equal(failedCatch.parent.finallyBlock, body(`{
+    if (!processingEntryRequeued && !processingEntryDeferred) {
+      await deps.redis.lrem(AGENT_TASK_PROCESSING_QUEUE, 1, taskId).catch(() => undefined);
+    }
+  }`)), failedCatch.parent.finallyBlock);
+  const changed = one(nodes(markOnce, node => ts.isCallExpression(node) && node.expression.getText() === 'tx.agentTask.updateMany'
+    && node.arguments[0]?.getText().includes('executionAttempt: input.expectedExecutionAttempt')
+    && node.arguments[0]?.getText().includes('result: { equals: current.result')), markOnce);
+  const terminalCall = one(nodes(markOnce, node => ts.isCallExpression(node) && symbol(node.expression) === terminal), markOnce);
+  need(terminalCall.arguments[0].getText() === 'current' && terminalCall.arguments[1].getText() === 'input.status'
+    && changed.getStart() > terminalCall.getStart(), changed);
+  const resultWrite = one(changed.arguments[0].properties.filter(property => ts.isPropertyAssignment(property) && property.name.getText() === 'data'), changed);
+  const resultGrammar = ts.createSourceFile('preserved-task-result.ts', `const data = {
+    status: input.status,
+    ...(input.progress !== undefined ? { progress: input.progress } : {}),
+    ...(result !== undefined ? { result: result as never } : {}),
+    ...(input.error !== undefined ? { error: input.error } : {}),
+  };`, ts.ScriptTarget.ES2022, true);
+  need(equal(resultWrite.initializer, resultGrammar.statements[0].declarationList.declarations[0].initializer), resultWrite);
+  for (const name of ['nativeImageReviewTerminalResult', 'nativeSourceReviewTerminalResult']) {
+    const nested = one(nodes(terminalCall, node => ts.isCallExpression(node) && node.expression.getText() === name), terminalCall);
+    const target = symbol(nested.expression); need(target?.body, nested);
+    need(shared(relative(left.root, target.getSourceFile().fileName).replaceAll('\\', '/'), target.name.text) === target, nested);
+  }
+  const projectionCall = one(nodes(projection, node => ts.isCallExpression(node) && node.expression.getText() === 'readSelectedImageGenerationChild'), projection);
+  need(symbol(projectionCall.expression) === fn(source, 'readSelectedImageGenerationChild'), projectionCall);
+  const caughtProjection = one(nodes(projection, ts.isCatchClause), projection);
+  need(nodes(caughtProjection, ts.isReturnStatement).length === 1 && nodes(caughtProjection, ts.isCallExpression).length === 0, caughtProjection);
+  const selectedTerminal = one(terminal.body.statements.filter(node => ts.isIfStatement(node)
+    && node.expression.getText() === "marker.profile === 'paper-illustration' && selectedGuide(task)"), terminal);
+  const privateLoop = one(selectedTerminal.thenStatement.statements.filter(ts.isForOfStatement), selectedTerminal);
+  same(privateLoop, `for (const key of ['selectedImageContext', 'selectedImageReply', 'selectedImageDraft', 'sourceMapRef', 'storyboardReview', 'nativeIllustration']) {
+    if (record(incoming) && Object.hasOwn(incoming, key) && !isDeepStrictEqual(incoming[key], stored[key])) blocked();
+    if (Object.hasOwn(stored, key)) privatePlan[key] = stored[key];
+  }`);
+  const retainedReturn = one(selectedTerminal.thenStatement.statements.filter(ts.isReturnStatement), selectedTerminal);
+  same(retainedReturn, `return { ...(record(incoming) ? incoming : {}), ...privatePlan, nativeAgentExecution: marker,
+    ...(record(task.result) && task.result.nativeAgentObjects ? { nativeAgentObjects: task.result.nativeAgentObjects } : {}) };`);
+  const projected = new Map([[path, { source, previous, text: inverse }]]);
+  return { status: 'conditional', projected, initialization, fresh,
+    separation: { reader, production, parent, submit, inserted, publicReferences, effectCalls, effectReads, effectFunctions,
+      poll, handlers, mark, markOnce, claim, recovery, projection, ordinaryView, terminal, failure, changed, productionCalls },
+    origin: { status: 'conditional', domain: 'old-admission-retained-plus-authentic-selected-read-extension',
+      current: source, previous, additionalRefusal: 'read-only validation may reject into the unchanged rollback/failed-CAS/strict-selected fallback; prior claim/rearm/CP writes retained' },
+    outstanding: ['successful original DEFAULT/private capture and strict emitted entries/library/vendor/config identity',
+      'actual locked journal pair/phase and admitted producer/retainer history; no old-reader downgrade after broader W',
+      'read extension is not a fresh production grant or same-task recovery/refund/availability guarantee'] };
+}
+
 function finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext, collected) {
   const left = finiteSelectedGuideSupplementaryTerms(ts, context, { ui: false });
   const right = finiteSelectedGuideSupplementaryTerms(ts, rollbackContext, { ui: false });
@@ -9068,6 +10041,10 @@ function finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext,
 function finiteSelectedGuideSourceModel(ts, context, rollbackContext, collected) {
   const oldContract = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/agent/workspace-guide-contract.ts'));
   const assets = context.program.getSourceFile(resolve(context.root, 'packages/domain/src/assets/presentation-asset.ts'));
+  const oldAssets = rollbackContext.program.getSourceFile(resolve(rollbackContext.root, 'packages/domain/src/assets/presentation-asset.ts'));
+  if (assets?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readSelectedImageGuideProposal')
+    && oldAssets && !oldAssets.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readSelectedImageGuideProposal'))
+    return finiteSelectedGuideSavedReaderSeparation(ts, context, rollbackContext, collected);
   if (oldContract?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readWorkspaceGuidePayloadWithSelectedImage')
     && assets?.statements.some(node => ts.isFunctionDeclaration(node) && node.name?.text === 'readSelectedImageGenerationChild'))
     return finiteSelectedGuideMaintenanceSourceModel(ts, context, rollbackContext, collected);
